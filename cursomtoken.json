@@ -1,0 +1,25 @@
+{
+  "idToken": {
+    "kind": "identitytoolkit#VerifyCustomTokenResponse",
+    "isNewUser": false,
+    "idToken": "eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJuYW1lIjoic2FpIiwicGljdHVyZSI6IiIsImVtYWlsX3ZlcmlmaWVkIjpmYWxzZSwicGhvbmVfbnVtYmVyIjoiKzkxIDk1MTUyIDM1MjEyIiwiYXV0aF90aW1lIjoxNzQ3NjM4OTA5LCJ1c2VyX2lkIjoib2Y1TUpLQjFJcHhDeEpxWlZsV3VqREZPd0MwOSIsImZpcmViYXNlIjp7ImlkZW50aXRpZXMiOnsicGhvbmUiOlsiKzkxIDk1MTUyIDM1MjEyIl19LCJzaWduX2luX3Byb3ZpZGVyIjoiY3VzdG9tIn0sImlhdCI6MTc0NzYzODkwOSwiZXhwIjoxNzQ3NjQyNTA5LCJhdWQiOiJob3RlbC1kNTlkMiIsImlzcyI6Imh0dHBzOi8vc2VjdXJldG9rZW4uZ29vZ2xlLmNvbS9ob3RlbC1kNTlkMiIsInN1YiI6Im9mNU1KS0IxSXB4Q3hKcVpWbFd1akRGT3dDMDkifQ.",
+    "refreshToken": "eyJfQXV0aEVtdWxhdG9yUmVmcmVzaFRva2VuIjoiRE8gTk9UIE1PRElGWSIsImxvY2FsSWQiOiJvZjVNSktCMUlweEN4SnFaVmxXdWpERk93QzA5IiwicHJvdmlkZXIiOiJjdXN0b20iLCJleHRyYUNsYWltcyI6e30sInByb2plY3RJZCI6ImhvdGVsLWQ1OWQyIn0=",
+    "expiresIn": "3600"
+  },
+  "userCreatedJWT": {
+    "success": true,
+    "data": {
+      "accessToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjNkYjljZGRlLWYxZTktNDU5Yy04MTNjLTNlN2Q5MWE0YjFjYyIsInBob25lIjoiKzkxIDk1MTUyIDM1MjEyIiwicm9sZSI6InVzZXIiLCJpYXQiOjE3NDc2MzkwNjAsImV4cCI6MTc0NzY0MjY2MH0.HUMki1dSdOpbwVQ0XSswY7knYXBVmEQ6qrBPevOrbhY",
+      "refreshToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjNkYjljZGRlLWYxZTktNDU5Yy04MTNjLTNlN2Q5MWE0YjFjYyIsInBob25lIjoiKzkxIDk1MTUyIDM1MjEyIiwicm9sZSI6InVzZXIiLCJpYXQiOjE3NDc2MzkwNjAsImV4cCI6MTc0ODI0Mzg2MH0.x1D5e07H8lVDXfyy8e2iVwVRdACdvLcRbNf2n5Bd_aE",
+      "user": {
+        "id": "3db9cdde-f1e9-459c-813c-3e7d91a4b1cc",
+        "role": "user",
+        "firebaseUid": "of5MJKB1IpxCxJqZVlWujDFOwC09",
+        "createdAt": "2025-05-19T07:16:16.000Z",
+        "updatedAt": "2025-05-19T07:16:16.000Z",
+        "name": "sai",
+        "phone": "+91 95152 35212"
+      }
+    }
+  }
+}
