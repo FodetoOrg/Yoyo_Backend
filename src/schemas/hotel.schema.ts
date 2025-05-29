@@ -15,7 +15,7 @@ export const HotelSchema = z.object({
   address: z.string(),
   city: z.string(),
   zipCode: z.string().nullable(),
-  starRating: z.number().nullable(),
+  starRating: z.string().nullable(),
   amenities: z.array(z.string()),
   ownerId: z.string().uuid(),
   createdAt: z.string().datetime(),
@@ -61,13 +61,15 @@ export const HotelSearchResponseSchema = z.object({
 
 // Get hotel by ID schema
 export const GetHotelParamsSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string(),
 });
 
 export const GetHotelResponseSchema = z.object({
   success: z.boolean(),
   data: z.object({
-    hotel: HotelSchema,
+    hotel: HotelSchema.extend({
+      cityId: z.string(),
+    }),
   }),
 });
 
@@ -84,7 +86,7 @@ export const CreateHotelBodySchema = z.object({
   cityId: z.string(),
   hotelOwnerId: z.string(),
   zipCode: z.string(),
-  starRating: z.number().int().min(1).max(5).optional(),
+  starRating: z.string().optional(),
   amenities: z.array(z.string()).optional(),
   images: z.array(z.string()).optional(),
 });
@@ -185,6 +187,11 @@ export const getHotelsSchema = {
 };
 
 export const getHotelUsersSchema = {
+  params: zodToJsonSchema(
+    z.object({
+      hotelId: z.string().default(""),
+    })
+  ),
   response: {
     200: zodToJsonSchema(
       z.array(

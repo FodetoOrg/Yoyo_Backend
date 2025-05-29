@@ -14,10 +14,8 @@ export const hotels = sqliteTable("hotels", {
   description: text("description"),
   address: text("address").notNull(),
   city: text("city").notNull(),
-  state: text("state"),
-  country: text("country").notNull(),
   zipCode: text("zip_code"),
-  starRating: integer("star_rating"),
+  starRating: text("star_rating"),
   amenities: text("amenities"), // Stored as JSON string
   ownerId: text("owner_id").references(() => users.id),
   mapCoordinates: text("map_coordinates"),
@@ -52,8 +50,20 @@ export const hotelsRelations = relations(hotels, ({ one, many }) => ({
   bookings: many(bookings),
   reviews: many(reviews),
   images: many(hotelImages),
+  city: one(hotelCities, {
+    fields: [hotels.id],
+    references: [hotelCities.hotelId],
+    relationName: "hotelCity",
+  }),
 }));
 
+export const hotelUsersRelations = relations(hotelUsers, ({ one }) => ({
+  user: one(users, {
+    fields: [hotelUsers.userId],
+    references: [users.id],
+    relationName: "hotelUser",
+  }),
+}));
 // Export type
 export type Hotel = InferSelectModel<typeof hotels>;
 

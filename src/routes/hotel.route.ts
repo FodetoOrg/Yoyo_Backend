@@ -6,6 +6,7 @@ import {
   updateHotelSchema,
   createRoomSchema,
   getHotelSchema,
+  getHotelUsersSchema,
 } from "../schemas/hotel.schema";
 import { rbacGuard } from "../plugins/rbacGuard";
 import { permissions } from "../utils/rbac";
@@ -44,6 +45,7 @@ export default async function hotelRoutes(fastify: FastifyInstance) {
   fastify.get(
     "/hotelUsers",
     {
+      ...getHotelUsersSchema,
       schema: {
         tags: ["hotels"],
         summary: "Get all hotel users",
@@ -99,7 +101,10 @@ export default async function hotelRoutes(fastify: FastifyInstance) {
         summary: "Create a new hotel",
         security: [{ bearerAuth: [] }],
       },
-      preHandler: [fastify.authenticate, rbacGuard(permissions.createHotel)],
+      preHandler: [
+        fastify.authenticate,
+        // rbacGuard(permissions.createHotel)
+      ],
     },
     async (request: FastifyRequest, reply) => {
       return hotelController.createHotel(

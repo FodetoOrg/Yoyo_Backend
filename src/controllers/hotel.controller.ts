@@ -107,12 +107,6 @@ export class HotelController {
       // Create hotel with image URLs
       const hotel = await this.hotelService.createHotel({
         ...hotelData,
-        ownerId: request.user.id,
-        images: imageUrls.map((url, index) => ({
-          id: randomUUID(),
-          url,
-          isPrimary: index === 0 // First image is primary
-        }))
       });
 
       return reply.code(201).send({
@@ -200,7 +194,8 @@ export class HotelController {
   }
 
   async getHotelUsers(request: FastifyRequest, reply: FastifyReply) {
-    const hotelUsers = await this.hotelService.getHotelUsers();
+    const {hotelId} = request.query;
+    const hotelUsers = await this.hotelService.getHotelUsers(hotelId);
     return reply.code(200).send({
       success: true,
       data: hotelUsers,

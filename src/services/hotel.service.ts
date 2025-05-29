@@ -6,6 +6,8 @@ import {
   roomImages,
   users,
   hotelUsers,
+  cities,
+  hotelCities,
 } from "../models/schema";
 import { eq, and, like, inArray, exists, not, isNull } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
@@ -25,18 +27,12 @@ interface HotelCreateParams {
   name: string;
   description?: string;
   address: string;
-  city: string;
-  state?: string;
-  country: string;
+  cityId: string;
   zipCode?: string;
   starRating?: number;
   amenities?: string[];
-  ownerId: string;
-  images?: Array<{
-    id: string;
-    url: string;
-    isPrimary: boolean;
-  }>;
+  hotelOwnerId: string;
+  images?: string[];
 }
 
 interface RoomCreateParams {
@@ -106,6 +102,7 @@ export class HotelService {
       where: eq(hotels.id, id),
       with: {
         images: true,
+        city: true,
       },
     });
 
@@ -128,6 +125,7 @@ export class HotelService {
       ownerId: hotel.ownerId,
       createdAt: hotel.createdAt,
       updatedAt: hotel.updatedAt,
+      cityId: hotel.city.id,
       images: hotel.images.map((image) => ({
         id: image.id,
         url: image.url,
@@ -141,33 +139,64 @@ export class HotelService {
     const db = this.fastify.db;
     const hotelId = uuidv4();
 
+    console.log("hotelData", hotelData);
     // Start a transaction
     return await db.transaction(async (tx) => {
+      // check if hotel owner exists
+      const hotelOwner = await tx.query.users.findFirst({
+        where: eq(users.id, hotelData.hotelOwnerId),
+      });
+
+      if (!hotelOwner) {
+        throw new ForbiddenError("Hotel owner not found");
+      }
+
+      // check if hotel city exists
+      const hotelCity = await tx.query.cities.findFirst({
+        where: eq(cities.id, hotelData.cityId),
+      });
+
+      if (!hotelCity) {
+        throw new ForbiddenError("Hotel city not found");
+      }
+
       // Create hotel
       await tx.insert(hotels).values({
         id: hotelId,
         name: hotelData.name,
         description: hotelData.description,
         address: hotelData.address,
-        city: hotelData.city,
-        state: hotelData.state,
-        country: hotelData.country,
+        city: hotelCity.name,
+        country: hotelCity.country,
         zipCode: hotelData.zipCode,
         starRating: hotelData.starRating,
         amenities: hotelData.amenities
           ? JSON.stringify(hotelData.amenities)
           : null,
-        ownerId: hotelData.ownerId,
+        ownerId: hotelData.hotelOwnerId,
       });
 
+      // add hotel city to hotel
+      await tx.insert(hotelCities).values({
+        id: uuidv4(),
+        hotelId,
+        cityId: hotelData.cityId,
+      });
+
+      // add hotel owner to hotel
+      await tx.insert(hotelUsers).values({
+        id: uuidv4(),
+        hotelId,
+        userId: hotelData.hotelOwnerId,
+      });
       // Create hotel images if provided
       if (hotelData.images && hotelData.images.length > 0) {
         await tx.insert(hotelImages).values(
           hotelData.images.map((image) => ({
-            id: image.id,
+            id: uuidv4(),
             hotelId,
-            url: image.url,
-            isPrimary: image.isPrimary,
+            url: image,
+            isPrimary: false,
           }))
         );
       }
@@ -358,13 +387,13 @@ export class HotelService {
     return true;
   }
 
-  async getHotelUsers() {
+  async getHotelUsers(hotelId: string) {
     const db = this.fastify.db;
     // added for testing
     // throw new ForbiddenError("You are not authorized to access this resource");
 
     // get all users with role hotel  and not part of hoteUsers table
-    const allHotelUsers = await db
+    let allHotelUsers = await db
       .select({
         id: users.id,
         phone: users.phone,
@@ -374,6 +403,29 @@ export class HotelService {
       .where(
         and(eq(users.role, UserRole.HOTEL_ADMIN), isNull(hotelUsers.userId))
       );
+
+    console.log("here allHotelUsers", allHotelUsers);
+    console.log("hotelId", hotelId);
+      
+    if (hotelId !== "") {
+      console.log("hotelId included ", hotelId);
+      const includedUser = await db.query.hotelUsers.findFirst({
+        where: eq(hotelUsers.hotelId, hotelId),
+        with: {
+          user: true,
+        },
+      });
+
+      console.log("includedUser", includedUser);
+
+      if (includedUser) {
+        allHotelUsers.push({
+          id: includedUser.user.id,
+          phone: includedUser.user.phone,
+        });
+      }
+    }
+
     return allHotelUsers;
   }
 }
