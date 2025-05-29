@@ -9,3 +9,4 @@ export * from './Payment';
 export * from './Review';
 export * from './HotelImage';
 export * from './RoomImage';
+export * from './cities'

@@ -5,22 +5,40 @@ import { rooms } from "./Room";
 import { bookings } from "./Booking";
 import { reviews } from "./Review";
 import { hotelImages } from "./HotelImage";
+import { cities } from "./cities";
 
 // Hotel table
-export const hotels = sqliteTable('hotels', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull(),
-  description: text('description'),
-  address: text('address').notNull(),
-  city: text('city').notNull(),
-  state: text('state'),
-  country: text('country').notNull(),
-  zipCode: text('zip_code'),
-  starRating: integer('star_rating'),
-  amenities: text('amenities'), // Stored as JSON string
-  ownerId: text('owner_id').references(() => users.id),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(new Date()),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(new Date()),
+export const hotels = sqliteTable("hotels", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  description: text("description"),
+  address: text("address").notNull(),
+  city: text("city").notNull(),
+  state: text("state"),
+  country: text("country").notNull(),
+  zipCode: text("zip_code"),
+  starRating: integer("star_rating"),
+  amenities: text("amenities"), // Stored as JSON string
+  ownerId: text("owner_id").references(() => users.id),
+  mapCoordinates: text("map_coordinates"),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .notNull()
+    .default(new Date()),
+});
+
+export const hotelCities = sqliteTable("hotel_cities", {
+  id: text("id").primaryKey(),
+  hotelId: text("hotel_id").references(() => hotels.id),
+  cityId: text("city_id").references(() => cities.id),
+});
+
+export const hotelUsers = sqliteTable("hotel_users", {
+  id: text("id").primaryKey(),
+  hotelId: text("hotel_id").references(() => hotels.id),
+  userId: text("user_id").references(() => users.id),
 });
 
 // Define relationships
@@ -28,7 +46,7 @@ export const hotelsRelations = relations(hotels, ({ one, many }) => ({
   owner: one(users, {
     fields: [hotels.ownerId],
     references: [users.id],
-    relationName: "hotelOwner"
+    relationName: "hotelOwner",
   }),
   rooms: many(rooms),
   bookings: many(bookings),
@@ -39,4 +57,4 @@ export const hotelsRelations = relations(hotels, ({ one, many }) => ({
 // Export type
 export type Hotel = InferSelectModel<typeof hotels>;
 
-export {}
+export {};

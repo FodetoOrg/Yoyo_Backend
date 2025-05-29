@@ -45,6 +45,36 @@ async function main() {
     `);
     console.log('Users table created');
 
+    // Create staff table
+    await db.run(sql`
+      CREATE TABLE IF NOT EXISTS staff (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL UNIQUE,
+        department TEXT,
+        position TEXT,
+        joining_date INTEGER NOT NULL DEFAULT (unixepoch()),
+        is_active INTEGER NOT NULL DEFAULT 1,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      )
+    `);
+    console.log('Staff table created');
+
+    // Create staff permissions table
+    await db.run(sql`
+      CREATE TABLE IF NOT EXISTS staff_permissions (
+        id TEXT PRIMARY KEY,
+        staff_id TEXT NOT NULL,
+        permission_key TEXT NOT NULL,
+        permission_value TEXT NOT NULL,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        FOREIGN KEY (staff_id) REFERENCES staff(id) ON DELETE CASCADE
+      )
+    `);
+    console.log('Staff permissions table created');
+
     // Create otps table
     await db.run(sql`
       CREATE TABLE IF NOT EXISTS otps (
@@ -202,6 +232,11 @@ async function main() {
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_bookings_hotel_id ON bookings(hotel_id)`);
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_bookings_user_id ON bookings(user_id)`);
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_rooms_hotel_id ON rooms(hotel_id)`);
+    
+    // Create indexes for staff tables
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_staff_user_id ON staff(user_id)`);
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_staff_permissions_staff_id ON staff_permissions(staff_id)`);
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_staff_permissions_key ON staff_permissions(permission_key)`);
     
     console.log('Indexes created');
 

@@ -10,17 +10,31 @@ import { bookings } from "./Booking";
 import { hotels } from "./Hotel";
 import { payments } from "./Payment";
 import { reviews } from "./Review";
+import { UserRole, UserStatus } from "../types/common";
 
 // User table
-export const users = sqliteTable('users', {
-  id: text('id').primaryKey(),
-  email: text('email').notNull().unique(),
-  name: text('name'),
-  phone: text('phone'),
-  role: text('role').notNull().default('user'),
-  firebaseUid: text('firebase_uid').notNull().unique(),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(new Date()),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(new Date()),
+export const users = sqliteTable("users", {
+  id: text("id").primaryKey(),
+  email: text("email"),
+  name: text("name"),
+  phone: text("phone").unique(),
+  role: text("role", {
+    enum: [UserRole.USER, UserRole.HOTEL_ADMIN, UserRole.STAFF],
+  })
+    .notNull()
+    .default(UserRole.USER),
+  status: text("status", {
+    enum: [UserStatus.ACTIVE, UserStatus.INACTIVE],
+  })
+    .notNull()
+    .default(UserStatus.ACTIVE),
+  firebaseUid: text("firebase_uid").notNull().unique(),
+  createdAt: integer("created_at", { mode: "timestamp" })
+    .notNull()
+    .default(new Date()),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .notNull()
+    .default(new Date()),
 });
 
 // Define relationships
@@ -32,4 +46,3 @@ export const usersRelations = relations(users, ({ many }) => ({
 }));
 
 export type User = InferSelectModel<typeof users>;
-

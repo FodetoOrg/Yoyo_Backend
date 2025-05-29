@@ -7,6 +7,8 @@ import {
   getHotelBookingsSchema,
   cancelBookingSchema
 } from '../schemas/booking.schema';
+import { rbacGuard } from '../plugins/rbacGuard';
+import { permissions } from '../utils/rbac';
 
 const bookingController = new BookingController();
 
@@ -25,7 +27,8 @@ export default async function bookingRoutes(fastify: FastifyInstance) {
       tags: ['bookings'],
       summary: 'Create a new booking',
       security: [{ bearerAuth: [] }]
-    }
+    },
+    preHandler: rbacGuard(permissions.createBooking)
   }, (request, reply) => bookingController.createBooking(request, reply));
   
   // Get booking by ID

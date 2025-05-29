@@ -3,19 +3,12 @@ import { users } from "../models/schema";
 import { eq } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import admin from "../config/firebase/firebase";
+import { UserRole, UserStatus } from "../types/common";
+import { ConflictError } from "../types/errors";
 
 interface TokenResponse {
   accessToken: string;
   refreshToken: string;
-  user: {
-    id: string;
-    phone: string;
-    name: string | null;
-    role: string;
-    firebaseUid: string;
-    createdAt: string;
-    updatedAt: string;
-  };
 }
 
 export class AuthService {
@@ -38,14 +31,14 @@ export class AuthService {
       const db = this.fastify.db;
 
       const userFromFirebase = await admin.auth().getUser(decodedToken.uid);
-
+      console.log("userFromFirebase ", userFromFirebase);
       if (!userFromFirebase) {
         throw new Error("User not found in Firebase");
       }
       console.log("userFromFirebase ", userFromFirebase);
       // Check if user exists
       let user = await db.query.users.findFirst({
-        where: eq(users.firebaseUid, decodedToken.uid),
+        where: eq(users.phone, decodedToken.phone_number),
       });
 
       // If user doesn't exist, create a new user
@@ -82,15 +75,6 @@ export class AuthService {
       return {
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
-        user: {
-          id: user.id,
-          name: user.name,
-          phone: user.phone,
-          role: user.role,
-          firebaseUid: user.firebaseUid,
-          createdAt: new Date(user.createdAt).toISOString(),
-          updatedAt: new Date(user.updatedAt).toISOString(),
-        },
       };
     } catch (error) {
       throw new Error("Invalid Firebase ID token " + error);
@@ -107,10 +91,9 @@ export class AuthService {
       {
         id: user.id,
         phone: user.phone,
-        role: user.role,
       },
       {
-        expiresIn: "1h",
+        expiresIn: "30m",
       }
     );
 
@@ -118,7 +101,6 @@ export class AuthService {
       {
         id: user.id,
         phone: user.phone,
-        role: user.role,
       },
       {
         expiresIn: "7d",
@@ -137,6 +119,7 @@ export class AuthService {
   ): Promise<{ accessToken: string; refreshToken: string }> {
     try {
       const decoded = await this.fastify.jwt.verify(refreshToken);
+      console.log("decoded in refreshToken ", decoded);
 
       // Check if user exists
       const user = await this.fastify.db.query.users.findFirst({
@@ -147,14 +130,17 @@ export class AuthService {
         throw new Error("User not found");
       }
 
-      // Generate new tokens
-      return this.generateTokens({
+      const tokens = await this.generateTokens({
         id: user.id,
         phone: user.phone,
         role: user.role,
       });
+      console.log("tokens in refreshToken ", tokens);
+      // Generate new tokens
+      return tokens;
     } catch (error) {
-      throw new Error("Invalid refresh token");
+      console.log(error);
+      throw new Error("Invalid refresh token ");
     }
   }
 
@@ -213,5 +199,38 @@ export class AuthService {
       createdAt: updatedUser.createdAt,
       updatedAt: updatedUser.updatedAt,
     };
+  }
+
+  async getAllUsers(page: number, limit: number, role: string) {
+    const db = this.fastify.db;
+    const allUsers = await db.query.users.findMany({
+      where: eq(users.role, role),
+      offset: (page - 1) * limit,
+      limit: limit,
+    });
+    return allUsers;
+  }
+
+  async addHotelAdmin(name: string, phone: string, email: string) {
+    const db = this.fastify.db;
+
+    const user = await db.query.users.findFirst({
+      where: eq(users.phone, `+91${phone}`),
+    });
+    if (user) {
+      console.log("user already exists with this phone number");
+      throw new ConflictError("User already exists with this phone number");
+    }
+
+    const hotelAdmin = await db.insert(users).values({
+      id: uuidv4(),
+      email,
+      name,
+      phone: `+91${phone}`,
+      role: UserRole.HOTEL_ADMIN,
+      status: UserStatus.ACTIVE,
+      firebaseUid: `${phone}_temp_uid`,
+    }).returning();
+    return hotelAdmin[0];
   }
 }

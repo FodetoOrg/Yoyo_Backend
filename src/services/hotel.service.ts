@@ -1,7 +1,16 @@
-import { FastifyInstance } from 'fastify';
-import { hotels, rooms, hotelImages, roomImages } from '../models/schema';
-import { eq, and, like, inArray } from 'drizzle-orm';
-import { v4 as uuidv4 } from 'uuid';
+import { FastifyInstance } from "fastify";
+import {
+  hotels,
+  rooms,
+  hotelImages,
+  roomImages,
+  users,
+  hotelUsers,
+} from "../models/schema";
+import { eq, and, like, inArray, exists, not, isNull } from "drizzle-orm";
+import { v4 as uuidv4 } from "uuid";
+import { UserRole } from "../types/common";
+import { ForbiddenError } from "../types/errors";
 
 interface HotelSearchParams {
   city: string;
@@ -9,7 +18,7 @@ interface HotelSearchParams {
   checkOut?: string;
   guests: number;
   rooms: number;
-  bookingType?: 'daily' | 'hourly';
+  bookingType?: "daily" | "hourly";
 }
 
 interface HotelCreateParams {
@@ -23,6 +32,11 @@ interface HotelCreateParams {
   starRating?: number;
   amenities?: string[];
   ownerId: string;
+  images?: Array<{
+    id: string;
+    url: string;
+    isPrimary: boolean;
+  }>;
 }
 
 interface RoomCreateParams {
@@ -45,11 +59,17 @@ export class HotelService {
     this.fastify = fastify;
   }
 
+  async getHotels() {
+    const db = this.fastify.db;
+    const hotels = await db.query.hotels.findMany();
+    return hotels;
+  }
+
   // Search hotels by city and other criteria
   async searchHotels(params: HotelSearchParams) {
     const db = this.fastify.db;
     const { city } = params;
-    
+
     // Query for hotels
     const hotelResults = await db.query.hotels.findMany({
       where: like(hotels.city, `%${city}%`),
@@ -61,7 +81,7 @@ export class HotelService {
     });
 
     // Format hotel results
-    const formattedHotels = hotelResults.map(hotel => ({
+    const formattedHotels = hotelResults.map((hotel) => ({
       id: hotel.id,
       name: hotel.name,
       description: hotel.description,
@@ -81,18 +101,18 @@ export class HotelService {
   // Get hotel by ID
   async getHotelById(id: string) {
     const db = this.fastify.db;
-    
+
     const hotel = await db.query.hotels.findFirst({
       where: eq(hotels.id, id),
       with: {
         images: true,
       },
     });
-    
+
     if (!hotel) {
       return null;
     }
-    
+
     // Format hotel data
     return {
       id: hotel.id,
@@ -108,11 +128,11 @@ export class HotelService {
       ownerId: hotel.ownerId,
       createdAt: hotel.createdAt,
       updatedAt: hotel.updatedAt,
-      images: hotel.images.map(image => ({
+      images: hotel.images.map((image) => ({
         id: image.id,
         url: image.url,
-        isPrimary: image.isPrimary
-      }))
+        isPrimary: image.isPrimary,
+      })),
     };
   }
 
@@ -120,44 +140,62 @@ export class HotelService {
   async createHotel(hotelData: HotelCreateParams) {
     const db = this.fastify.db;
     const hotelId = uuidv4();
-    
-    await db.insert(hotels).values({
-      id: hotelId,
-      name: hotelData.name,
-      description: hotelData.description,
-      address: hotelData.address,
-      city: hotelData.city,
-      state: hotelData.state,
-      country: hotelData.country,
-      zipCode: hotelData.zipCode,
-      starRating: hotelData.starRating,
-      amenities: hotelData.amenities ? JSON.stringify(hotelData.amenities) : null,
-      ownerId: hotelData.ownerId,
+
+    // Start a transaction
+    return await db.transaction(async (tx) => {
+      // Create hotel
+      await tx.insert(hotels).values({
+        id: hotelId,
+        name: hotelData.name,
+        description: hotelData.description,
+        address: hotelData.address,
+        city: hotelData.city,
+        state: hotelData.state,
+        country: hotelData.country,
+        zipCode: hotelData.zipCode,
+        starRating: hotelData.starRating,
+        amenities: hotelData.amenities
+          ? JSON.stringify(hotelData.amenities)
+          : null,
+        ownerId: hotelData.ownerId,
+      });
+
+      // Create hotel images if provided
+      if (hotelData.images && hotelData.images.length > 0) {
+        await tx.insert(hotelImages).values(
+          hotelData.images.map((image) => ({
+            id: image.id,
+            hotelId,
+            url: image.url,
+            isPrimary: image.isPrimary,
+          }))
+        );
+      }
+
+      // Get the created hotel
+      const hotel = await this.getHotelById(hotelId);
+      return hotel;
     });
-    
-    // Get the created hotel
-    const hotel = await this.getHotelById(hotelId);
-    return hotel;
   }
 
   // Update hotel details
   async updateHotel(hotelId: string, hotelData: Partial<HotelCreateParams>) {
     const db = this.fastify.db;
-    
+
     // Process amenities if provided
     let processedData: any = { ...hotelData };
     if (hotelData.amenities) {
       processedData.amenities = JSON.stringify(hotelData.amenities);
     }
-    
+
     await db
       .update(hotels)
       .set({
         ...processedData,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
       .where(eq(hotels.id, hotelId));
-    
+
     // Get the updated hotel
     const hotel = await this.getHotelById(hotelId);
     return hotel;
@@ -166,36 +204,28 @@ export class HotelService {
   // Delete a hotel
   async deleteHotel(hotelId: string) {
     const db = this.fastify.db;
-    
+
     // First, delete all rooms associated with this hotel
     const hotelRooms = await db.query.rooms.findMany({
-      where: eq(rooms.hotelId, hotelId)
+      where: eq(rooms.hotelId, hotelId),
     });
-    
+
     if (hotelRooms.length > 0) {
-      const roomIds = hotelRooms.map(room => room.id);
-      
+      const roomIds = hotelRooms.map((room) => room.id);
+
       // Delete room images
-      await db
-        .delete(roomImages)
-        .where(inArray(roomImages.roomId, roomIds));
-      
+      await db.delete(roomImages).where(inArray(roomImages.roomId, roomIds));
+
       // Delete rooms
-      await db
-        .delete(rooms)
-        .where(inArray(rooms.id, roomIds));
+      await db.delete(rooms).where(inArray(rooms.id, roomIds));
     }
-    
+
     // Delete hotel images
-    await db
-      .delete(hotelImages)
-      .where(eq(hotelImages.hotelId, hotelId));
-    
+    await db.delete(hotelImages).where(eq(hotelImages.hotelId, hotelId));
+
     // Delete hotel
-    await db
-      .delete(hotels)
-      .where(eq(hotels.id, hotelId));
-    
+    await db.delete(hotels).where(eq(hotels.id, hotelId));
+
     return true;
   }
 
@@ -203,7 +233,7 @@ export class HotelService {
   async createRoom(roomData: RoomCreateParams) {
     const db = this.fastify.db;
     const roomId = uuidv4();
-    
+
     await db.insert(rooms).values({
       id: roomId,
       hotelId: roomData.hotelId,
@@ -216,7 +246,7 @@ export class HotelService {
       amenities: roomData.amenities ? JSON.stringify(roomData.amenities) : null,
       available: roomData.available !== undefined ? roomData.available : true,
     });
-    
+
     // Get the created room
     const room = await this.getRoomById(roomId);
     return room;
@@ -225,18 +255,18 @@ export class HotelService {
   // Get room by ID
   async getRoomById(roomId: string) {
     const db = this.fastify.db;
-    
+
     const room = await db.query.rooms.findFirst({
       where: eq(rooms.id, roomId),
       with: {
         images: true,
       },
     });
-    
+
     if (!room) {
       return null;
     }
-    
+
     // Format room data
     return {
       id: room.id,
@@ -251,18 +281,18 @@ export class HotelService {
       available: room.available,
       createdAt: room.createdAt,
       updatedAt: room.updatedAt,
-      images: room.images.map(image => ({
+      images: room.images.map((image) => ({
         id: image.id,
         url: image.url,
-        isPrimary: image.isPrimary
-      }))
+        isPrimary: image.isPrimary,
+      })),
     };
   }
 
   // Get all rooms for a hotel
   async getRoomsByHotelId(hotelId: string) {
     const db = this.fastify.db;
-    
+
     const roomResults = await db.query.rooms.findMany({
       where: eq(rooms.hotelId, hotelId),
       with: {
@@ -271,9 +301,9 @@ export class HotelService {
         },
       },
     });
-    
+
     // Format room results
-    const formattedRooms = roomResults.map(room => ({
+    const formattedRooms = roomResults.map((room) => ({
       id: room.id,
       hotelId: room.hotelId,
       name: room.name,
@@ -288,28 +318,28 @@ export class HotelService {
       updatedAt: room.updatedAt,
       image: room.images.length > 0 ? room.images[0].url : null,
     }));
-    
+
     return formattedRooms;
   }
 
   // Update room details
   async updateRoom(roomId: string, roomData: Partial<RoomCreateParams>) {
     const db = this.fastify.db;
-    
+
     // Process amenities if provided
     let processedData: any = { ...roomData };
     if (roomData.amenities) {
       processedData.amenities = JSON.stringify(roomData.amenities);
     }
-    
+
     await db
       .update(rooms)
       .set({
         ...processedData,
-        updatedAt: new Date()
+        updatedAt: new Date(),
       })
       .where(eq(rooms.id, roomId));
-    
+
     // Get the updated room
     const room = await this.getRoomById(roomId);
     return room;
@@ -318,17 +348,32 @@ export class HotelService {
   // Delete a room
   async deleteRoom(roomId: string) {
     const db = this.fastify.db;
-    
+
     // Delete room images
-    await db
-      .delete(roomImages)
-      .where(eq(roomImages.roomId, roomId));
-    
+    await db.delete(roomImages).where(eq(roomImages.roomId, roomId));
+
     // Delete room
-    await db
-      .delete(rooms)
-      .where(eq(rooms.id, roomId));
-    
+    await db.delete(rooms).where(eq(rooms.id, roomId));
+
     return true;
+  }
+
+  async getHotelUsers() {
+    const db = this.fastify.db;
+    // added for testing
+    // throw new ForbiddenError("You are not authorized to access this resource");
+
+    // get all users with role hotel  and not part of hoteUsers table
+    const allHotelUsers = await db
+      .select({
+        id: users.id,
+        phone: users.phone,
+      })
+      .from(users)
+      .leftJoin(hotelUsers, eq(users.id, hotelUsers.userId))
+      .where(
+        and(eq(users.role, UserRole.HOTEL_ADMIN), isNull(hotelUsers.userId))
+      );
+    return allHotelUsers;
   }
 }

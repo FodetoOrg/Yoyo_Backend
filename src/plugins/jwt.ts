@@ -1,6 +1,7 @@
 import fp from 'fastify-plugin';
 import jwt from '@fastify/jwt';
 import { FastifyInstance, FastifyRequest } from 'fastify';
+import { HttpStatus } from '../types/common';
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -22,17 +23,23 @@ export default fp(async function (fastify: FastifyInstance) {
   fastify.register(jwt, {
     secret: process.env.JWT_SECRET || 'your-secret-key',
     sign: {
-      expiresIn: '1h', // Access token expiration
+      expiresIn: '7d', // Access token expiration
     },
   });
 
   // Decorator to authenticate requests
   fastify.decorate('authenticate', async (request: FastifyRequest) => {
     try {
-      await request.jwtVerify();
+      console.log("Authorization header:", request.headers.authorization);
+      const decoded = await request.jwtVerify();
+      console.log('here in jwt decoded ',decoded);
+      request.user = decoded;
+      console.log("request.user ",request.user);
+      
+
     } catch (err) {
-      const error = new Error('Unauthorized: Invalid or expired token');
-      error['statusCode'] = 401;
+      const error = new Error('Unauthorized: Invalid or expired token') as Error & { statusCode: number };
+      error.statusCode = HttpStatus.UNAUTHORIZED;
       throw error;
     }
   });

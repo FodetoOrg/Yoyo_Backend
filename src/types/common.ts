@@ -61,3 +61,14 @@ export enum ErrorCode {
   INTERNAL_ERROR = 'INTERNAL_ERROR',
   CONFLICT = 'CONFLICT'
 } 
+
+export enum UserRole {
+  USER = 'user',
+  HOTEL_ADMIN = 'hotel',
+  STAFF = 'staff'
+}
+
+export enum UserStatus {
+  ACTIVE = 'active',
+  INACTIVE = 'inactive'
+}

@@ -22,5 +22,5 @@ async function generateToken(uid: string) {
 }
 
 // Replace this with the UID from emulator
-const testUid = 'of5MJKB1IpxCxJqZVlWujDFOwC09';
+const testUid = 'ry1uVjsR7UXk8hgdvcnxWgiKucpz';
 generateToken(testUid);

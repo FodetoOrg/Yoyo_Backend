@@ -9,11 +9,14 @@ config();
 import registerSwagger from './plugins/swagger';
 import registerJwt from './plugins/jwt';
 import registerDb from './plugins/db';
+import registerErrorHandler from './plugins/error-handler';
 
 // Import routes
 import authRoutes from './routes/auth.route';
 import hotelRoutes from './routes/hotel.route';
 import bookingRoutes from './routes/booking.route';
+import  staffRoutes  from './routes/staff.route';
+import citiesRoutes from './routes/cities.route';
 
 // Create Fastify instance
 export const app: FastifyInstance = fastify({
@@ -29,6 +32,7 @@ export const app: FastifyInstance = fastify({
         }
       : undefined,
   },
+  bodyLimit: 30 * 1024 * 1024, // 30MB limit for request body
 });
 
 // Register plugins
@@ -41,11 +45,14 @@ app.register(cors, {
 app.register(registerSwagger);
 app.register(registerJwt);
 app.register(registerDb);
+app.register(registerErrorHandler);
 
 // Register routes
 app.register(authRoutes, { prefix: '/api/v1/auth' });
 app.register(hotelRoutes, { prefix: '/api/v1/hotels' });
 app.register(bookingRoutes, { prefix: '/api/v1/bookings' });
+app.register(staffRoutes, { prefix: '/api/v1/staff' });
+app.register(citiesRoutes, { prefix: '/api/v1/cities' });
 
 // Default route
 app.get('/', async () => {
