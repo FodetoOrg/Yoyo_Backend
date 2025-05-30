@@ -8,7 +8,9 @@ import {
   hotelUsers,
   cities,
   hotelCities,
+  Hotel,
 } from "../models/schema";
+import { v4 as uuidv4 } from "uuid";
 import { eq, and, like, inArray, exists, not, isNull } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { UserRole } from "../types/common";
@@ -29,10 +31,11 @@ interface HotelCreateParams {
   address: string;
   cityId: string;
   zipCode?: string;
-  starRating?: number;
+  starRating?: string;
   amenities?: string[];
-  hotelOwnerId: string;
+  ownerId: string;
   images?: string[];
+  mapCoordinates: string;
 }
 
 interface RoomCreateParams {
@@ -125,7 +128,8 @@ export class HotelService {
       ownerId: hotel.ownerId,
       createdAt: hotel.createdAt,
       updatedAt: hotel.updatedAt,
-      cityId: hotel.city.id,
+      cityId: hotel.city.cityId,
+      mapCoordinates: hotel.mapCoordinates,
       images: hotel.images.map((image) => ({
         id: image.id,
         url: image.url,
@@ -143,11 +147,13 @@ export class HotelService {
     // Start a transaction
     return await db.transaction(async (tx) => {
       // check if hotel owner exists
-      const hotelOwner = await tx.query.users.findFirst({
-        where: eq(users.id, hotelData.hotelOwnerId),
+      const hotelOwner = await tx.query.hotelUsers.findFirst({
+        where: eq(hotelUsers.userId, hotelData.ownerId),
       });
 
-      if (!hotelOwner) {
+      console.log("hotelOwner in createHotel", hotelOwner);
+
+      if (hotelOwner) {
         throw new ForbiddenError("Hotel owner not found");
       }
 
@@ -173,7 +179,8 @@ export class HotelService {
         amenities: hotelData.amenities
           ? JSON.stringify(hotelData.amenities)
           : null,
-        ownerId: hotelData.hotelOwnerId,
+        ownerId: hotelData.ownerId,
+        mapCoordinates: hotelData.mapCoordinates,
       });
 
       // add hotel city to hotel
@@ -187,7 +194,7 @@ export class HotelService {
       await tx.insert(hotelUsers).values({
         id: uuidv4(),
         hotelId,
-        userId: hotelData.hotelOwnerId,
+        userId: hotelData.ownerId,
       });
       // Create hotel images if provided
       if (hotelData.images && hotelData.images.length > 0) {
@@ -208,7 +215,7 @@ export class HotelService {
   }
 
   // Update hotel details
-  async updateHotel(hotelId: string, hotelData: Partial<HotelCreateParams>) {
+  async updateHotel(hotelId: string, hotelData) {
     const db = this.fastify.db;
 
     // Process amenities if provided
@@ -217,17 +224,72 @@ export class HotelService {
       processedData.amenities = JSON.stringify(hotelData.amenities);
     }
 
-    await db
-      .update(hotels)
-      .set({
-        ...processedData,
-        updatedAt: new Date(),
-      })
-      .where(eq(hotels.id, hotelId));
+    return await db.transaction(async (tx) => {
+      const existingData: Hotel = await tx.query.hotel.findFirst({
+        where: eq(hotels.id, hotelData.id),
+      });
+
+      if (!existingData) {
+        throw new ForbiddenError("Hotel not found");
+      }
+
+      const hotelOwner = await tx.query.hotelUsers.findFirst({
+        where: eq(hotelUsers.userId, hotelData.ownerId),
+      });
+
+      if (hotelOwner) {
+        throw new ForbiddenError("Hotel owner already assigned to other hotel");
+      }
+
+      // check if hotel city exists
+      const hotelCity = await tx.query.cities.findFirst({
+        where: eq(cities.id, hotelData.cityId),
+      });
+
+      if (!hotelCity) {
+        throw new ForbiddenError("Hotel city not found");
+      }
+
+      if (existingData.ownerId !== hotelData.ownerId) {
+        await tx
+          .delete(hotelUsers)
+          .where(eq(hotelUsers.hotelId, existingData.ownerId));
+
+        await tx.insert(hotelUsers).values({
+          hotelId: hotelData.id,
+          userId: hotelData.ownerId,
+          id: uuidv4(),
+        });
+      }
+
+      const existingCity = await tx.query.hotelCities.findFirst({
+        where: eq(hotelCities.hotelId, hotelData.id),
+      });
+
+      if (existingCity.cityId !== hotelData.cityId) {
+        await tx
+          .delete(hotelCities)
+          .where(eq(hotelCities.cityId, existingCity.cityId));
+
+        await tx.insert(hotelCities).values({
+          hotelId: hotelData.id,
+          cityId: hotelData.cityId,
+          id: uuidv4(),
+        });
+      }
+
+      await db
+        .update(hotels)
+        .set({
+          ...processedData,
+          updatedAt: new Date(),
+        })
+        .where(eq(hotels.id, hotelId));
+      const hotel = await this.getHotelById(hotelId);
+      return hotel;
+    });
 
     // Get the updated hotel
-    const hotel = await this.getHotelById(hotelId);
-    return hotel;
   }
 
   // Delete a hotel
@@ -406,7 +468,7 @@ export class HotelService {
 
     console.log("here allHotelUsers", allHotelUsers);
     console.log("hotelId", hotelId);
-      
+
     if (hotelId !== "") {
       console.log("hotelId included ", hotelId);
       const includedUser = await db.query.hotelUsers.findFirst({

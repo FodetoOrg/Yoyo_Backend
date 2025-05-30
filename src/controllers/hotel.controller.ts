@@ -9,7 +9,7 @@ import {
   HotelSearchQuerySchema
 } from "../schemas/hotel.schema";
 import { uploadToS3 } from "../config/aws";
-import { randomUUID } from "crypto";
+import { ForbiddenError } from "../types/errors";
 
 interface AuthenticatedRequest extends FastifyRequest {
   user: {
@@ -104,6 +104,9 @@ export class HotelController {
         );
       }
 
+    
+      hotelData.images = imageUrls;
+
       // Create hotel with image URLs
       const hotel = await this.hotelService.createHotel({
         ...hotelData,
@@ -128,6 +131,7 @@ export class HotelController {
 
   async updateHotel(request: AuthenticatedRequest, reply: FastifyReply) {
     try {
+      // throw new ForbiddenError("dont have accesss");
       const { id } = GetHotelParamsSchema.parse(request.params);
       const hotelData = UpdateHotelBodySchema.parse(request.body);
       const hotel = await this.hotelService.updateHotel(id, hotelData);

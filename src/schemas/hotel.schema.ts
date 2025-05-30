@@ -17,6 +17,7 @@ export const HotelSchema = z.object({
   zipCode: z.string().nullable(),
   starRating: z.string().nullable(),
   amenities: z.array(z.string()),
+  mapCoordinates: z.string(),
   ownerId: z.string().uuid(),
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),
@@ -84,11 +85,12 @@ export const CreateHotelBodySchema = z.object({
   description: z.string(),
   address: z.string(),
   cityId: z.string(),
-  hotelOwnerId: z.string(),
+  ownerId: z.string(),
   zipCode: z.string(),
   starRating: z.string().optional(),
   amenities: z.array(z.string()).optional(),
   images: z.array(z.string()).optional(),
+  mapCoordinates: z.string(),
 });
 
 export const CreateHotelResponseSchema = z.object({
@@ -108,7 +110,7 @@ export const UpdateHotelBodySchema = z.object({
   state: z.string().optional(),
   country: z.string().optional(),
   zipCode: z.string().optional(),
-  starRating: z.number().int().min(1).max(5).optional(),
+  starRating: z.string(),
   amenities: z.array(z.string()).optional(),
 });
 
@@ -165,7 +167,11 @@ export const createHotelSchema = {
 
 export const updateHotelSchema = {
   params: zodToJsonSchema(GetHotelParamsSchema),
-  body: zodToJsonSchema(UpdateHotelBodySchema),
+  body: zodToJsonSchema(
+    CreateHotelBodySchema.extend({
+      id: z.string(),
+    })
+  ),
   response: {
     200: zodToJsonSchema(UpdateHotelResponseSchema),
   },

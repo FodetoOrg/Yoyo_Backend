@@ -18,7 +18,7 @@ export const hotels = sqliteTable("hotels", {
   starRating: text("star_rating"),
   amenities: text("amenities"), // Stored as JSON string
   ownerId: text("owner_id").references(() => users.id),
-  mapCoordinates: text("map_coordinates"),
+  mapCoordinates: text("map_coordinates").notNull().default('17.4065,78.4772'),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(new Date()),

@@ -124,7 +124,7 @@ export default async function hotelRoutes(fastify: FastifyInstance) {
         summary: "Update hotel details",
         security: [{ bearerAuth: [] }],
       },
-      preHandler: [fastify.authenticate, rbacGuard(permissions.updateHotel)],
+      preHandler: [fastify.authenticate],
     },
     async (request: FastifyRequest, reply) => {
       return hotelController.updateHotel(

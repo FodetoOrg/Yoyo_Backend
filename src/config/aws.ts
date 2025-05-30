@@ -28,6 +28,8 @@ export const uploadToS3 = async (file: Buffer, fileName: string, contentType: st
   });
 
   await upload.done();
+
+  console.log("s3 upload key", key);
   
   return `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/${key}`;
 }; 

@@ -1,6 +1,6 @@
 import { InferSelectModel, relations } from "drizzle-orm";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
-import { hotels } from "./Hotel";
+import { hotelCities, hotels } from "./Hotel";
 
 export const cities = sqliteTable("cities", {
   id: text("id").primaryKey(),
@@ -11,8 +11,9 @@ export const cities = sqliteTable("cities", {
     .default(new Date()),
 });
 
-export const citiesRelations = relations(cities, ({ many }) => ({
-  hotels: many(hotels),
+export const citiesRelations = relations(cities, ({ many, one }) => ({
+  // hotels: many(hotels),
+  // cityHotels : many(hotelCities)
 }));
 
 export type City = InferSelectModel<typeof cities>;
