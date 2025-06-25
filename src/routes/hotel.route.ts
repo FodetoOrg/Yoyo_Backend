@@ -8,8 +8,6 @@ import {
   getHotelSchema,
   getHotelUsersSchema,
 } from "../schemas/hotel.schema";
-import { rbacGuard } from "../plugins/rbacGuard";
-import { permissions } from "../utils/rbac";
 
 interface AuthenticatedRequest extends FastifyRequest {
   user: {

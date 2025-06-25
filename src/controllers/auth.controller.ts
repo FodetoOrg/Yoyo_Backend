@@ -8,7 +8,6 @@ import {
 } from "../schemas/auth.schema";
 import { HttpStatus } from "../types/common";
 import { logger } from "../utils/logger";
-import admin from "../config/firebase/firebase";
 
 export class AuthController {
   private authService: AuthService;

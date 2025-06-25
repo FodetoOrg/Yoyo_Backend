@@ -4,7 +4,10 @@ import {
   addHotelAdminSchema,
   getAllUsersSchema,
   loginSchema,
+  meSchema,
+  profileSchema,
   refreshTokenSchema,
+  updateProfileSchema,
 } from "../schemas/auth.schema";
 import { rbacGuard } from "../plugins/rbacGuard";
 import { permissions } from "../utils/rbac";
@@ -12,18 +15,12 @@ import { permissions } from "../utils/rbac";
 const authController = new AuthController();
 
 export default async function authRoutes(fastify: FastifyInstance) {
-  // Set fastify instance in the auth service
   authController["authService"].setFastify(fastify);
 
-  // Public routes
   fastify.post(
     "/login",
     {
-      schema: {
-        ...loginSchema,
-        tags: ["auth"],
-        summary: "Login with Firebase ID token and get JWT tokens",
-      },
+      schema: loginSchema,
     },
     (request, reply) => authController.login(request, reply)
   );
@@ -31,11 +28,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
   fastify.get(
     "/me",
     {
-      schema: {
-        tags: ["auth"],
-        summary: "Get user profile",
-        security: [{ bearerAuth: [] }],
-      },
+      schema: meSchema,
       preHandler: [fastify.authenticate],
     },
     (request, reply) => authController.verifyToken(request, reply)
@@ -44,24 +37,15 @@ export default async function authRoutes(fastify: FastifyInstance) {
   fastify.post(
     "/refresh-token",
     {
-      schema: {
-        ...refreshTokenSchema,
-        tags: ["auth"],
-        summary: "Refresh access token using refresh token",
-      },
+      schema: refreshTokenSchema,
     },
     (request, reply) => authController.refreshToken(request, reply)
   );
 
-  // Protected routes (require authentication)
   fastify.get(
     "/profile",
     {
-      schema: {
-        tags: ["auth"],
-        summary: "Get user profile",
-        security: [{ bearerAuth: [] }],
-      },
+      schema: profileSchema,
       preHandler: [
         fastify.authenticate,
         rbacGuard(permissions.viewUserProfile),
@@ -73,11 +57,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
   fastify.put(
     "/profile",
     {
-      schema: {
-        tags: ["auth"],
-        summary: "Update user profile",
-        security: [{ bearerAuth: [] }],
-      },
+      schema: updateProfileSchema,
       preHandler: [
         fastify.authenticate,
         rbacGuard(permissions.updateUserProfile),
@@ -86,17 +66,10 @@ export default async function authRoutes(fastify: FastifyInstance) {
     (request, reply) => authController.updateProfile(request, reply)
   );
 
-  // paginated response  userRole , and paginated response
   fastify.get(
     "/users",
     {
-      schema: {
-        ...getAllUsersSchema,
-        tags: ["auth"],
-        summary: "Get all users with pagination",
-        security: [{ bearerAuth: [] }],
-      },
-      // preHandler: [fastify.authenticate],
+      schema: getAllUsersSchema,
     },
     (request, reply) => authController.getAllUsers(request, reply)
   );
@@ -104,11 +77,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
   fastify.post(
     "/addHotelAdmin",
     {
-      schema: {
-        ...addHotelAdminSchema,
-        tags: ["auth"],
-        summary: "Add hotel admin",
-      },
+      schema: addHotelAdminSchema,
     },
     (request, reply) => authController.addHotelAdmin(request, reply)
   );

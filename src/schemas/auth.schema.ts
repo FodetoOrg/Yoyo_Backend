@@ -61,6 +61,8 @@ export const loginSchema = {
     200: zodToJsonSchema(LoginResponseSchema),
     400: zodToJsonSchema(ErrorResponseSchema),
   },
+  tags: ["auth"],
+  summary: "Login with Firebase ID token and get JWT tokens",
 };
 
 export const refreshTokenSchema = {
@@ -69,6 +71,8 @@ export const refreshTokenSchema = {
     200: zodToJsonSchema(RefreshTokenResponseSchema),
     400: zodToJsonSchema(ErrorResponseSchema),
   },
+  tags: ["auth"],
+  summary: "Refresh access token using refresh token",
 };
 
 export const verifyTokenSchema = {
@@ -100,6 +104,9 @@ export const getAllUsersSchema = {
     ),
     400: zodToJsonSchema(ErrorResponseSchema),
   },
+  tags: ["auth"],
+  summary: "Get all users with pagination",
+  security: [{ bearerAuth: [] }],
 };
 
 export const addHotelAdminSchema = {
@@ -121,4 +128,24 @@ export const addHotelAdminSchema = {
     ),
     400: zodToJsonSchema(ErrorResponseSchema),
   },
+  tags: ["auth"],
+  summary: "Add hotel admin",
+};
+
+export const meSchema = {
+  tags: ["auth"],
+  summary: "Get user profile",
+  security: [{ bearerAuth: [] }],
+};
+
+export const profileSchema = {
+  tags: ["auth"],
+  summary: "Get user profile",
+  security: [{ bearerAuth: [] }],
+};
+
+export const updateProfileSchema = {
+  tags: ["auth"],
+  summary: "Update user profile",
+  security: [{ bearerAuth: [] }],
 };
