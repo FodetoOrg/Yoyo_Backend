@@ -24,7 +24,15 @@ export class AuthService {
     try {
       console.log("idToken in start of loginWithFirebase  ", idToken);
 
+      const payload = JSON.parse(Buffer.from(idToken.split('.')[1], 'base64').toString());
+      console.log("Full token received:", idToken.length, idToken.slice(0, 50));
+
+      console.log("🔍 Decoded Token Payload: ", payload);
+
       const decodedToken = await admin.auth().verifyIdToken(idToken);
+
+
+
 
       console.log("decodedToken ", decodedToken);
       console.log("idToken ", idToken);

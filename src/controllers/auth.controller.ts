@@ -25,7 +25,7 @@ export class AuthController {
       const { idToken } = LoginRequestSchema.parse(request.body);
 
       const result = await this.authService.loginWithFirebase(idToken);
-
+      
       const response = LoginResponseSchema.parse({
         success: true,
         data: result,
