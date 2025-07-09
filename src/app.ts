@@ -17,6 +17,7 @@ import hotelRoutes from './routes/hotel.route';
 import bookingRoutes from './routes/booking.route';
 import  staffRoutes  from './routes/staff.route';
 import citiesRoutes from './routes/cities.route';
+import roomTypeRoutes from './routes/roomType.route';
 
 // Create Fastify instance
 export const app: FastifyInstance = fastify({
@@ -53,6 +54,7 @@ app.register(hotelRoutes, { prefix: '/api/v1/hotels' });
 app.register(bookingRoutes, { prefix: '/api/v1/bookings' });
 app.register(staffRoutes, { prefix: '/api/v1/staff' });
 app.register(citiesRoutes, { prefix: '/api/v1/cities' });
+app.register(roomTypeRoutes, { prefix: '/api/v1/room-types' });
 
 // Default route
 app.get('/', async () => {

@@ -18,7 +18,9 @@ export const hotels = sqliteTable("hotels", {
   starRating: text("star_rating"),
   amenities: text("amenities"), // Stored as JSON string
   ownerId: text("owner_id").references(() => users.id),
+  commissionRate: real("commission_rate").notNull().default(10), // Percentage
   mapCoordinates: text("map_coordinates").notNull().default('17.4065,78.4772'),
+  status: text("status").notNull().default('active'), // active, inactive, suspended
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(new Date()),
