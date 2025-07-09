@@ -1,5 +1,6 @@
 import fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
 import { config } from 'dotenv';
 
 // Load environment variables
@@ -18,6 +19,13 @@ import bookingRoutes from './routes/booking.route';
 import  staffRoutes  from './routes/staff.route';
 import citiesRoutes from './routes/cities.route';
 import roomTypeRoutes from './routes/roomType.route';
+import invoiceRoutes from './routes/invoice.route';
+import couponRoutes from './routes/coupon.route';
+import revenueRoutes from './routes/revenue.route';
+import pricingRoutes from './routes/pricing.route';
+import analyticsRoutes from './routes/analytics.route';
+import uploadRoutes from './routes/upload.route';
+import notificationRoutes from './routes/notification.route';
 
 // Create Fastify instance
 export const app: FastifyInstance = fastify({
@@ -42,6 +50,13 @@ app.register(cors, {
   credentials: true,
 });
 
+// Register multipart for file uploads
+app.register(multipart, {
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB
+  },
+});
+
 // Register custom plugins
 app.register(registerSwagger);
 app.register(registerJwt);
@@ -55,6 +70,13 @@ app.register(bookingRoutes, { prefix: '/api/v1/bookings' });
 app.register(staffRoutes, { prefix: '/api/v1/staff' });
 app.register(citiesRoutes, { prefix: '/api/v1/cities' });
 app.register(roomTypeRoutes, { prefix: '/api/v1/room-types' });
+app.register(invoiceRoutes, { prefix: '/api/v1/invoices' });
+app.register(couponRoutes, { prefix: '/api/v1/coupons' });
+app.register(revenueRoutes, { prefix: '/api/v1/revenue' });
+app.register(pricingRoutes, { prefix: '/api/v1/pricing' });
+app.register(analyticsRoutes, { prefix: '/api/v1/analytics' });
+app.register(uploadRoutes, { prefix: '/api/v1/upload' });
+app.register(notificationRoutes, { prefix: '/api/v1/notifications' });
 
 // Default route
 app.get('/', async () => {

@@ -32,6 +32,7 @@
     "@aws-sdk/lib-storage": "^3.817.0",
     "@fastify/cors": "^9.0.0",
     "@fastify/jwt": "^8.0.0",
+    "@fastify/multipart": "^9.0.3",
     "@fastify/swagger": "^8.15.0",
     "@fastify/swagger-ui": "^2.1.0",
     "@firebase/auth": "^1.10.4",
