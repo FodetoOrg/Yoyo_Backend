@@ -362,6 +362,153 @@ async function main() {
     `);
     console.log('Notifications table created');
 
+    // Create notification queue table
+    await db.run(sql`
+      CREATE TABLE IF NOT EXISTS notification_queue (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        type TEXT NOT NULL,
+        priority INTEGER NOT NULL DEFAULT 5,
+        title TEXT NOT NULL,
+        message TEXT NOT NULL,
+        data TEXT,
+        push_token TEXT,
+        email TEXT,
+        phone TEXT,
+        status TEXT NOT NULL DEFAULT 'pending',
+        attempts INTEGER NOT NULL DEFAULT 0,
+        max_attempts INTEGER NOT NULL DEFAULT 3,
+        scheduled_at INTEGER,
+        process_after INTEGER NOT NULL DEFAULT (unixepoch()),
+        sent_at INTEGER,
+        failed_at INTEGER,
+        error TEXT,
+        response TEXT,
+        source TEXT,
+        source_id TEXT,
+        batch_id TEXT,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      )
+    `);
+    console.log('Notification queue table created');
+
+    // Create notification templates table
+    await db.run(sql`
+      CREATE TABLE IF NOT EXISTS notification_templates (
+        id TEXT PRIMARY KEY,
+        key TEXT NOT NULL UNIQUE,
+        name TEXT NOT NULL,
+        description TEXT,
+        push_title TEXT,
+        push_body TEXT,
+        email_subject TEXT,
+        email_html TEXT,
+        email_text TEXT,
+        sms_text TEXT,
+        in_app_title TEXT,
+        in_app_message TEXT,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        priority INTEGER NOT NULL DEFAULT 5,
+        channels TEXT NOT NULL DEFAULT '["in_app"]',
+        variables TEXT,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch())
+      )
+    `);
+    console.log('Notification templates table created');
+
+    // Create user notification preferences table
+    await db.run(sql`
+      CREATE TABLE IF NOT EXISTS user_notification_preferences (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL UNIQUE,
+        push_enabled INTEGER NOT NULL DEFAULT 1,
+        email_enabled INTEGER NOT NULL DEFAULT 1,
+        sms_enabled INTEGER NOT NULL DEFAULT 0,
+        booking_notifications INTEGER NOT NULL DEFAULT 1,
+        payment_notifications INTEGER NOT NULL DEFAULT 1,
+        promotional_notifications INTEGER NOT NULL DEFAULT 0,
+        system_notifications INTEGER NOT NULL DEFAULT 1,
+        quiet_hours_start TEXT DEFAULT '22:00',
+        quiet_hours_end TEXT DEFAULT '08:00',
+        timezone TEXT DEFAULT 'Asia/Kolkata',
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      )
+    `);
+    console.log('User notification preferences table created');
+
+    // Create payment orders table
+    await db.run(sql`
+      CREATE TABLE IF NOT EXISTS payment_orders (
+        id TEXT PRIMARY KEY,
+        booking_id TEXT NOT NULL,
+        user_id TEXT NOT NULL,
+        razorpay_order_id TEXT NOT NULL UNIQUE,
+        amount REAL NOT NULL,
+        currency TEXT NOT NULL DEFAULT 'INR',
+        status TEXT NOT NULL DEFAULT 'created',
+        receipt TEXT NOT NULL,
+        attempts INTEGER NOT NULL DEFAULT 0,
+        max_attempts INTEGER NOT NULL DEFAULT 3,
+        expires_at INTEGER NOT NULL,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        FOREIGN KEY (booking_id) REFERENCES bookings(id),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      )
+    `);
+    console.log('Payment orders table created');
+
+    // Create payment webhooks table
+    await db.run(sql`
+      CREATE TABLE IF NOT EXISTS payment_webhooks (
+        id TEXT PRIMARY KEY,
+        razorpay_event_id TEXT NOT NULL UNIQUE,
+        event TEXT NOT NULL,
+        payment_id TEXT,
+        order_id TEXT,
+        signature TEXT NOT NULL,
+        payload TEXT NOT NULL,
+        processed INTEGER NOT NULL DEFAULT 0,
+        processed_at INTEGER,
+        error TEXT,
+        retry_count INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch())
+      )
+    `);
+    console.log('Payment webhooks table created');
+
+    // Create admin payments table
+    await db.run(sql`
+      CREATE TABLE IF NOT EXISTS admin_payments (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL,
+        from_user_id TEXT,
+        to_user_id TEXT,
+        hotel_id TEXT,
+        booking_id TEXT,
+        revenue_record_id TEXT,
+        amount REAL NOT NULL,
+        currency TEXT NOT NULL DEFAULT 'INR',
+        method TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'pending',
+        reference TEXT,
+        reason TEXT,
+        metadata TEXT,
+        processed_at INTEGER,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        FOREIGN KEY (from_user_id) REFERENCES users(id),
+        FOREIGN KEY (to_user_id) REFERENCES users(id),
+        FOREIGN KEY (booking_id) REFERENCES bookings(id)
+      )
+    `);
+    console.log('Admin payments table created');
+
     console.log('Schema creation completed successfully');
 
     // Create indexes for performance
@@ -387,6 +534,20 @@ async function main() {
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_revenue_records_period ON revenue_records(period)`);
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)`);
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read)`);
+    
+    // Create indexes for notification queue
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_notification_queue_user_id ON notification_queue(user_id)`);
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_notification_queue_status ON notification_queue(status)`);
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_notification_queue_priority ON notification_queue(priority)`);
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_notification_queue_process_after ON notification_queue(process_after)`);
+    
+    // Create indexes for payment tables
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_payment_orders_booking_id ON payment_orders(booking_id)`);
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_payment_orders_user_id ON payment_orders(user_id)`);
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_payment_orders_razorpay_order_id ON payment_orders(razorpay_order_id)`);
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_payment_webhooks_event_id ON payment_webhooks(razorpay_event_id)`);
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_admin_payments_type ON admin_payments(type)`);
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_admin_payments_status ON admin_payments(status)`);
     
     console.log('Indexes created');
 

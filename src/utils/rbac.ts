@@ -34,6 +34,10 @@ export const permissions: Record<string, string> = {
   // Invoices
   viewInvoices: "viewInvoices",
   manageInvoices: "manageInvoices",
+  
+  // Payments
+  managePayments: "managePayments",
+  processRefunds: "processRefunds",
 
 
 };
@@ -60,6 +64,8 @@ export const rolePermissions: Record<string, Record<string, boolean>> = {
     [permissions.viewAnalytics]: true,
     [permissions.viewInvoices]: true,
     [permissions.manageInvoices]: true,
+    [permissions.managePayments]: true,
+    [permissions.processRefunds]: true,
 
   },
   hotel: {
@@ -68,6 +74,8 @@ export const rolePermissions: Record<string, Record<string, boolean>> = {
     [permissions.createRoom]: true,
     [permissions.viewAnalytics]: true,
     [permissions.viewInvoices]: true,
+    [permissions.managePayments]: false,
+    [permissions.processRefunds]: false,
   },
   user: {
     [permissions.viewUserProfile]: true,

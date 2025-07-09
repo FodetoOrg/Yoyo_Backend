@@ -17,3 +17,5 @@ export * from './Revenue';
 export * from './PriceAdjustment';
 export * from './Staff';
 export * from './Notification';
+export * from './NotificationQueue';
+export * from './PaymentOrder';

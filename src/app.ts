@@ -26,6 +26,8 @@ import pricingRoutes from './routes/pricing.route';
 import analyticsRoutes from './routes/analytics.route';
 import uploadRoutes from './routes/upload.route';
 import notificationRoutes from './routes/notification.route';
+import paymentRoutes from './routes/payment.route';
+import { getNotificationProcessor } from './jobs/notification-processor';
 
 // Create Fastify instance
 export const app: FastifyInstance = fastify({
@@ -77,6 +79,7 @@ app.register(pricingRoutes, { prefix: '/api/v1/pricing' });
 app.register(analyticsRoutes, { prefix: '/api/v1/analytics' });
 app.register(uploadRoutes, { prefix: '/api/v1/upload' });
 app.register(notificationRoutes, { prefix: '/api/v1/notifications' });
+app.register(paymentRoutes, { prefix: '/api/v1/payments' });
 
 // Default route
 app.get('/', async () => {
@@ -109,4 +112,20 @@ app.setErrorHandler((error, request, reply) => {
     message,
     statusCode
   });
+});
+
+// Start notification processor
+app.addHook('onReady', async () => {
+  const processor = getNotificationProcessor(app);
+  processor.start(30000); // Process every 30 seconds
+  
+  app.log.info('Notification processor started');
+});
+
+// Stop notification processor on close
+app.addHook('onClose', async () => {
+  const processor = getNotificationProcessor(app);
+  processor.stop();
+  
+  app.log.info('Notification processor stopped');
 });
