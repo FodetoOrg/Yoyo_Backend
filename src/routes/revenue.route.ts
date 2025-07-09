@@ -1,5 +1,13 @@
 import { FastifyInstance } from 'fastify';
 import { RevenueController } from '../controllers/revenue.controller';
+import {
+  getRevenueRecordsSchema,
+  getRevenueRecordByIdSchema,
+  generateRevenueRecordsSchema,
+  markAsPaidSchema,
+  updateStatusSchema,
+  getRevenueSummarySchema,
+} from '../schemas/revenue.schema';
 import { rbacGuard } from '../plugins/rbacGuard';
 import { permissions } from '../utils/rbac';
 
@@ -15,6 +23,7 @@ export default async function revenueRoutes(fastify: FastifyInstance) {
   // Get revenue records with filters
   fastify.get('/', {
     schema: {
+      ...getRevenueRecordsSchema,
       tags: ['revenue'],
       summary: 'Get revenue records with filters',
       security: [{ bearerAuth: [] }]
@@ -25,6 +34,7 @@ export default async function revenueRoutes(fastify: FastifyInstance) {
   // Get revenue record by ID
   fastify.get('/:id', {
     schema: {
+      ...getRevenueRecordByIdSchema,
       tags: ['revenue'],
       summary: 'Get revenue record by ID',
       security: [{ bearerAuth: [] }]
@@ -35,6 +45,7 @@ export default async function revenueRoutes(fastify: FastifyInstance) {
   // Generate revenue records for a period
   fastify.post('/generate', {
     schema: {
+      ...generateRevenueRecordsSchema,
       tags: ['revenue'],
       summary: 'Generate revenue records for a period',
       security: [{ bearerAuth: [] }]
@@ -45,6 +56,7 @@ export default async function revenueRoutes(fastify: FastifyInstance) {
   // Mark revenue record as paid
   fastify.post('/:id/pay', {
     schema: {
+      ...markAsPaidSchema,
       tags: ['revenue'],
       summary: 'Mark revenue record as paid',
       security: [{ bearerAuth: [] }]
@@ -55,6 +67,7 @@ export default async function revenueRoutes(fastify: FastifyInstance) {
   // Update revenue record status
   fastify.put('/:id/status', {
     schema: {
+      ...updateStatusSchema,
       tags: ['revenue'],
       summary: 'Update revenue record status',
       security: [{ bearerAuth: [] }]
@@ -65,6 +78,7 @@ export default async function revenueRoutes(fastify: FastifyInstance) {
   // Get revenue summary
   fastify.get('/summary/overview', {
     schema: {
+      ...getRevenueSummarySchema,
       tags: ['revenue'],
       summary: 'Get revenue summary',
       security: [{ bearerAuth: [] }]

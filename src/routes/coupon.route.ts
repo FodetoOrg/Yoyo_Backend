@@ -1,5 +1,13 @@
 import { FastifyInstance } from 'fastify';
 import { CouponController } from '../controllers/coupon.controller';
+import {
+  getCouponsSchema,
+  getCouponByIdSchema,
+  createCouponSchema,
+  updateCouponSchema,
+  deleteCouponSchema,
+  validateCouponSchema,
+} from '../schemas/coupon.schema';
 import { rbacGuard } from '../plugins/rbacGuard';
 import { permissions } from '../utils/rbac';
 
@@ -15,6 +23,7 @@ export default async function couponRoutes(fastify: FastifyInstance) {
   // Get coupons with filters (Super admin only)
   fastify.get('/', {
     schema: {
+      ...getCouponsSchema,
       tags: ['coupons'],
       summary: 'Get coupons with filters',
       security: [{ bearerAuth: [] }]
@@ -25,6 +34,7 @@ export default async function couponRoutes(fastify: FastifyInstance) {
   // Get coupon by ID (Super admin only)
   fastify.get('/:id', {
     schema: {
+      ...getCouponByIdSchema,
       tags: ['coupons'],
       summary: 'Get coupon by ID',
       security: [{ bearerAuth: [] }]
@@ -35,6 +45,7 @@ export default async function couponRoutes(fastify: FastifyInstance) {
   // Create coupon (Super admin only)
   fastify.post('/', {
     schema: {
+      ...createCouponSchema,
       tags: ['coupons'],
       summary: 'Create a new coupon',
       security: [{ bearerAuth: [] }]
@@ -45,6 +56,7 @@ export default async function couponRoutes(fastify: FastifyInstance) {
   // Update coupon (Super admin only)
   fastify.put('/:id', {
     schema: {
+      ...updateCouponSchema,
       tags: ['coupons'],
       summary: 'Update coupon',
       security: [{ bearerAuth: [] }]
@@ -55,6 +67,7 @@ export default async function couponRoutes(fastify: FastifyInstance) {
   // Delete coupon (Super admin only)
   fastify.delete('/:id', {
     schema: {
+      ...deleteCouponSchema,
       tags: ['coupons'],
       summary: 'Delete coupon',
       security: [{ bearerAuth: [] }]
@@ -65,6 +78,7 @@ export default async function couponRoutes(fastify: FastifyInstance) {
   // Validate coupon (Public for booking process)
   fastify.post('/validate', {
     schema: {
+      ...validateCouponSchema,
       tags: ['coupons'],
       summary: 'Validate coupon for booking',
       security: [{ bearerAuth: [] }]

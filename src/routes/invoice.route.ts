@@ -1,5 +1,12 @@
 import { FastifyInstance } from 'fastify';
 import { InvoiceController } from '../controllers/invoice.controller';
+import {
+  getInvoicesSchema,
+  getInvoiceByIdSchema,
+  createInvoiceSchema,
+  updateInvoiceStatusSchema,
+  generateInvoiceSchema,
+} from '../schemas/invoice.schema';
 import { rbacGuard } from '../plugins/rbacGuard';
 import { permissions } from '../utils/rbac';
 
@@ -15,6 +22,7 @@ export default async function invoiceRoutes(fastify: FastifyInstance) {
   // Get invoices with filters
   fastify.get('/', {
     schema: {
+      ...getInvoicesSchema,
       tags: ['invoices'],
       summary: 'Get invoices with filters',
       security: [{ bearerAuth: [] }]
@@ -25,6 +33,7 @@ export default async function invoiceRoutes(fastify: FastifyInstance) {
   // Get invoice by ID
   fastify.get('/:id', {
     schema: {
+      ...getInvoiceByIdSchema,
       tags: ['invoices'],
       summary: 'Get invoice by ID',
       security: [{ bearerAuth: [] }]
@@ -35,6 +44,7 @@ export default async function invoiceRoutes(fastify: FastifyInstance) {
   // Create invoice
   fastify.post('/', {
     schema: {
+      ...createInvoiceSchema,
       tags: ['invoices'],
       summary: 'Create a new invoice',
       security: [{ bearerAuth: [] }]
@@ -45,6 +55,7 @@ export default async function invoiceRoutes(fastify: FastifyInstance) {
   // Update invoice status
   fastify.put('/:id/status', {
     schema: {
+      ...updateInvoiceStatusSchema,
       tags: ['invoices'],
       summary: 'Update invoice status',
       security: [{ bearerAuth: [] }]
@@ -55,6 +66,7 @@ export default async function invoiceRoutes(fastify: FastifyInstance) {
   // Generate invoice from booking
   fastify.post('/generate', {
     schema: {
+      ...generateInvoiceSchema,
       tags: ['invoices'],
       summary: 'Generate invoice from booking',
       security: [{ bearerAuth: [] }]

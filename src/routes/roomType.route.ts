@@ -1,5 +1,12 @@
 import { FastifyInstance } from 'fastify';
 import { RoomTypeController } from '../controllers/roomType.controller';
+import {
+  getRoomTypesSchema,
+  getRoomTypeByIdSchema,
+  createRoomTypeSchema,
+  updateRoomTypeSchema,
+  deleteRoomTypeSchema,
+} from '../schemas/roomType.schema';
 import { rbacGuard } from '../plugins/rbacGuard';
 import { permissions } from '../utils/rbac';
 
@@ -12,6 +19,7 @@ export default async function roomTypeRoutes(fastify: FastifyInstance) {
   // Get all room types
   fastify.get('/', {
     schema: {
+      ...getRoomTypesSchema,
       tags: ['room-types'],
       summary: 'Get all room types',
       security: [{ bearerAuth: [] }]
@@ -22,6 +30,7 @@ export default async function roomTypeRoutes(fastify: FastifyInstance) {
   // Get room type by ID
   fastify.get('/:id', {
     schema: {
+      ...getRoomTypeByIdSchema,
       tags: ['room-types'],
       summary: 'Get room type by ID',
       security: [{ bearerAuth: [] }]
@@ -32,6 +41,7 @@ export default async function roomTypeRoutes(fastify: FastifyInstance) {
   // Create room type (Super admin only)
   fastify.post('/', {
     schema: {
+      ...createRoomTypeSchema,
       tags: ['room-types'],
       summary: 'Create a new room type',
       security: [{ bearerAuth: [] }]
@@ -45,6 +55,7 @@ export default async function roomTypeRoutes(fastify: FastifyInstance) {
   // Update room type (Super admin only)
   fastify.put('/:id', {
     schema: {
+      ...updateRoomTypeSchema,
       tags: ['room-types'],
       summary: 'Update room type',
       security: [{ bearerAuth: [] }]
@@ -58,6 +69,7 @@ export default async function roomTypeRoutes(fastify: FastifyInstance) {
   // Delete room type (Super admin only)
   fastify.delete('/:id', {
     schema: {
+      ...deleteRoomTypeSchema,
       tags: ['room-types'],
       summary: 'Delete room type',
       security: [{ bearerAuth: [] }]

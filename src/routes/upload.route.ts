@@ -1,5 +1,12 @@
 import { FastifyInstance } from 'fastify';
 import { UploadController } from '../controllers/upload.controller';
+import {
+  uploadBase64ImagesSchema,
+  uploadMultipartImageSchema,
+  uploadMultipleMultipartImagesSchema,
+  generateImageVariantsSchema,
+  deleteImageSchema,
+} from '../schemas/upload.schema';
 
 const uploadController = new UploadController();
 
@@ -13,6 +20,7 @@ export default async function uploadRoutes(fastify: FastifyInstance) {
   // Upload images from base64
   fastify.post('/images/base64', {
     schema: {
+      ...uploadBase64ImagesSchema,
       tags: ['upload'],
       summary: 'Upload images from base64 data',
       security: [{ bearerAuth: [] }]
@@ -22,6 +30,7 @@ export default async function uploadRoutes(fastify: FastifyInstance) {
   // Upload single image from multipart form data
   fastify.post('/images/single', {
     schema: {
+      ...uploadMultipartImageSchema,
       tags: ['upload'],
       summary: 'Upload single image from multipart form data',
       security: [{ bearerAuth: [] }]
@@ -31,6 +40,7 @@ export default async function uploadRoutes(fastify: FastifyInstance) {
   // Upload multiple images from multipart form data
   fastify.post('/images/multiple', {
     schema: {
+      ...uploadMultipleMultipartImagesSchema,
       tags: ['upload'],
       summary: 'Upload multiple images from multipart form data',
       security: [{ bearerAuth: [] }]
@@ -40,6 +50,7 @@ export default async function uploadRoutes(fastify: FastifyInstance) {
   // Generate image variants (original, thumbnail, medium)
   fastify.post('/images/variants', {
     schema: {
+      ...generateImageVariantsSchema,
       tags: ['upload'],
       summary: 'Generate image variants (original, thumbnail, medium)',
       security: [{ bearerAuth: [] }]
@@ -49,6 +60,7 @@ export default async function uploadRoutes(fastify: FastifyInstance) {
   // Delete image
   fastify.delete('/images', {
     schema: {
+      ...deleteImageSchema,
       tags: ['upload'],
       summary: 'Delete image from storage',
       security: [{ bearerAuth: [] }]

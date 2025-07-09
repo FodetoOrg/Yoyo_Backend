@@ -1,5 +1,14 @@
 import { FastifyInstance } from 'fastify';
 import { NotificationController } from '../controllers/notification.controller';
+import {
+  getUserNotificationsSchema,
+  markAsReadSchema,
+  markAllAsReadSchema,
+  deleteNotificationSchema,
+  sendNotificationSchema,
+  sendEmailSchema,
+  sendSMSSchema,
+} from '../schemas/notification.schema';
 import { rbacGuard } from '../plugins/rbacGuard';
 import { permissions } from '../utils/rbac';
 
@@ -15,6 +24,7 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
   // Get user notifications
   fastify.get('/', {
     schema: {
+      ...getUserNotificationsSchema,
       tags: ['notifications'],
       summary: 'Get user notifications',
       security: [{ bearerAuth: [] }]
@@ -24,6 +34,7 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
   // Mark notification as read
   fastify.post('/mark-read', {
     schema: {
+      ...markAsReadSchema,
       tags: ['notifications'],
       summary: 'Mark notification as read',
       security: [{ bearerAuth: [] }]
@@ -33,6 +44,7 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
   // Mark all notifications as read
   fastify.post('/mark-all-read', {
     schema: {
+      ...markAllAsReadSchema,
       tags: ['notifications'],
       summary: 'Mark all notifications as read',
       security: [{ bearerAuth: [] }]
@@ -42,6 +54,7 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
   // Delete notification
   fastify.delete('/', {
     schema: {
+      ...deleteNotificationSchema,
       tags: ['notifications'],
       summary: 'Delete notification',
       security: [{ bearerAuth: [] }]
@@ -51,6 +64,7 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
   // Send real-time notification (Admin only)
   fastify.post('/send', {
     schema: {
+      ...sendNotificationSchema,
       tags: ['notifications'],
       summary: 'Send real-time notification',
       security: [{ bearerAuth: [] }]
@@ -61,6 +75,7 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
   // Send email notification (Admin only)
   fastify.post('/send-email', {
     schema: {
+      ...sendEmailSchema,
       tags: ['notifications'],
       summary: 'Send email notification',
       security: [{ bearerAuth: [] }]
@@ -71,6 +86,7 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
   // Send SMS notification (Admin only)
   fastify.post('/send-sms', {
     schema: {
+      ...sendSMSSchema,
       tags: ['notifications'],
       summary: 'Send SMS notification',
       security: [{ bearerAuth: [] }]

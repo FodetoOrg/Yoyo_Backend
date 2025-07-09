@@ -1,5 +1,13 @@
 import { FastifyInstance } from 'fastify';
 import { PricingController } from '../controllers/pricing.controller';
+import {
+  createPriceAdjustmentSchema,
+  getPriceAdjustmentHistorySchema,
+  getPriceAdjustmentByIdSchema,
+  updatePriceAdjustmentSchema,
+  deletePriceAdjustmentSchema,
+  getEffectivePriceSchema,
+} from '../schemas/pricing.schema';
 import { rbacGuard } from '../plugins/rbacGuard';
 import { permissions } from '../utils/rbac';
 
@@ -15,6 +23,7 @@ export default async function pricingRoutes(fastify: FastifyInstance) {
   // Create price adjustment
   fastify.post('/adjust', {
     schema: {
+      ...createPriceAdjustmentSchema,
       tags: ['pricing'],
       summary: 'Create price adjustment',
       security: [{ bearerAuth: [] }]
@@ -25,6 +34,7 @@ export default async function pricingRoutes(fastify: FastifyInstance) {
   // Get price adjustment history
   fastify.get('/history', {
     schema: {
+      ...getPriceAdjustmentHistorySchema,
       tags: ['pricing'],
       summary: 'Get price adjustment history',
       security: [{ bearerAuth: [] }]
@@ -35,6 +45,7 @@ export default async function pricingRoutes(fastify: FastifyInstance) {
   // Get price adjustment by ID
   fastify.get('/:id', {
     schema: {
+      ...getPriceAdjustmentByIdSchema,
       tags: ['pricing'],
       summary: 'Get price adjustment by ID',
       security: [{ bearerAuth: [] }]
@@ -45,6 +56,7 @@ export default async function pricingRoutes(fastify: FastifyInstance) {
   // Update price adjustment
   fastify.put('/:id', {
     schema: {
+      ...updatePriceAdjustmentSchema,
       tags: ['pricing'],
       summary: 'Update price adjustment',
       security: [{ bearerAuth: [] }]
@@ -55,6 +67,7 @@ export default async function pricingRoutes(fastify: FastifyInstance) {
   // Delete price adjustment
   fastify.delete('/:id', {
     schema: {
+      ...deletePriceAdjustmentSchema,
       tags: ['pricing'],
       summary: 'Delete price adjustment',
       security: [{ bearerAuth: [] }]
@@ -65,6 +78,7 @@ export default async function pricingRoutes(fastify: FastifyInstance) {
   // Get effective price for a room
   fastify.get('/effective-price', {
     schema: {
+      ...getEffectivePriceSchema,
       tags: ['pricing'],
       summary: 'Get effective price for a room',
       security: [{ bearerAuth: [] }]

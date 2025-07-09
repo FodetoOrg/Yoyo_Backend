@@ -1,5 +1,10 @@
 import { FastifyInstance } from 'fastify';
 import { AnalyticsController } from '../controllers/analytics.controller';
+import {
+  getDashboardAnalyticsSchema,
+  getCityAnalyticsSchema,
+  getRevenueAnalyticsSchema,
+} from '../schemas/analytics.schema';
 import { rbacGuard } from '../plugins/rbacGuard';
 import { permissions } from '../utils/rbac';
 
@@ -15,6 +20,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
   // Get dashboard analytics
   fastify.get('/dashboard', {
     schema: {
+      ...getDashboardAnalyticsSchema,
       tags: ['analytics'],
       summary: 'Get dashboard analytics',
       security: [{ bearerAuth: [] }]
@@ -25,6 +31,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
   // Get city analytics
   fastify.get('/cities/:id', {
     schema: {
+      ...getCityAnalyticsSchema,
       tags: ['analytics'],
       summary: 'Get city analytics',
       security: [{ bearerAuth: [] }]
@@ -35,6 +42,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
   // Get revenue analytics
   fastify.get('/revenue', {
     schema: {
+      ...getRevenueAnalyticsSchema,
       tags: ['analytics'],
       summary: 'Get revenue analytics with time series data',
       security: [{ bearerAuth: [] }]

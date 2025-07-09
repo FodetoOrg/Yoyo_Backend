@@ -16,3 +16,4 @@ export * from './Coupon';
 export * from './Revenue';
 export * from './PriceAdjustment';
 export * from './Staff';
+export * from './Notification';

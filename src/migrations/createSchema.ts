@@ -345,6 +345,23 @@ async function main() {
     `);
     console.log('Price adjustments table created');
 
+    // Create notifications table
+    await db.run(sql`
+      CREATE TABLE IF NOT EXISTS notifications (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        message TEXT NOT NULL,
+        type TEXT NOT NULL DEFAULT 'info',
+        data TEXT,
+        read INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      )
+    `);
+    console.log('Notifications table created');
+
     console.log('Schema creation completed successfully');
 
     // Create indexes for performance
@@ -368,6 +385,8 @@ async function main() {
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_coupon_mappings_coupon_id ON coupon_mappings(coupon_id)`);
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_revenue_records_hotel_id ON revenue_records(hotel_id)`);
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_revenue_records_period ON revenue_records(period)`);
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)`);
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_notifications_read ON notifications(read)`);
     
     console.log('Indexes created');
 
