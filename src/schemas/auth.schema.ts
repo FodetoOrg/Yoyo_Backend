@@ -7,15 +7,17 @@ export const UserSchema = z.object({
   id: z.string().uuid(),
   name: z.string().optional(),
   phone: z.string().optional(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
   status: z.enum(["active", "inactive"]),
+  role:z.string()
 });
 
 // Auth tokens schema
 export const AuthTokensSchema = z.object({
   accessToken: z.string(),
   refreshToken: z.string(),
+
 });
 
 // Request schemas
@@ -27,10 +29,11 @@ export const RefreshTokenRequestSchema = z.object({
   refreshToken: z.string(),
 });
 
-// Response schemas
 export const LoginResponseSchema = z.object({
   success: z.boolean(),
-  data: AuthTokensSchema,
+  data: AuthTokensSchema.extend({
+    user: UserSchema,
+  }),
 });
 
 export const RefreshTokenResponseSchema = z.object({

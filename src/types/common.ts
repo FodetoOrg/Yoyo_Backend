@@ -65,7 +65,8 @@ export enum ErrorCode {
 export enum UserRole {
   USER = 'user',
   HOTEL_ADMIN = 'hotel',
-  STAFF = 'staff'
+  STAFF = 'staff',
+  SUPER_ADMIN = 'superAdmin'
 }
 
 export enum UserStatus {

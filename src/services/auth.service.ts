@@ -9,6 +9,7 @@ import { ConflictError } from "../types/errors";
 interface TokenResponse {
   accessToken: string;
   refreshToken: string;
+
 }
 
 export class AuthService {
@@ -20,7 +21,7 @@ export class AuthService {
   }
 
   // Login or register user with Firebase ID token
-  async loginWithFirebase(idToken: string): Promise<TokenResponse> {
+  async loginWithFirebase(idToken: string): Promise<any> {
     try {
       console.log("idToken in start of loginWithFirebase  ", idToken);
 
@@ -83,6 +84,15 @@ export class AuthService {
       return {
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
+        user:{
+          id:user.id,
+          name:user.name || '',
+          phone:user.phone,
+          createdAt:new Date(user.createdAt).toString() || '',
+          updatedAt:new Date(user.updatedAt).toString() || '',
+          status:user.status,
+          role:user.role
+        }
       };
     } catch (error) {
       throw new Error("Invalid Firebase ID token " + error);
