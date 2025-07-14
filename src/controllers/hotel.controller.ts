@@ -175,24 +175,101 @@ export class HotelController {
   async createRoom(request: AuthenticatedRequest, reply: FastifyReply) {
     try {
       const { id: hotelId } = GetHotelParamsSchema.parse(request.params);
-      const roomData = CreateRoomBodySchema.parse(request.body);
+      const roomData = request.body as any; // Handle dynamic frontend data
+      
+      // Validate required fields
+      if (!roomData.name || !roomData.roomNumber || !roomData.pricePerNight) {
+        return reply.code(400).send({
+          success: false,
+          message: 'Missing required fields: name, roomNumber, pricePerNight',
+        });
+      }
+      
       const room = await this.hotelService.createRoom({
-        ...roomData,
         hotelId,
+        roomNumber: roomData.roomNumber,
+        name: roomData.name,
+        description: roomData.description,
+        capacity: parseInt(roomData.capacity) || 1,
+        bedType: roomData.bedType,
+        size: parseFloat(roomData.size),
+        floor: parseInt(roomData.floor),
+        pricePerNight: parseFloat(roomData.pricePerNight),
+        pricePerHour: roomData.pricePerHour ? parseFloat(roomData.pricePerHour) : undefined,
+        type: roomData.type,
+        roomTypeId: roomData.roomTypeId,
+        isHourlyBooking: roomData.isHourlyBooking,
+        isDailyBooking: roomData.isDailyBooking,
+        amenities: Array.isArray(roomData.amenities) ? roomData.amenities : [],
+        status: roomData.status || 'available',
+        images: Array.isArray(roomData.images) ? roomData.images : [],
       });
+      
       return reply.code(201).send({
         success: true,
         message: "Room created successfully",
         data: { room },
       });
     } catch (error) {
-      if (error instanceof z.ZodError) {
-        return reply.code(400).send({
-          success: false,
-          message: "Validation error",
-          errors: error.errors,
-        });
-      }
+      request.log.error(error);
+      return reply.code(500).send({
+        success: false,
+        message: error.message || "Failed to create room",
+      });
+    }
+  }
+
+  async updateRoom(request: AuthenticatedRequest, reply: FastifyReply) {
+    try {
+      const { id: hotelId } = GetHotelParamsSchema.parse(request.params);
+      const { roomId } = request.params as { roomId: string };
+      const roomData = request.body as any; // Handle dynamic frontend data
+      
+      const room = await this.hotelService.getUpdatedRoom(roomId, {
+        hotelId,
+        roomNumber: roomData.roomNumber,
+        name: roomData.name,
+        description: roomData.description,
+        capacity: roomData.capacity ? parseInt(roomData.capacity) : undefined,
+        bedType: roomData.bedType,
+        size: roomData.size ? parseFloat(roomData.size) : undefined,
+        floor: roomData.floor ? parseInt(roomData.floor) : undefined,
+        pricePerNight: roomData.pricePerNight ? parseFloat(roomData.pricePerNight) : undefined,
+        pricePerHour: roomData.pricePerHour ? parseFloat(roomData.pricePerHour) : undefined,
+        type: roomData.type,
+        roomTypeId: roomData.roomTypeId,
+        isHourlyBooking: roomData.isHourlyBooking,
+        isDailyBooking: roomData.isDailyBooking,
+        amenities: Array.isArray(roomData.amenities) ? roomData.amenities : undefined,
+        status: roomData.status,
+        images: Array.isArray(roomData.images) ? roomData.images : undefined,
+      });
+      
+      return reply.code(200).send({
+        success: true,
+        message: "Room updated successfully",
+        data: { room },
+      });
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send({
+        success: false,
+        message: error.message || "Failed to update room",
+      });
+    }
+  }
+
+  async getRoomsByHotel(request: AuthenticatedRequest, reply: FastifyReply) {
+    try {
+      const { id: hotelId } = GetHotelParamsSchema.parse(request.params);
+      const rooms = await this.hotelService.getRoomsByHotelIdEnhanced(hotelId);
+      
+      return reply.code(200).send({
+        success: true,
+        data: { rooms },
+      });
+    } catch (error) {
+      request.log.error(error);
       throw error;
     }
   }

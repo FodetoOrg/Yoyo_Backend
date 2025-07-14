@@ -14,7 +14,9 @@ export const rooms = sqliteTable('rooms', {
   name: text('name').notNull(),
   description: text('description'),
   roomTypeId: text('room_type_id').references(() => roomTypes.id),
+  type: text('type'), // For backward compatibility if roomTypeId is not used
   maxGuests: integer('max_guests').notNull().default(1),
+  capacity: integer('capacity').notNull().default(1), // Alternative to maxGuests
   bedType: text('bed_type'), // single, double, queen, king
   size: real('size'), // in square feet
   floor: integer('floor'),

@@ -5,6 +5,7 @@ import { v4 as uuidv4 } from "uuid";
 import admin from "../config/firebase/firebase";
 import { UserRole, UserStatus } from "../types/common";
 import { ConflictError } from "../types/errors";
+import { hotelUsers } from "../models/Hotel";
 
 interface TokenResponse {
   accessToken: string;
@@ -74,6 +75,15 @@ export class AuthService {
         throw new Error("User not found after creation");
       }
 
+      // Get hotel ID if user is hotel admin
+      let hotelId = null;
+      if (user.role === UserRole.HOTEL_ADMIN) {
+        const hotelUser = await db.query.hotelUsers.findFirst({
+          where: eq(hotelUsers.userId, user.id),
+        });
+        hotelId = hotelUser?.hotelId || null;
+      }
+      
       console.log("user ", user);
       console.log("generating token");
       // Generate JWT tokens
@@ -91,7 +101,8 @@ export class AuthService {
           createdAt:new Date(user.createdAt).toString() || '',
           updatedAt:new Date(user.updatedAt).toString() || '',
           status:user.status,
-          role:user.role
+          role:user.role,
+          hotelId
         }
       };
     } catch (error) {
@@ -174,6 +185,14 @@ export class AuthService {
       return null;
     }
 
+    // Get hotel ID if user is hotel admin
+    let hotelId = null;
+    if (user.role === UserRole.HOTEL_ADMIN) {
+      const hotelUser = await db.query.hotelUsers.findFirst({
+        where: eq(hotelUsers.userId, userId),
+      });
+      hotelId = hotelUser?.hotelId || null;
+    }
     // Remove sensitive information
     return {
       id: user.id,
@@ -181,6 +200,7 @@ export class AuthService {
       name: user.name,
       phone: user.phone,
       role: user.role,
+      hotelId,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     };
