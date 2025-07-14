@@ -168,6 +168,57 @@ async function main() {
         priority: 3,
         variables: JSON.stringify(['amount', 'type', 'reason', 'paymentId']),
       },
+      {
+        id: uuidv4(),
+        key: 'offline_payment_received',
+        name: 'Offline Payment Received',
+        description: 'Sent when offline payment is recorded',
+        pushTitle: 'Payment Received ✅',
+        pushBody: 'Your {{paymentType}} payment of ₹{{amount}} has been received',
+        emailSubject: 'Payment Received - {{hotelName}}',
+        emailHtml: `
+          <h2>Payment Received ✅</h2>
+          <p>We have received your payment.</p>
+          <p><strong>Amount:</strong> ₹{{amount}}</p>
+          <p><strong>Payment Type:</strong> {{paymentType}}</p>
+          <p><strong>Receipt Number:</strong> {{receiptNumber}}</p>
+          <p><strong>Hotel:</strong> {{hotelName}}</p>
+          <p><strong>Booking ID:</strong> {{bookingId}}</p>
+          <p>Thank you for your payment!</p>
+        `,
+        smsText: 'Payment of ₹{{amount}} received for booking {{bookingId}}. Receipt: {{receiptNumber}}',
+        inAppTitle: 'Payment Received ✅',
+        inAppMessage: 'Your {{paymentType}} payment of ₹{{amount}} has been received',
+        channels: JSON.stringify(['push', 'email', 'sms', 'in_app']),
+        priority: 2,
+        variables: JSON.stringify(['amount', 'paymentType', 'receiptNumber', 'hotelName', 'bookingId']),
+      },
+      {
+        id: uuidv4(),
+        key: 'booking_confirmed_offline',
+        name: 'Booking Confirmed (Offline Payment)',
+        description: 'Sent when booking is confirmed with offline payment',
+        pushTitle: 'Booking Confirmed! 🎉',
+        pushBody: 'Your booking at {{hotelName}} is confirmed. Payment due: {{paymentDueDate}}',
+        emailSubject: 'Booking Confirmed - {{hotelName}}',
+        emailHtml: `
+          <h2>Booking Confirmed! 🎉</h2>
+          <p>Your booking has been confirmed.</p>
+          <p><strong>Hotel:</strong> {{hotelName}}</p>
+          <p><strong>Check-in:</strong> {{checkIn}}</p>
+          <p><strong>Check-out:</strong> {{checkOut}}</p>
+          <p><strong>Total Amount:</strong> ₹{{totalAmount}}</p>
+          <p><strong>Payment Due:</strong> {{paymentDueDate}}</p>
+          <p><strong>Booking ID:</strong> {{bookingId}}</p>
+          <p>Please make the payment before the due date.</p>
+        `,
+        smsText: 'Booking confirmed at {{hotelName}}. Payment of ₹{{totalAmount}} due by {{paymentDueDate}}. Booking ID: {{bookingId}}',
+        inAppTitle: 'Booking Confirmed! 🎉',
+        inAppMessage: 'Your booking at {{hotelName}} is confirmed. Payment due: {{paymentDueDate}}',
+        channels: JSON.stringify(['push', 'email', 'sms', 'in_app']),
+        priority: 1,
+        variables: JSON.stringify(['hotelName', 'checkIn', 'checkOut', 'totalAmount', 'paymentDueDate', 'bookingId']),
+      },
     ];
 
     for (const template of templates) {
