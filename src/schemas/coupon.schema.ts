@@ -16,14 +16,14 @@ export const CouponSchema = z.object({
   discountValue: z.number().positive(),
   maxDiscountAmount: z.number().positive().optional(),
   minOrderAmount: z.number().min(0),
-  validFrom: z.string().datetime(),
-  validTo: z.string().datetime(),
+  validFrom: z.string(),
+  validTo: z.string(),
   usageLimit: z.number().int().positive().optional(),
   usedCount: z.number().int().min(0),
   priceIncreasePercentage: z.number().min(0),
   status: z.enum(['active', 'inactive', 'expired']),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
   mappings: z.object({
     cities: z.array(z.object({
       id: z.string().uuid(),

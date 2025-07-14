@@ -115,7 +115,7 @@ export class BookingController {
           booking,
           paymentInfo: {
             totalAmount,
-            currency: 'INR'
+            currency: 'INR',
             paymentMode: booking.paymentMode,
             requiresOnlinePayment: booking.requiresOnlinePayment,
             advanceAmount: booking.advanceAmount,
