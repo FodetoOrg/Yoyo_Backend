@@ -28,6 +28,9 @@ import uploadRoutes from './routes/upload.route';
 import notificationRoutes from './routes/notification.route';
 import paymentRoutes from './routes/payment.route';
 import roomRoutes from './routes/room.route';
+import hotelSearchRoutes from './routes/hotelSearch.route';
+import customerProfileRoutes from './routes/customerProfile.route';
+import wishlistRoutes from './routes/wishlist.route';
 import { getNotificationProcessor } from './jobs/notification-processor';
 
 // Create Fastify instance
@@ -82,6 +85,9 @@ app.register(uploadRoutes, { prefix: '/api/v1/upload' });
 app.register(notificationRoutes, { prefix: '/api/v1/notifications' });
 app.register(paymentRoutes, { prefix: '/api/v1/payments' });
 app.register(roomRoutes, { prefix: '/api/v1/rooms' });
+app.register(hotelSearchRoutes, { prefix: '/api/v1/search' });
+app.register(customerProfileRoutes, { prefix: '/api/v1/profile' });
+app.register(wishlistRoutes, { prefix: '/api/v1/wishlist' });
 
 // Default route
 app.get('/', async () => {

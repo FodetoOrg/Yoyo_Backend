@@ -524,6 +524,75 @@ async function main() {
     `);
     console.log('Admin payments table created');
 
+    // Create customer profiles table
+    await db.run(sql`
+      CREATE TABLE IF NOT EXISTS customer_profiles (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL UNIQUE,
+        full_name TEXT,
+        email TEXT,
+        gender TEXT,
+        date_of_birth INTEGER,
+        profile_image TEXT,
+        booking_updates_enabled INTEGER NOT NULL DEFAULT 1,
+        checkin_reminders_enabled INTEGER NOT NULL DEFAULT 1,
+        security_alerts_enabled INTEGER NOT NULL DEFAULT 1,
+        promotional_offers_enabled INTEGER NOT NULL DEFAULT 0,
+        preferred_language TEXT DEFAULT 'en',
+        currency TEXT DEFAULT 'INR',
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      )
+    `);
+    console.log('Customer profiles table created');
+
+    // Create wishlists table
+    await db.run(sql`
+      CREATE TABLE IF NOT EXISTS wishlists (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        hotel_id TEXT NOT NULL,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (hotel_id) REFERENCES hotels(id),
+        UNIQUE(user_id, hotel_id)
+      )
+    `);
+    console.log('Wishlists table created');
+
+    // Create hotel reviews table (enhanced)
+    await db.run(sql`
+      CREATE TABLE IF NOT EXISTS hotel_reviews (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        hotel_id TEXT NOT NULL,
+        booking_id TEXT,
+        overall_rating REAL NOT NULL,
+        cleanliness_rating REAL,
+        service_rating REAL,
+        location_rating REAL,
+        value_for_money_rating REAL,
+        amenities_rating REAL,
+        title TEXT,
+        comment TEXT,
+        pros TEXT,
+        cons TEXT,
+        stay_date INTEGER,
+        room_type TEXT,
+        trip_type TEXT,
+        is_verified INTEGER NOT NULL DEFAULT 0,
+        is_approved INTEGER NOT NULL DEFAULT 1,
+        helpful_count INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        FOREIGN KEY (user_id) REFERENCES users(id),
+        FOREIGN KEY (hotel_id) REFERENCES hotels(id),
+        FOREIGN KEY (booking_id) REFERENCES bookings(id)
+      )
+    `);
+    console.log('Hotel reviews table created');
+
     console.log('Schema creation completed successfully');
 
     // Create indexes for performance
@@ -563,6 +632,14 @@ async function main() {
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_payment_webhooks_event_id ON payment_webhooks(razorpay_event_id)`);
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_admin_payments_type ON admin_payments(type)`);
     await db.run(sql`CREATE INDEX IF NOT EXISTS idx_admin_payments_status ON admin_payments(status)`);
+    
+    // Create indexes for new tables
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_customer_profiles_user_id ON customer_profiles(user_id)`);
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_wishlists_user_id ON wishlists(user_id)`);
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_wishlists_hotel_id ON wishlists(hotel_id)`);
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_hotel_reviews_hotel_id ON hotel_reviews(hotel_id)`);
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_hotel_reviews_user_id ON hotel_reviews(user_id)`);
+    await db.run(sql`CREATE INDEX IF NOT EXISTS idx_hotel_reviews_rating ON hotel_reviews(overall_rating)`);
     
     console.log('Indexes created');
 

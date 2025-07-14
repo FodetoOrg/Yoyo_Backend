@@ -19,3 +19,6 @@ export * from './Staff';
 export * from './Notification';
 export * from './NotificationQueue';
 export * from './PaymentOrder';
+export * from './CustomerProfile';
+export * from './Wishlist';
+export * from './HotelReview';
