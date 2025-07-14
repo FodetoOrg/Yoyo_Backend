@@ -103,12 +103,6 @@ export class RoomService {
       whereConditions.push(eq(rooms.isDailyBooking, isDailyBooking));
     }
 
-    // Search filter (name, room number, hotel name)
-    let searchCondition = null;
-    if (search) {
-      searchCondition = `(rooms.name LIKE '%${search}%' OR rooms.room_number LIKE '%${search}%' OR hotels.name LIKE '%${search}%')`;
-    }
-
     const roomResults = await db.query.rooms.findMany({
       where: whereConditions.length > 0 ? and(...whereConditions) : undefined,
       with: {

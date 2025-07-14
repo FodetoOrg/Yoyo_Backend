@@ -159,10 +159,39 @@ export class RoomController {
   // Create room
   async createRoom(request: AuthenticatedRequest, reply: FastifyReply) {
     try {
-      const roomData = createRoomSchema.parse(request.body);
-      const userId = request.user?.id;
+      // Handle dynamic frontend data
+      const roomData = request.body as any;
       
-      const roomId = await this.roomService.createRoom(roomData, userId);
+      // Validate required fields
+      if (!roomData.name || !roomData.roomNumber || !roomData.pricePerNight || !roomData.hotelId) {
+        return reply.code(400).send({
+          success: false,
+          message: 'Missing required fields: name, roomNumber, pricePerNight, hotelId',
+        });
+      }
+      
+      const processedData = {
+        hotelId: roomData.hotelId,
+        roomNumber: roomData.roomNumber,
+        name: roomData.name,
+        description: roomData.description,
+        capacity: parseInt(roomData.capacity) || 1,
+        bedType: roomData.bedType,
+        size: roomData.size ? parseFloat(roomData.size) : undefined,
+        floor: roomData.floor ? parseInt(roomData.floor) : undefined,
+        pricePerNight: parseFloat(roomData.pricePerNight),
+        pricePerHour: roomData.pricePerHour ? parseFloat(roomData.pricePerHour) : undefined,
+        type: roomData.type,
+        roomTypeId: roomData.roomTypeId,
+        isHourlyBooking: roomData.isHourlyBooking,
+        isDailyBooking: roomData.isDailyBooking,
+        amenities: Array.isArray(roomData.amenities) ? roomData.amenities : [],
+        status: roomData.status || 'available',
+        images: Array.isArray(roomData.images) ? roomData.images : [],
+      };
+      
+      const userId = request.user?.id;
+      const roomId = await this.roomService.createRoom(processedData, userId);
       const room = await this.roomService.getRoomById(roomId);
       
       return reply.code(201).send({
@@ -172,14 +201,6 @@ export class RoomController {
       });
     } catch (error) {
       request.log.error(error);
-      
-      if (error instanceof z.ZodError) {
-        return reply.code(400).send({
-          success: false,
-          message: 'Validation error',
-          errors: error.errors,
-        });
-      }
       
       const statusCode = error.statusCode || 500;
       return reply.code(statusCode).send({
@@ -193,10 +214,30 @@ export class RoomController {
   async updateRoom(request: AuthenticatedRequest, reply: FastifyReply) {
     try {
       const { id } = roomParamsSchema.parse(request.params);
-      const roomData = updateRoomSchema.parse(request.body);
-      const userId = request.user?.id;
+      const roomData = request.body as any;
       
-      await this.roomService.updateRoom(id, roomData, userId);
+      const processedData: any = {};
+      
+      // Only include fields that are provided
+      if (roomData.roomNumber !== undefined) processedData.roomNumber = roomData.roomNumber;
+      if (roomData.name !== undefined) processedData.name = roomData.name;
+      if (roomData.description !== undefined) processedData.description = roomData.description;
+      if (roomData.capacity !== undefined) processedData.capacity = parseInt(roomData.capacity);
+      if (roomData.bedType !== undefined) processedData.bedType = roomData.bedType;
+      if (roomData.size !== undefined) processedData.size = parseFloat(roomData.size);
+      if (roomData.floor !== undefined) processedData.floor = parseInt(roomData.floor);
+      if (roomData.pricePerNight !== undefined) processedData.pricePerNight = parseFloat(roomData.pricePerNight);
+      if (roomData.pricePerHour !== undefined) processedData.pricePerHour = parseFloat(roomData.pricePerHour);
+      if (roomData.type !== undefined) processedData.type = roomData.type;
+      if (roomData.roomTypeId !== undefined) processedData.roomTypeId = roomData.roomTypeId;
+      if (roomData.isHourlyBooking !== undefined) processedData.isHourlyBooking = roomData.isHourlyBooking;
+      if (roomData.isDailyBooking !== undefined) processedData.isDailyBooking = roomData.isDailyBooking;
+      if (roomData.amenities !== undefined) processedData.amenities = Array.isArray(roomData.amenities) ? roomData.amenities : [];
+      if (roomData.status !== undefined) processedData.status = roomData.status;
+      if (roomData.images !== undefined) processedData.images = Array.isArray(roomData.images) ? roomData.images : [];
+      
+      const userId = request.user?.id;
+      await this.roomService.updateRoom(id, processedData, userId);
       const room = await this.roomService.getRoomById(id);
       
       return reply.code(200).send({
