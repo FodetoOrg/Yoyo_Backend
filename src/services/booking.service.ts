@@ -15,6 +15,8 @@ interface BookingCreateParams {
   guestCount: number;
   totalAmount: number;
   specialRequests?: string;
+  paymentMode?: 'online' | 'offline';
+  advanceAmount?: number;
 }
 
 export class BookingService {
@@ -80,6 +82,46 @@ export class BookingService {
     const db = this.fastify.db;
     const bookingId = uuidv4();
     
+    // Get hotel payment configuration
+    const hotel = await db.query.hotels.findFirst({
+      where: eq(hotels.id, bookingData.hotelId)
+    });
+    
+    if (!hotel) {
+      throw new Error('Hotel not found');
+    }
+    
+    // Determine payment mode based on hotel configuration and user preference
+    let finalPaymentMode = bookingData.paymentMode || 'offline';
+    let requiresOnlinePayment = false;
+    let paymentDueDate = null;
+    let remainingAmount = bookingData.totalAmount;
+    let advanceAmount = 0;
+    
+    // Validate payment mode against hotel configuration
+    if (finalPaymentMode === 'online' && !hotel.onlinePaymentEnabled) {
+      throw new Error('Online payment is not enabled for this hotel');
+    }
+    
+    if (finalPaymentMode === 'offline' && !hotel.offlinePaymentEnabled) {
+      throw new Error('Offline payment is not enabled for this hotel');
+    }
+    
+    // Set payment requirements based on mode
+    if (finalPaymentMode === 'online') {
+      requiresOnlinePayment = true;
+    } else {
+      // For offline payments, set due date (e.g., 24 hours before check-in)
+      paymentDueDate = new Date(bookingData.checkInDate);
+      paymentDueDate.setHours(paymentDueDate.getHours() - 24);
+      
+      // Handle advance payment if specified
+      if (bookingData.advanceAmount && bookingData.advanceAmount > 0) {
+        advanceAmount = Math.min(bookingData.advanceAmount, bookingData.totalAmount);
+        remainingAmount = bookingData.totalAmount - advanceAmount;
+      }
+    }
+    
     await db.insert(bookings).values({
       id: bookingId,
       userId: bookingData.userId,
@@ -91,9 +133,14 @@ export class BookingService {
       totalHours: bookingData.totalHours,
       guestCount: bookingData.guestCount,
       totalAmount: bookingData.totalAmount,
+      paymentMode: finalPaymentMode,
+      requiresOnlinePayment,
+      paymentDueDate,
+      advanceAmount,
+      remainingAmount,
       specialRequests: bookingData.specialRequests,
-      status: 'pending',
-      paymentStatus: 'pending',
+      status: finalPaymentMode === 'offline' ? 'confirmed' : 'pending',
+      paymentStatus: finalPaymentMode === 'offline' ? 'pending' : 'pending',
     });
     
     // Get the created booking
@@ -131,6 +178,11 @@ export class BookingService {
       totalHours: booking.totalHours,
       guestCount: booking.guestCount,
       totalAmount: booking.totalAmount,
+      paymentMode: booking.paymentMode,
+      requiresOnlinePayment: booking.requiresOnlinePayment,
+      paymentDueDate: booking.paymentDueDate,
+      advanceAmount: booking.advanceAmount,
+      remainingAmount: booking.remainingAmount,
       status: booking.status,
       paymentStatus: booking.paymentStatus,
       specialRequests: booking.specialRequests,
@@ -224,6 +276,7 @@ export class BookingService {
       bookingType: booking.bookingType,
       guestCount: booking.guestCount,
       totalAmount: booking.totalAmount,
+      paymentMode: booking.paymentMode,
       status: booking.status,
       paymentStatus: booking.paymentStatus,
       bookingDate: booking.bookingDate,

@@ -36,6 +36,9 @@ interface HotelCreateParams {
   ownerId: string;
   images?: string[];
   mapCoordinates: string;
+  paymentMode?: 'online' | 'offline' | 'both';
+  onlinePaymentEnabled?: boolean;
+  offlinePaymentEnabled?: boolean;
 }
 
 interface RoomCreateParams {
@@ -126,6 +129,9 @@ export class HotelService {
       starRating: hotel.starRating,
       amenities: hotel.amenities ? JSON.parse(hotel.amenities) : [],
       ownerId: hotel.ownerId,
+      paymentMode: hotel.paymentMode,
+      onlinePaymentEnabled: hotel.onlinePaymentEnabled,
+      offlinePaymentEnabled: hotel.offlinePaymentEnabled,
       createdAt: hotel.createdAt,
       updatedAt: hotel.updatedAt,
       cityId: hotel.city.cityId,
@@ -181,6 +187,9 @@ export class HotelService {
           : null,
         ownerId: hotelData.ownerId,
         mapCoordinates: hotelData.mapCoordinates,
+        paymentMode: hotelData.paymentMode || 'offline',
+        onlinePaymentEnabled: hotelData.onlinePaymentEnabled || false,
+        offlinePaymentEnabled: hotelData.offlinePaymentEnabled !== false, // Default true
       });
 
       // add hotel city to hotel

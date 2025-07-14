@@ -91,6 +91,9 @@ export const CreateHotelBodySchema = z.object({
   amenities: z.array(z.string()).optional(),
   images: z.array(z.string()).optional(),
   mapCoordinates: z.string(),
+  paymentMode: z.enum(['online', 'offline', 'both']).default('offline'),
+  onlinePaymentEnabled: z.boolean().default(false),
+  offlinePaymentEnabled: z.boolean().default(true),
 });
 
 export const CreateHotelResponseSchema = z.object({
@@ -112,6 +115,9 @@ export const UpdateHotelBodySchema = z.object({
   zipCode: z.string().optional(),
   starRating: z.string(),
   amenities: z.array(z.string()).optional(),
+  paymentMode: z.enum(['online', 'offline', 'both']).optional(),
+  onlinePaymentEnabled: z.boolean().optional(),
+  offlinePaymentEnabled: z.boolean().optional(),
 });
 
 export const UpdateHotelResponseSchema = z.object({

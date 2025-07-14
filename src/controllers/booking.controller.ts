@@ -116,6 +116,11 @@ export class BookingController {
           paymentInfo: {
             totalAmount,
             currency: 'INR'
+            paymentMode: booking.paymentMode,
+            requiresOnlinePayment: booking.requiresOnlinePayment,
+            advanceAmount: booking.advanceAmount,
+            remainingAmount: booking.remainingAmount,
+            paymentDueDate: booking.paymentDueDate
           }
         }
       });

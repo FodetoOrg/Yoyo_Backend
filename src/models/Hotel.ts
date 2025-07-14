@@ -20,6 +20,9 @@ export const hotels = sqliteTable("hotels", {
   ownerId: text("owner_id").references(() => users.id),
   commissionRate: real("commission_rate").notNull().default(10), // Percentage
   mapCoordinates: text("map_coordinates").notNull().default('17.4065,78.4772'),
+  paymentMode: text("payment_mode").notNull().default('offline'), // 'online', 'offline', 'both'
+  onlinePaymentEnabled: integer("online_payment_enabled", { mode: 'boolean' }).notNull().default(false),
+  offlinePaymentEnabled: integer("offline_payment_enabled", { mode: 'boolean' }).notNull().default(true),
   status: text("status").notNull().default('active'), // active, inactive, suspended
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()

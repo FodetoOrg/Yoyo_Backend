@@ -216,4 +216,39 @@ export class PaymentController {
       });
     }
   }
+
+  // Record offline payment
+  async recordOfflinePayment(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const paymentData = recordOfflinePaymentSchema.parse(request.body);
+      
+      const processedData = {
+        ...paymentData,
+        transactionDate: paymentData.transactionDate ? new Date(paymentData.transactionDate) : undefined,
+      };
+      
+      const result = await this.paymentService.recordOfflinePayment(processedData);
+
+      return reply.code(201).send({
+        success: true,
+        message: 'Offline payment recorded successfully',
+        data: result,
+      });
+    } catch (error) {
+      request.log.error(error);
+
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({
+          success: false,
+          message: 'Validation error',
+          errors: error.errors,
+        });
+      }
+
+      return reply.code(500).send({
+        success: false,
+        message: error.message || 'Failed to record offline payment',
+      });
+    }
+  }
 }

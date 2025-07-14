@@ -18,10 +18,15 @@ export const bookings = sqliteTable('bookings', {
   totalHours: integer('total_hours'), // Only for hourly bookings
   guestCount: integer('guest_count').notNull().default(1),
   totalAmount: real('total_amount').notNull(),
+  paymentMode: text('payment_mode').notNull().default('offline'), // 'online', 'offline'
+  requiresOnlinePayment: integer('requires_online_payment', { mode: 'boolean' }).notNull().default(false),
   status: text('status').notNull().default('pending'), // pending, confirmed, cancelled, completed
   paymentStatus: text('payment_status').notNull().default('pending'), // pending, completed, failed, refunded
   bookingDate: integer('booking_date', { mode: 'timestamp' }).notNull().default(new Date()),
   specialRequests: text('special_requests'),
+  paymentDueDate: integer('payment_due_date', { mode: 'timestamp' }), // For offline payments
+  advanceAmount: real('advance_amount').default(0), // For partial payments
+  remainingAmount: real('remaining_amount').default(0), // For partial payments
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(new Date()),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(new Date()),
 });

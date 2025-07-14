@@ -72,4 +72,14 @@ export default async function paymentRoutes(fastify: FastifyInstance) {
     },
     preHandler: [fastify.authenticate]
   }, (request, reply) => paymentController.getPaymentHistory(request, reply));
+
+  // Record offline payment
+  fastify.post('/offline', {
+    schema: {
+      tags: ['payments'],
+      summary: 'Record offline payment',
+      security: [{ bearerAuth: [] }]
+    },
+    preHandler: [fastify.authenticate]
+  }, (request, reply) => paymentController.recordOfflinePayment(request, reply));
 }
