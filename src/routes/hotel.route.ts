@@ -157,7 +157,6 @@ export default async function hotelRoutes(fastify: FastifyInstance) {
     "/:id/rooms",
     {
       schema: {
-        ...createRoomSchema,
         tags: ["hotels"],
         summary: "Create a new room",
         security: [{ bearerAuth: [] }],
@@ -166,6 +165,89 @@ export default async function hotelRoutes(fastify: FastifyInstance) {
     },
     async (request: FastifyRequest, reply) => {
       return hotelController.createRoom(request as AuthenticatedRequest, reply);
+    }
+  );
+
+  // Update room (authenticated)
+  fastify.put(
+    "/:id/rooms/:roomId",
+    {
+      schema: {
+        tags: ["hotels"],
+        summary: "Update a room",
+        security: [{ bearerAuth: [] }],
+      },
+      preHandler: [fastify.authenticate],
+    },
+    async (request: FastifyRequest, reply) => {
+      return hotelController.updateRoom(request as AuthenticatedRequest, reply);
+    }
+  );
+
+  // Get rooms by hotel (authenticated)
+  fastify.get(
+    "/:id/rooms",
+    {
+      schema: {
+        tags: ["hotels"],
+        summary: "Get all rooms for a hotel",
+        security: [{ bearerAuth: [] }],
+      },
+      preHandler: [fastify.authenticate],
+    },
+    async (request: FastifyRequest, reply) => {
+      return hotelController.getRoomsByHotel(request as AuthenticatedRequest, reply);
+    }
+  );
+
+  // Get single room (authenticated)
+  fastify.get(
+    "/:id/rooms/:roomId",
+    {
+      schema: {
+        tags: ["hotels"],
+        summary: "Get a specific room",
+        security: [{ bearerAuth: [] }],
+      },
+      preHandler: [fastify.authenticate],
+    },
+    async (request: FastifyRequest, reply) => {
+      const { roomId } = request.params as { roomId: string };
+      const room = await hotelController.hotelService.getRoomById(roomId);
+      
+      if (!room) {
+        return reply.code(404).send({
+          success: false,
+          message: "Room not found",
+        });
+      }
+      
+      return reply.code(200).send({
+        success: true,
+        data: { room },
+      });
+    }
+  );
+
+  // Delete room (authenticated)
+  fastify.delete(
+    "/:id/rooms/:roomId",
+    {
+      schema: {
+        tags: ["hotels"],
+        summary: "Delete a room",
+        security: [{ bearerAuth: [] }],
+      },
+      preHandler: [fastify.authenticate],
+    },
+    async (request: FastifyRequest, reply) => {
+      const { roomId } = request.params as { roomId: string };
+      await hotelController.hotelService.deleteRoom(roomId);
+      
+      return reply.code(200).send({
+        success: true,
+        message: "Room deleted successfully",
+      });
     }
   );
 }

@@ -130,14 +130,22 @@ export const UpdateHotelResponseSchema = z.object({
 
 // Create room schema
 export const CreateRoomBodySchema = z.object({
+  roomNumber: z.string().min(1),
   name: z.string().min(1),
   description: z.string().optional(),
-  maxGuests: z.number().int().min(1),
+  capacity: z.number().int().min(1),
+  bedType: z.string().optional(),
+  size: z.number().optional(),
+  floor: z.number().int().optional(),
   pricePerNight: z.number().min(0),
   pricePerHour: z.number().min(0).optional(),
-  roomType: z.string().min(1),
+  type: z.string().optional(),
+  roomTypeId: z.string().uuid().optional(),
+  isHourlyBooking: z.union([z.boolean(), z.string()]).optional(),
+  isDailyBooking: z.union([z.boolean(), z.string()]).optional(),
   amenities: z.array(z.string()).optional(),
-  available: z.boolean().default(true),
+  status: z.string().default('available'),
+  images: z.array(z.string()).optional(),
 });
 
 export const CreateRoomResponseSchema = z.object({

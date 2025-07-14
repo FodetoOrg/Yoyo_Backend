@@ -43,14 +43,22 @@ interface HotelCreateParams {
 
 interface RoomCreateParams {
   hotelId: string;
+  roomNumber: string;
   name: string;
   description?: string;
-  maxGuests: number;
+  capacity: number;
+  bedType?: string;
+  size?: number;
+  floor?: number;
   pricePerNight: number;
   pricePerHour?: number;
-  roomType: string;
+  type?: string;
+  roomTypeId?: string;
+  isHourlyBooking?: boolean;
+  isDailyBooking?: boolean;
   amenities?: string[];
-  available?: boolean;
+  status?: string;
+  images?: string[];
 }
 
 export class HotelService {
@@ -334,18 +342,59 @@ export class HotelService {
     const db = this.fastify.db;
     const roomId = uuidv4();
 
+    // Handle image uploads if present
+    let imageUrls: string[] = [];
+    if (roomData.images && roomData.images.length > 0) {
+      imageUrls = await Promise.all(
+        roomData.images.map(async (base64Image) => {
+          // Check if it's base64 data
+          if (base64Image.startsWith('data:image/')) {
+            const buffer = Buffer.from(base64Image.split(',')[1], 'base64');
+            return await uploadToS3(buffer, `room-${roomId}-${Date.now()}.jpg`, 'image/jpeg');
+          }
+          return base64Image; // If it's already a URL
+        })
+      );
+    }
+
+    // Convert boolean strings to actual booleans
+    const isHourlyBooking = roomData.isHourlyBooking === 'Active' || roomData.isHourlyBooking === true;
+    const isDailyBooking = roomData.isDailyBooking === 'Active' || roomData.isDailyBooking === true;
+
     await db.insert(rooms).values({
       id: roomId,
       hotelId: roomData.hotelId,
+      roomNumber: roomData.roomNumber,
       name: roomData.name,
       description: roomData.description,
-      maxGuests: roomData.maxGuests,
+      roomTypeId: roomData.roomTypeId,
+      type: roomData.type,
+      maxGuests: roomData.capacity, // Map capacity to maxGuests
+      capacity: roomData.capacity,
+      bedType: roomData.bedType,
+      size: roomData.size,
+      floor: roomData.floor,
       pricePerNight: roomData.pricePerNight,
       pricePerHour: roomData.pricePerHour,
-      roomType: roomData.roomType,
+      isHourlyBooking,
+      isDailyBooking,
       amenities: roomData.amenities ? JSON.stringify(roomData.amenities) : null,
-      available: roomData.available !== undefined ? roomData.available : true,
+      status: roomData.status || 'available',
     });
+
+    // Create room images if uploaded
+    if (imageUrls.length > 0) {
+      await Promise.all(
+        imageUrls.map(async (url, index) => {
+          await db.insert(roomImages).values({
+            id: uuidv4(),
+            roomId,
+            url,
+            isPrimary: index === 0, // First image is primary
+          });
+        })
+      );
+    }
 
     // Get the created room
     const room = await this.getRoomById(roomId);
@@ -360,6 +409,7 @@ export class HotelService {
       where: eq(rooms.id, roomId),
       with: {
         images: true,
+        roomType: true,
       },
     });
 
@@ -371,14 +421,27 @@ export class HotelService {
     return {
       id: room.id,
       hotelId: room.hotelId,
+      roomNumber: room.roomNumber,
       name: room.name,
       description: room.description,
-      maxGuests: room.maxGuests,
+      capacity: room.capacity,
+      maxGuests: room.maxGuests, // Keep for backward compatibility
+      bedType: room.bedType,
+      size: room.size,
+      floor: room.floor,
       pricePerNight: room.pricePerNight,
       pricePerHour: room.pricePerHour,
-      roomType: room.roomType,
+      type: room.type,
+      roomTypeId: room.roomTypeId,
+      roomType: room.roomType ? {
+        id: room.roomType.id,
+        name: room.roomType.name,
+        description: room.roomType.description,
+      } : null,
+      isHourlyBooking: room.isHourlyBooking,
+      isDailyBooking: room.isDailyBooking,
       amenities: room.amenities ? JSON.parse(room.amenities) : [],
-      available: room.available,
+      status: room.status,
       createdAt: room.createdAt,
       updatedAt: room.updatedAt,
       images: room.images.map((image) => ({
@@ -426,23 +489,124 @@ export class HotelService {
   async updateRoom(roomId: string, roomData: Partial<RoomCreateParams>) {
     const db = this.fastify.db;
 
-    // Process amenities if provided
-    let processedData: any = { ...roomData };
-    if (roomData.amenities) {
-      processedData.amenities = JSON.stringify(roomData.amenities);
-    }
+    return await db.transaction(async (tx) => {
+      // Handle image uploads if present
+      let imageUrls: string[] = [];
+      if (roomData.images && roomData.images.length > 0) {
+        // Delete existing images
+        await tx.delete(roomImages).where(eq(roomImages.roomId, roomId));
+        
+        imageUrls = await Promise.all(
+          roomData.images.map(async (base64Image) => {
+            // Check if it's base64 data
+            if (base64Image.startsWith('data:image/')) {
+              const buffer = Buffer.from(base64Image.split(',')[1], 'base64');
+              return await uploadToS3(buffer, `room-${roomId}-${Date.now()}.jpg`, 'image/jpeg');
+            }
+            return base64Image; // If it's already a URL
+          })
+        );
+      }
 
-    await db
-      .update(rooms)
-      .set({
-        ...processedData,
-        updatedAt: new Date(),
-      })
-      .where(eq(rooms.id, roomId));
+      // Process data for update
+      let processedData: any = { ...roomData };
+      
+      // Handle amenities
+      if (roomData.amenities) {
+        processedData.amenities = JSON.stringify(roomData.amenities);
+      }
+      
+      // Handle boolean conversions
+      if (roomData.isHourlyBooking !== undefined) {
+        processedData.isHourlyBooking = roomData.isHourlyBooking === 'Active' || roomData.isHourlyBooking === true;
+      }
+      if (roomData.isDailyBooking !== undefined) {
+        processedData.isDailyBooking = roomData.isDailyBooking === 'Active' || roomData.isDailyBooking === true;
+      }
+      
+      // Map capacity to maxGuests if provided
+      if (roomData.capacity) {
+        processedData.maxGuests = roomData.capacity;
+      }
+      
+      // Remove images from processed data as we handle them separately
+      delete processedData.images;
+      processedData.updatedAt = new Date();
 
-    // Get the updated room
-    const room = await this.getRoomById(roomId);
-    return room;
+      await tx
+        .update(rooms)
+        .set(processedData)
+        .where(eq(rooms.id, roomId));
+
+      // Create new room images if uploaded
+      if (imageUrls.length > 0) {
+        await Promise.all(
+          imageUrls.map(async (url, index) => {
+            await tx.insert(roomImages).values({
+              id: uuidv4(),
+              roomId,
+              url,
+              isPrimary: index === 0, // First image is primary
+            });
+          })
+        );
+      }
+
+      return roomId;
+    });
+  }
+
+  // Get updated room after update
+  async getUpdatedRoom(roomId: string, roomData: Partial<RoomCreateParams>) {
+    await this.updateRoom(roomId, roomData);
+    return await this.getRoomById(roomId);
+  }
+
+  // Get rooms by hotel ID with enhanced data
+  async getRoomsByHotelIdEnhanced(hotelId: string) {
+    const db = this.fastify.db;
+
+    const roomResults = await db.query.rooms.findMany({
+      where: eq(rooms.hotelId, hotelId),
+      with: {
+        images: true,
+        roomType: true,
+      },
+      orderBy: [rooms.roomNumber, rooms.name],
+    });
+
+    // Format room results
+    return roomResults.map((room) => ({
+      id: room.id,
+      hotelId: room.hotelId,
+      roomNumber: room.roomNumber,
+      name: room.name,
+      description: room.description,
+      capacity: room.capacity,
+      maxGuests: room.maxGuests,
+      bedType: room.bedType,
+      size: room.size,
+      floor: room.floor,
+      pricePerNight: room.pricePerNight,
+      pricePerHour: room.pricePerHour,
+      type: room.type,
+      roomTypeId: room.roomTypeId,
+      roomType: room.roomType ? {
+        id: room.roomType.id,
+        name: room.roomType.name,
+      } : null,
+      isHourlyBooking: room.isHourlyBooking,
+      isDailyBooking: room.isDailyBooking,
+      amenities: room.amenities ? JSON.parse(room.amenities) : [],
+      status: room.status,
+      createdAt: room.createdAt,
+      updatedAt: room.updatedAt,
+      images: room.images.map((image) => ({
+        id: image.id,
+        url: image.url,
+        isPrimary: image.isPrimary,
+      })),
+    }));
   }
 
   // Delete a room
