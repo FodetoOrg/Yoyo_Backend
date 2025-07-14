@@ -64,7 +64,7 @@ export const RoomFiltersSchema = z.object({
 });
 
 export const CreateRoomRequestSchema = z.object({
-  hotelId: z.string().uuid(),
+  hotelId: z.string(),
   roomNumber: z.string().min(1),
   name: z.string().min(1),
   description: z.string().optional(),
