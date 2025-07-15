@@ -39,7 +39,7 @@ export const SearchHotelsRequestSchema = z.object({
 });
 
 export const HomeTabQuerySchema = z.object({
-  coordinates: CoordinatesSchema.optional(),
+  coordinates: CoordinatesSchema,
   limit: z.number().int().min(1).max(20).default(10),
 });
 
