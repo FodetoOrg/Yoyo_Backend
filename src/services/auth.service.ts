@@ -22,7 +22,7 @@ export class AuthService {
   }
 
   // Login or register user with Firebase ID token
-  async loginWithFirebase(idToken: string): Promise<any> {
+  async loginWithFirebase(idToken: string, role: string = "user"): Promise<any> {
     try {
       console.log("idToken in start of loginWithFirebase  ", idToken);
 
@@ -48,7 +48,10 @@ export class AuthService {
       console.log("userFromFirebase ", userFromFirebase);
       // Check if user exists
       let user = await db.query.users.findFirst({
-        where: eq(users.phone, decodedToken.phone_number),
+        where: and(
+          eq(users.phone, decodedToken.phone_number),
+          eq(users.role, role)
+        ),
       });
 
       // If user doesn't exist, create a new user
@@ -56,6 +59,8 @@ export class AuthService {
         const userId = uuidv4();
         const now = new Date();
 
+        // Determine hasOnboarded based on role
+        const hasOnboarded = role === "hotel" || role === "superAdmin";
         user = await db
           .insert(users)
           .values({
@@ -63,7 +68,8 @@ export class AuthService {
             email: "",
             name: userFromFirebase.displayName || null,
             phone: userFromFirebase.phoneNumber || null,
-            role: "user",
+            role: role as any,
+            hasOnboarded,
             firebaseUid: decodedToken.uid,
             createdAt: now,
             updatedAt: now,
@@ -98,6 +104,7 @@ export class AuthService {
           id:user.id,
           name:user.name || '',
           phone:user.phone,
+          hasOnboarded: user.hasOnboarded,
           createdAt:new Date(user.createdAt).toString() || '',
           updatedAt:new Date(user.updatedAt).toString() || '',
           status:user.status,
@@ -145,7 +152,7 @@ export class AuthService {
   // Refresh access token using refresh token
   async refreshToken(
     refreshToken: string
-  ): Promise<{ accessToken: string; refreshToken: string }> {
+  ): Promise<{ accessToken: string; refreshToken: string; user: any }> {
     try {
       const decoded = await this.fastify.jwt.verify(refreshToken);
       console.log("decoded in refreshToken ", decoded);
@@ -159,14 +166,34 @@ export class AuthService {
         throw new Error("User not found");
       }
 
+      // Get hotel ID if user is hotel admin
+      let hotelId = null;
+      if (user.role === UserRole.HOTEL_ADMIN) {
+        const hotelUser = await this.fastify.db.query.hotelUsers.findFirst({
+          where: eq(hotelUsers.userId, user.id),
+        });
+        hotelId = hotelUser?.hotelId || null;
+      }
       const tokens = await this.generateTokens({
         id: user.id,
         phone: user.phone,
         role: user.role,
       });
       console.log("tokens in refreshToken ", tokens);
-      // Generate new tokens
-      return tokens;
+      return {
+        ...tokens,
+        user: {
+          id: user.id,
+          name: user.name || '',
+          phone: user.phone,
+          hasOnboarded: user.hasOnboarded,
+          createdAt: new Date(user.createdAt).toString() || '',
+          updatedAt: new Date(user.updatedAt).toString() || '',
+          status: user.status,
+          role: user.role,
+          hotelId
+        }
+      };
     } catch (error) {
       console.log(error);
       throw new Error("Invalid refresh token ");
@@ -252,9 +279,14 @@ export class AuthService {
   async addHotelAdmin(name: string, phone: string, email: string) {
     const db = this.fastify.db;
 
+    // Check if hotel admin with this phone already exists
     const user = await db.query.users.findFirst({
-      where: eq(users.phone, `+91${phone}`),
+      where: and(
+        eq(users.phone, `+91${phone}`),
+        eq(users.role, UserRole.HOTEL_ADMIN)
+      ),
     });
+    
     if (user) {
       console.log("user already exists with this phone number");
       throw new ConflictError("User already exists with this phone number");
@@ -266,6 +298,7 @@ export class AuthService {
       name,
       phone: `+91${phone}`,
       role: UserRole.HOTEL_ADMIN,
+      hasOnboarded: true, // Hotel admins are pre-onboarded
       status: UserStatus.ACTIVE,
       firebaseUid: `${phone}_temp_uid`,
     }).returning();

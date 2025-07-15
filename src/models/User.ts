@@ -18,6 +18,9 @@ export const users = sqliteTable("users", {
   email: text("email"),
   name: text("name"),
   phone: text("phone").unique(),
+  hasOnboarded: integer("has_onboarded", { mode: "boolean" })
+    .notNull()
+    .default(false),
   role: text("role", {
     enum: [UserRole.USER, UserRole.HOTEL_ADMIN, UserRole.STAFF],
   })
@@ -35,7 +38,10 @@ export const users = sqliteTable("users", {
   updatedAt: integer("updated_at", { mode: "timestamp" })
     .notNull()
     .default(new Date()),
-});
+}, (table) => ({
+  // Make phone + role combination unique
+  phoneRoleUnique: unique().on(table.phone, table.role),
+}));
 
 // Define relationships
 export const usersRelations = relations(users, ({ many }) => ({
