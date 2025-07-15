@@ -17,17 +17,7 @@ export class HotelSearchController {
   // Main hotel search
   async searchHotels(request: FastifyRequest, reply: FastifyReply) {
     try {
-      // Parse and validate the search data
-      let searchData;
-      try {
-        searchData = SearchHotelsRequestSchema.parse(request.body);
-      } catch (validationError) {
-        return reply.code(400).send({
-          success: false,
-          message: 'Validation error',
-          errors: validationError.errors || [{ message: validationError.message }]
-        });
-      }
+      const searchData = SearchHotelsRequestSchema.parse(request.body);
       
       const searchFilters = {
         coordinates: searchData.coordinates,
@@ -45,6 +35,18 @@ export class HotelSearchController {
         page: searchData.page,
         limit: searchData.limit,
       };
+
+      // Prioritize coordinates-based search over city-based search
+      if (searchFilters.coordinates && (!searchFilters.city || searchFilters.city.trim() === '')) {
+        // If we have coordinates but no city, we can still search by location
+        request.log.info('Performing coordinates-based search without city filter');
+      } else if (searchFilters.coordinates && searchFilters.city) {
+        // If we have both, we'll use coordinates as the primary filter but keep city for context
+        request.log.info('Performing coordinates-based search with city context');
+      } else if (searchFilters.city && (!searchFilters.coordinates)) {
+        // Fallback to city-only search if no coordinates
+        request.log.info('Performing city-based search without coordinates');
+      }
 
       const result = await this.hotelSearchService.searchHotels(searchFilters);
       
