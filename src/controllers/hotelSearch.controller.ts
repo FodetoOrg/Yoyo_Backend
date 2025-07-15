@@ -107,7 +107,9 @@ export class HotelSearchController {
   // Home page - Latest hotels
   async getLatestHotels(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const { limit } = HomeTabQuerySchema.parse(request.query);
+      const { limit } = z.object({
+        limit: z.number().int().min(1).max(20).default(10),
+      }).parse(request.query);
       const userId = (request as any).user?.id;
       
       const hotels = await this.hotelSearchService.getLatestHotels({
@@ -135,7 +137,9 @@ export class HotelSearchController {
   // Home page - Hotels with offers
   async getOffersHotels(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const { limit } = HomeTabQuerySchema.parse(request.query);
+      const { limit } = z.object({
+        limit: z.number().int().min(1).max(20).default(10),
+      }).parse(request.query);
       const userId = (request as any).user?.id;
       
       const hotels = await this.hotelSearchService.getOffersHotels({

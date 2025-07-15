@@ -21,10 +21,13 @@ export default fp(async (fastify: FastifyInstance) => {
         message: 'Validation error',
         error: {
           code: ErrorCode.VALIDATION_ERROR,
-          details: error.errors.map(err => ({
-            field: err.path.join('.'),
-            message: err.message
-          }))
+          details: error.errors.map(err => {
+            const field = Array.isArray(err.path) ? err.path.join('.') : '';
+            return {
+              field,
+              message: err.message
+            };
+          })
         }
       });
     }
@@ -36,10 +39,13 @@ export default fp(async (fastify: FastifyInstance) => {
         message: 'Validation error',
         error: {
           code: ErrorCode.VALIDATION_ERROR,
-          details: error.validation.map(err => ({
-            field: err.dataPath.slice(1), // Remove leading dot
-            message: err.message
-          }))
+          details: error.validation.map(err => {
+            const field = err.dataPath && err.dataPath.length > 0 ? err.dataPath.slice(1) : '';
+            return {
+              field,
+              message: err.message
+            };
+          })
         }
       });
     }
