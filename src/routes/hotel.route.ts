@@ -89,6 +89,21 @@ export default async function hotelRoutes(fastify: FastifyInstance) {
     }
   );
 
+  // Get detailed hotel information (public)
+  fastify.get(
+    "/:id/details",
+    {
+      schema: {
+        tags: ["hotels"],
+        summary: "Get detailed hotel information",
+      },
+      preHandler: [],
+    },
+    async (request, reply) => {
+      return hotelController.getHotelDetails(request, reply);
+    }
+  );
+
   // Create hotel (authenticated)
   fastify.post(
     "/",
