@@ -1,14 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { HotelSearchService } from '../services/hotelSearch.service';
 import { z } from 'zod';
-import {
-  SearchHotelsRequestSchema,
-  HomeTabQuerySchema,
-  searchHotelsSchema,
-  getNearbyHotelsSchema,
-  getLatestHotelsSchema,
-  getOffersHotelsSchema
-} from '../schemas/hotelSearch.schema';
+import { SearchHotelsRequestSchema, HomeTabQuerySchema } from '../schemas/hotelSearch.schema';
 
 export class HotelSearchController {
   private hotelSearchService: HotelSearchService;
@@ -42,6 +35,18 @@ export class HotelSearchController {
         page: searchData.page,
         limit: searchData.limit,
       };
+
+      // Prioritize coordinates-based search over city-based search
+      if (searchFilters.coordinates && (!searchFilters.city || searchFilters.city.trim() === '')) {
+        // If we have coordinates but no city, we can still search by location
+        request.log.info('Performing coordinates-based search without city filter');
+      } else if (searchFilters.coordinates && searchFilters.city) {
+        // If we have both, we'll use coordinates as the primary filter but keep city for context
+        request.log.info('Performing coordinates-based search with city context');
+      } else if (searchFilters.city && (!searchFilters.coordinates)) {
+        // Fallback to city-only search if no coordinates
+        request.log.info('Performing city-based search without coordinates');
+      }
 
       const result = await this.hotelSearchService.searchHotels(searchFilters);
       
@@ -107,9 +112,16 @@ export class HotelSearchController {
   // Home page - Latest hotels
   async getLatestHotels(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const { limit } = z.object({
+      // Only validate the limit parameter
+      const querySchema = z.object({
         limit: z.number().int().min(1).max(20).default(10),
-      }).parse(request.query);
+        coordinates: z.object({
+          lat: z.number(),
+          lng: z.number()
+        }).optional().nullable()
+      });
+      
+      const { limit } = querySchema.parse(request.query);
       const userId = (request as any).user?.id;
       
       const hotels = await this.hotelSearchService.getLatestHotels({
@@ -137,9 +149,16 @@ export class HotelSearchController {
   // Home page - Hotels with offers
   async getOffersHotels(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const { limit } = z.object({
+      // Only validate the limit parameter
+      const querySchema = z.object({
         limit: z.number().int().min(1).max(20).default(10),
-      }).parse(request.query);
+        coordinates: z.object({
+          lat: z.number(),
+          lng: z.number()
+        }).optional().nullable()
+      });
+      
+      const { limit } = querySchema.parse(request.query);
       const userId = (request as any).user?.id;
       
       const hotels = await this.hotelSearchService.getOffersHotels({

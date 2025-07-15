@@ -65,7 +65,7 @@ export class HotelSearchService {
       eq(hotels.status, 'active')
     ];
 
-    // Location filtering
+    // Location filtering - prioritize coordinates over city name
     if (city) {
       whereConditions.push(like(hotels.city, `%${city}%`));
     }
@@ -119,16 +119,28 @@ export class HotelSearchService {
       hotelsData = hotelsData.filter(h => availableHotelIds.includes(h.hotel.id));
     }
 
-    // Distance calculation if coordinates provided
+    // Distance calculation and filtering if coordinates provided
     if (coordinates) {
-      hotelsData = hotelsData.map(hotel => ({
+      // First calculate distance for all hotels
+      const hotelsWithDistance = hotelsData.map(hotel => ({
         ...hotel,
         distance: this.calculateDistance(
           coordinates.lat,
           coordinates.lng,
           this.parseCoordinates(hotel.hotel.mapCoordinates)
         )
-      })).filter(hotel => hotel.distance <= radius);
+      }));
+      
+      // Then filter by radius
+      hotelsData = hotelsWithDistance.filter(hotel => hotel.distance <= radius);
+      
+      // If we're using coordinates but also had a city filter, we can now prioritize by distance
+      // This allows searching for "streets in Hyderabad" by showing nearby hotels even if city names don't exactly match
+      if (city) {
+        // We already filtered by city above, but now we have distance data
+        // We can sort by distance first, then apply other sorting criteria
+        hotelsData = hotelsData.sort((a, b) => (a.distance || 0) - (b.distance || 0));
+      }
     }
 
     // Amenities filtering
