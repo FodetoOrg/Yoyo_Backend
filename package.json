@@ -16,7 +16,8 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:pull": "drizzle-kit pull",
-    "migrate:users": "ts-node src/migrations/updateUsersTableOnboarding.ts"
+    "migrate:users": "ts-node src/migrations/updateUsersTableOnboarding.ts",
+    "migrate:customer-profiles": "ts-node src/migrations/updateCustomerProfileTable.ts"
   },
   "keywords": [
     "hotel",

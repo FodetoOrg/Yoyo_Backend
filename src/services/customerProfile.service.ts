@@ -20,6 +20,16 @@ interface CustomerProfileData {
   // Other preferences
   preferredLanguage?: string;
   currency?: string;
+  
+  // Onboarding
+  skippedOnboarding?: boolean;
+}
+
+interface OnboardingData {
+  fullName: string;
+  email: string;
+  dateOfBirth?: Date;
+  gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say';
 }
 
 export class CustomerProfileService {
@@ -76,6 +86,11 @@ export class CustomerProfileService {
         currency: profile.currency,
       },
       
+      // Onboarding status
+      onboarding: {
+        skipped: profile.skippedOnboarding,
+      },
+      
       // Account info
       accountInfo: {
         memberSince: profile.user.createdAt,
@@ -115,6 +130,7 @@ export class CustomerProfileService {
       promotionalOffersEnabled: data.promotionalOffersEnabled ?? false,
       preferredLanguage: data.preferredLanguage || 'en',
       currency: data.currency || 'INR',
+      skippedOnboarding: data.skippedOnboarding ?? false,
     });
 
     return await this.getProfile(userId);
@@ -144,6 +160,96 @@ export class CustomerProfileService {
       .where(eq(customerProfiles.userId, userId));
 
     return await this.getProfile(userId);
+  }
+
+  // Complete onboarding
+  async completeOnboarding(userId: string, data: OnboardingData) {
+    const db = this.fastify.db;
+
+    return await db.transaction(async (tx) => {
+      // Update user's hasOnboarded status
+      await tx
+        .update(users)
+        .set({
+          hasOnboarded: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, userId));
+
+      // Check if profile exists
+      const existingProfile = await tx.query.customerProfiles.findFirst({
+        where: eq(customerProfiles.userId, userId)
+      });
+
+      if (existingProfile) {
+        // Update existing profile
+        await tx
+          .update(customerProfiles)
+          .set({
+            fullName: data.fullName,
+            email: data.email,
+            dateOfBirth: data.dateOfBirth,
+            gender: data.gender,
+            skippedOnboarding: false,
+            updatedAt: new Date(),
+          })
+          .where(eq(customerProfiles.userId, userId));
+      } else {
+        // Create new profile
+        await tx.insert(customerProfiles).values({
+          id: uuidv4(),
+          userId,
+          fullName: data.fullName,
+          email: data.email,
+          dateOfBirth: data.dateOfBirth,
+          gender: data.gender,
+          skippedOnboarding: false,
+        });
+      }
+
+      return await this.getProfile(userId);
+    });
+  }
+
+  // Skip onboarding
+  async skipOnboarding(userId: string) {
+    const db = this.fastify.db;
+
+    return await db.transaction(async (tx) => {
+      // Update user's hasOnboarded status
+      await tx
+        .update(users)
+        .set({
+          hasOnboarded: true,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, userId));
+
+      // Check if profile exists
+      const existingProfile = await tx.query.customerProfiles.findFirst({
+        where: eq(customerProfiles.userId, userId)
+      });
+
+      if (existingProfile) {
+        // Update existing profile to mark as skipped
+        await tx
+          .update(customerProfiles)
+          .set({
+            skippedOnboarding: true,
+            updatedAt: new Date(),
+          })
+          .where(eq(customerProfiles.userId, userId));
+      } else {
+        // Create profile with default values and skipped flag
+        await tx.insert(customerProfiles).values({
+          id: uuidv4(),
+          userId,
+          skippedOnboarding: true,
+        });
+      }
+
+      return await this.getProfile(userId);
+    });
   }
 
   // Update notification preferences
