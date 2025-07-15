@@ -1,30 +1,12 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { CustomerProfileService } from '../services/customerProfile.service';
 import { z } from 'zod';
+import {
+  UpdateProfileRequestSchema,
+  UpdateNotificationsRequestSchema,
+  CompleteOnboardingRequestSchema
+} from '../schemas/customerProfile.schema';
 
-const updateProfileSchema = z.object({
-  fullName: z.string().min(1).optional(),
-  email: z.string().email().optional(),
-  gender: z.enum(['male', 'female', 'other', 'prefer_not_to_say']).optional(),
-  dateOfBirth: z.string().datetime().optional(),
-  profileImage: z.string().optional(),
-  preferredLanguage: z.string().default('en').optional(),
-  currency: z.string().default('INR').optional(),
-});
-
-const updateNotificationsSchema = z.object({
-  bookingUpdates: z.boolean().optional(),
-  checkinReminders: z.boolean().optional(),
-  securityAlerts: z.boolean().optional(),
-  promotionalOffers: z.boolean().optional(),
-});
-
-const completeOnboardingSchema = z.object({
-  fullName: z.string().min(1, 'Full name is required'),
-  email: z.string().email('Valid email is required'),
-  dateOfBirth: z.string().datetime().optional(),
-  gender: z.enum(['male', 'female', 'other', 'prefer_not_to_say']).optional(),
-});
 
 export class CustomerProfileController {
   private customerProfileService: CustomerProfileService;
@@ -62,7 +44,7 @@ export class CustomerProfileController {
   async updateProfile(request: FastifyRequest, reply: FastifyReply) {
     try {
       const userId = (request as any).user.id;
-      const profileData = updateProfileSchema.parse(request.body);
+      const profileData = UpdateProfileRequestSchema.parse(request.body);
       
       const processedData = {
         ...profileData,
@@ -99,7 +81,7 @@ export class CustomerProfileController {
   async updateNotifications(request: FastifyRequest, reply: FastifyReply) {
     try {
       const userId = (request as any).user.id;
-      const preferences = updateNotificationsSchema.parse(request.body);
+      const preferences = UpdateNotificationsRequestSchema.parse(request.body);
       
       const profile = await this.customerProfileService.updateNotificationPreferences(userId, preferences);
       
@@ -131,7 +113,7 @@ export class CustomerProfileController {
  async completeOnboarding(request: FastifyRequest, reply: FastifyReply) {
    try {
      const userId = (request as any).user.id;
-     const onboardingData = completeOnboardingSchema.parse(request.body);
+     const onboardingData = CompleteOnboardingRequestSchema.parse(request.body);
      
      const processedData = {
        ...onboardingData,

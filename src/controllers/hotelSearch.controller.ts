@@ -1,48 +1,14 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { HotelSearchService } from '../services/hotelSearch.service';
 import { z } from 'zod';
-
-const searchHotelsSchema = z.object({
-  // Location
-  coordinates: z.object({
-    lat: z.number(),
-    lng: z.number(),
-  }).optional(),
-  city: z.string().optional(),
-  radius: z.number().default(50),
-  
-  // Dates and guests
-  dateRange: z.object({
-    startDate: z.string().datetime(),
-    endDate: z.string().datetime(),
-  }).optional(),
-  guests: z.object({
-    adults: z.number().int().min(1),
-    children: z.number().int().min(0),
-    infants: z.number().int().min(0),
-  }),
-  
-  // Filters
-  priceRange: z.object({
-    min: z.number().optional(),
-    max: z.number().optional(),
-  }).optional(),
-  starRating: z.number().int().min(1).max(5).optional(),
-  amenities: z.array(z.string()).optional(),
-  sortBy: z.enum(['recommended', 'price_low', 'price_high', 'rating', 'distance']).default('recommended'),
-  
-  // Pagination
-  page: z.number().int().min(1).default(1),
-  limit: z.number().int().min(1).max(50).default(10),
-});
-
-const homeTabSchema = z.object({
-  coordinates: z.object({
-    lat: z.number(),
-    lng: z.number(),
-  }).optional(),
-  limit: z.number().int().min(1).max(20).default(10),
-});
+import {
+  SearchHotelsRequestSchema,
+  HomeTabQuerySchema,
+  searchHotelsSchema,
+  getNearbyHotelsSchema,
+  getLatestHotelsSchema,
+  getOffersHotelsSchema
+} from '../schemas/hotelSearch.schema';
 
 export class HotelSearchController {
   private hotelSearchService: HotelSearchService;
@@ -58,7 +24,7 @@ export class HotelSearchController {
   // Main hotel search
   async searchHotels(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const searchData = searchHotelsSchema.parse(request.body);
+      const searchData = SearchHotelsRequestSchema.parse(request.body);
       
       const searchFilters = {
         coordinates: searchData.coordinates,
@@ -104,7 +70,7 @@ export class HotelSearchController {
   // Home page - Nearby hotels
   async getNearbyHotels(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const { coordinates, limit } = homeTabSchema.parse(request.query);
+      const { coordinates, limit } = HomeTabQuerySchema.parse(request.query);
       const userId = (request as any).user?.id;
       
       const hotels = await this.hotelSearchService.getNearbyHotels({
@@ -141,7 +107,7 @@ export class HotelSearchController {
   // Home page - Latest hotels
   async getLatestHotels(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const { limit } = homeTabSchema.parse(request.query);
+      const { limit } = HomeTabQuerySchema.parse(request.query);
       const userId = (request as any).user?.id;
       
       const hotels = await this.hotelSearchService.getLatestHotels({
@@ -169,7 +135,7 @@ export class HotelSearchController {
   // Home page - Hotels with offers
   async getOffersHotels(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const { limit } = homeTabSchema.parse(request.query);
+      const { limit } = HomeTabQuerySchema.parse(request.query);
       const userId = (request as any).user?.id;
       
       const hotels = await this.hotelSearchService.getOffersHotels({
