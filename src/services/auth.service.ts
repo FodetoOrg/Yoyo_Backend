@@ -1,11 +1,12 @@
 import { FastifyInstance } from "fastify";
 import { users } from "../models/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import admin from "../config/firebase/firebase";
 import { UserRole, UserStatus } from "../types/common";
-import { ConflictError } from "../types/errors";
+import { ConflictError, NotFoundError } from "../types/errors";
 import { hotelUsers } from "../models/Hotel";
+import { NotFound } from "@aws-sdk/client-s3/dist-types";
 
 interface TokenResponse {
   accessToken: string;
@@ -75,11 +76,17 @@ export class AuthService {
             updatedAt: now,
           })
           .returning();
+          if (!user) {
+            throw new Error("User not found after creation");
+          }
+          user=user[0]
+        
       }
 
       if (!user) {
         throw new Error("User not found after creation");
       }
+
 
       // Get hotel ID if user is hotel admin
       let hotelId = null;
@@ -276,6 +283,36 @@ export class AuthService {
     return allUsers;
   }
 
+  async getUserById(id:string){
+    const db = this.fastify.db;
+    const user =await  db.query.users.findFirst({
+      where:eq(users.id,id)
+    })
+    console.log('user from db ',user)
+    if(!user){
+      throw new  NotFoundError('User Not Found');
+    }
+    let hotelId;
+    if (user.role === UserRole.HOTEL_ADMIN) {
+      const hotelUser = await db.query.hotelUsers.findFirst({
+        where: eq(hotelUsers.userId, user.id),
+      });
+      hotelId = hotelUser?.hotelId || null;
+    }
+    return {
+      id: user.id,
+      name: user.name || '',
+      phone: user.phone,
+      hasOnboarded: user.hasOnboarded,
+      createdAt: new Date(user.createdAt).toString() || '',
+      updatedAt: new Date(user.updatedAt).toString() || '',
+      status: user.status,
+      role: user.role,
+      hotelId
+      
+    };
+  }
+
   async addHotelAdmin(name: string, phone: string, email: string) {
     const db = this.fastify.db;
 
@@ -304,4 +341,6 @@ export class AuthService {
     }).returning();
     return hotelAdmin[0];
   }
+
+
 }

@@ -5,7 +5,7 @@
 // but the actual schema definitions are centralized in schema.ts
 
 import { InferSelectModel, relations } from "drizzle-orm";
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { integer, sqliteTable, text, unique } from "drizzle-orm/sqlite-core";
 import { bookings } from "./Booking";
 import { hotels } from "./Hotel";
 import { payments } from "./Payment";

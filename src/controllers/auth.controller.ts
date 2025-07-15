@@ -1,4 +1,4 @@
-import { FastifyRequest, FastifyReply } from "fastify";
+import fastify, { FastifyRequest, FastifyReply } from "fastify";
 import { AuthService } from "../services/auth.service";
 import {
   LoginRequestSchema,
@@ -25,7 +25,7 @@ export class AuthController {
       const { idToken, role } = LoginRequestSchema.parse(request.body);
 
       const result = await this.authService.loginWithFirebase(idToken, role);
-      
+
       const response = LoginResponseSchema.parse({
         success: true,
         data: result,
@@ -41,10 +41,17 @@ export class AuthController {
 
   async verifyToken(request: FastifyRequest, reply: FastifyReply) {
     try {
+      const user = request.user
+      console.log('user from request ', user)
+      const userReturned = await this.authService.getUserById(user?.id)
+
+
+
       return reply.status(HttpStatus.OK).send({
         success: true,
         data: {
-          message: "Token verified",
+
+          user: userReturned
         },
       });
     } catch (error) {
