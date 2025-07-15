@@ -22,6 +22,9 @@ export const customerProfiles = sqliteTable('customer_profiles', {
   preferredLanguage: text('preferred_language').default('en'),
   currency: text('currency').default('INR'),
   
+ // Onboarding
+ skippedOnboarding: integer('skipped_onboarding', { mode: 'boolean' }).notNull().default(false),
+ 
   // Onboarding
   skippedOnboarding: integer('skipped_onboarding', { mode: 'boolean' }).notNull().default(false),
   

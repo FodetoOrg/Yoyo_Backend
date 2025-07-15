@@ -64,6 +64,38 @@ export default async function customerProfileRoutes(fastify: FastifyInstance) {
     }
   }, (request, reply) => customerProfileController.updateNotifications(request, reply));
 
+ // Complete onboarding
+ fastify.post('/onboarding/complete', {
+   schema: {
+     tags: ['customer-profile'],
+     summary: 'Complete customer onboarding',
+     description: 'Complete the customer onboarding process with required information',
+     security: [{ bearerAuth: [] }],
+     body: {
+       type: 'object',
+       required: ['fullName', 'email'],
+       properties: {
+         fullName: { type: 'string', minLength: 1 },
+         email: { type: 'string', format: 'email' },
+         dateOfBirth: { type: 'string', format: 'date-time' },
+         gender: { 
+           type: 'string', 
+           enum: ['male', 'female', 'other', 'prefer_not_to_say'] 
+         }
+       }
+     }
+   }
+ }, (request, reply) => customerProfileController.completeOnboarding(request, reply));
+ 
+ // Skip onboarding
+ fastify.post('/onboarding/skip', {
+   schema: {
+     tags: ['customer-profile'],
+     summary: 'Skip customer onboarding',
+     description: 'Skip the customer onboarding process and create profile with default values',
+     security: [{ bearerAuth: [] }]
+   }
+ }, (request, reply) => customerProfileController.skipOnboarding(request, reply));
   // Delete profile
   fastify.delete('/', {
     schema: {

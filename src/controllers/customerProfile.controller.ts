@@ -19,6 +19,13 @@ const updateNotificationsSchema = z.object({
   promotionalOffers: z.boolean().optional(),
 });
 
+const completeOnboardingSchema = z.object({
+  fullName: z.string().min(1, 'Full name is required'),
+  email: z.string().email('Valid email is required'),
+  dateOfBirth: z.string().datetime().optional(),
+  gender: z.enum(['male', 'female', 'other', 'prefer_not_to_say']).optional(),
+});
+
 export class CustomerProfileController {
   private customerProfileService: CustomerProfileService;
 
@@ -119,6 +126,65 @@ export class CustomerProfileController {
       });
     }
   }
+
+ // Complete onboarding
+ async completeOnboarding(request: FastifyRequest, reply: FastifyReply) {
+   try {
+     const userId = (request as any).user.id;
+     const onboardingData = completeOnboardingSchema.parse(request.body);
+     
+     const processedData = {
+       ...onboardingData,
+       dateOfBirth: onboardingData.dateOfBirth ? new Date(onboardingData.dateOfBirth) : undefined,
+     };
+     
+     const profile = await this.customerProfileService.completeOnboarding(userId, processedData);
+     
+     return reply.code(200).send({
+       success: true,
+       message: 'Onboarding completed successfully',
+       data: profile,
+     });
+   } catch (error) {
+     request.log.error(error);
+     
+     if (error instanceof z.ZodError) {
+       return reply.code(400).send({
+         success: false,
+         message: 'Validation error',
+         errors: error.errors,
+       });
+     }
+     
+     const statusCode = error.statusCode || 500;
+     return reply.code(statusCode).send({
+       success: false,
+       message: error.message || 'Failed to complete onboarding',
+     });
+   }
+ }
+ 
+ // Skip onboarding
+ async skipOnboarding(request: FastifyRequest, reply: FastifyReply) {
+   try {
+     const userId = (request as any).user.id;
+     const profile = await this.customerProfileService.skipOnboarding(userId);
+     
+     return reply.code(200).send({
+       success: true,
+       message: 'Onboarding skipped successfully',
+       data: profile,
+     });
+   } catch (error) {
+     request.log.error(error);
+     
+     const statusCode = error.statusCode || 500;
+     return reply.code(statusCode).send({
+       success: false,
+       message: error.message || 'Failed to skip onboarding',
+     });
+   }
+ }
 
   // Delete profile
   async deleteProfile(request: FastifyRequest, reply: FastifyReply) {
