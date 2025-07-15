@@ -1,23 +1,12 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { WishlistService } from '../services/wishlist.service';
 import { z } from 'zod';
-
-const addToWishlistSchema = z.object({
-  hotelId: z.string().uuid(),
-});
-
-const removeFromWishlistSchema = z.object({
-  hotelId: z.string().uuid(),
-});
-
-const checkWishlistSchema = z.object({
-  hotelId: z.string().uuid(),
-});
-
-const wishlistQuerySchema = z.object({
-  page: z.number().int().min(1).default(1),
-  limit: z.number().int().min(1).max(50).default(10),
-});
+import {
+  AddToWishlistSchema,
+  RemoveFromWishlistSchema,
+  CheckWishlistSchema,
+  WishlistQuerySchema
+} from '../schemas/wishlist.schema';
 
 export class WishlistController {
   private wishlistService: WishlistService;
@@ -34,7 +23,7 @@ export class WishlistController {
   async getWishlist(request: FastifyRequest, reply: FastifyReply) {
     try {
       const userId = (request as any).user.id;
-      const { page, limit } = wishlistQuerySchema.parse(request.query);
+      const { page, limit } = WishlistQuerySchema.parse(request.query);
       
       const result = await this.wishlistService.getUserWishlist(userId, page, limit);
       
@@ -64,7 +53,7 @@ export class WishlistController {
   async addToWishlist(request: FastifyRequest, reply: FastifyReply) {
     try {
       const userId = (request as any).user.id;
-      const { hotelId } = addToWishlistSchema.parse(request.body);
+      const { hotelId } = AddToWishlistSchema.parse(request.body);
       
       const result = await this.wishlistService.addToWishlist(userId, hotelId);
       
@@ -95,7 +84,7 @@ export class WishlistController {
   async removeFromWishlist(request: FastifyRequest, reply: FastifyReply) {
     try {
       const userId = (request as any).user.id;
-      const { hotelId } = removeFromWishlistSchema.parse(request.body);
+      const { hotelId } = RemoveFromWishlistSchema.parse(request.body);
       
       const result = await this.wishlistService.removeFromWishlist(userId, hotelId);
       
@@ -126,7 +115,7 @@ export class WishlistController {
   async checkWishlist(request: FastifyRequest, reply: FastifyReply) {
     try {
       const userId = (request as any).user.id;
-      const { hotelId } = checkWishlistSchema.parse(request.query);
+      const { hotelId } = CheckWishlistSchema.parse(request.query);
       
       const result = await this.wishlistService.isInWishlist(userId, hotelId);
       
