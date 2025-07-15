@@ -9,9 +9,10 @@ import {
   cities,
   hotelCities,
   Hotel,
+  hotelReviews,
 } from "../models/schema";
 import { v4 as uuidv4 } from "uuid";
-import { eq, and, like, inArray, exists, not, isNull } from "drizzle-orm";
+import { eq, and, like, inArray, exists, not, isNull, desc } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { UserRole } from "../types/common";
 import { ForbiddenError } from "../types/errors";
