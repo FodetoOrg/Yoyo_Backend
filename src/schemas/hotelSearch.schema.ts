@@ -117,6 +117,10 @@ export const SearchHotelsResponseSchema = z.object({
   }),
 });
 
+const CustomHotelSearchResultSchema = HotelSearchResultSchema.extend({
+  distance: z.number().optional(), // 👈 override from nullable to optional (or any custom rule)
+});
+
 export const HomeTabResponseSchema = z.object({
   success: z.boolean(),
   data: z.object({
