@@ -25,8 +25,6 @@ export const customerProfiles = sqliteTable('customer_profiles', {
  // Onboarding
  skippedOnboarding: integer('skipped_onboarding', { mode: 'boolean' }).notNull().default(false),
  
-  // Onboarding
-  skippedOnboarding: integer('skipped_onboarding', { mode: 'boolean' }).notNull().default(false),
   
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(new Date()),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(new Date()),

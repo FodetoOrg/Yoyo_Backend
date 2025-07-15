@@ -28,7 +28,7 @@ interface CustomerProfileData {
 interface OnboardingData {
   fullName: string;
   email: string;
-  dateOfBirth?: Date;
+  // dateOfBirth?: Date;
   gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say';
 }
 
@@ -188,7 +188,7 @@ export class CustomerProfileService {
           .set({
             fullName: data.fullName,
             email: data.email,
-            dateOfBirth: data.dateOfBirth,
+            // dateOfBirth: data.dateOfBirth,
             gender: data.gender,
             skippedOnboarding: false,
             updatedAt: new Date(),
@@ -201,7 +201,7 @@ export class CustomerProfileService {
           userId,
           fullName: data.fullName,
           email: data.email,
-          dateOfBirth: data.dateOfBirth,
+          // dateOfBirth: data.dateOfBirth,
           gender: data.gender,
           skippedOnboarding: false,
         });

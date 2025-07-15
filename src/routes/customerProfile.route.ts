@@ -77,7 +77,6 @@ export default async function customerProfileRoutes(fastify: FastifyInstance) {
        properties: {
          fullName: { type: 'string', minLength: 1 },
          email: { type: 'string', format: 'email' },
-         dateOfBirth: { type: 'string', format: 'date-time' },
          gender: { 
            type: 'string', 
            enum: ['male', 'female', 'other', 'prefer_not_to_say'] 
