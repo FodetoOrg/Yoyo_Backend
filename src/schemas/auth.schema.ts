@@ -10,7 +10,9 @@ export const UserSchema = z.object({
   createdAt: z.string(),
   updatedAt: z.string(),
   status: z.enum(["active", "inactive"]),
-  role:z.string()
+  role: z.string(),
+  hasOnboarded: z.boolean(),
+  hotelId: z.string().optional().nullable()
 });
 
 // Auth tokens schema
@@ -141,6 +143,17 @@ export const meSchema = {
   tags: ["auth"],
   summary: "Get user profile",
   security: [{ bearerAuth: [] }],
+  response: {
+    200: zodToJsonSchema(
+      z.object({
+        success:z.boolean(),
+        data: z.object({
+          user: UserSchema,
+        }),
+      })
+    ),
+    400: zodToJsonSchema(ErrorResponseSchema),
+  }
 };
 
 export const profileSchema = {
