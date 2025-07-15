@@ -231,7 +231,7 @@ export class HotelSearchService {
       where: eq(hotels.status, 'active'),
       with: {
         images: {
-          where: eq(hotelImages.isPrimary, true),
+        
           limit: 1,
         }
       },
@@ -254,6 +254,8 @@ export class HotelSearchService {
 
         const pricing = await this.getHotelPricing(hotel.id);
 
+        console.log('hotel is ',hotel)
+
         return {
           id: hotel.id,
           name: hotel.name,
@@ -272,6 +274,10 @@ export class HotelSearchService {
             primary: hotel.images[0]?.url || null,
           },
           isNew: true,
+          paymentOptions:{
+            onlineEnabled:hotel.onlinePaymentEnabled,
+            offlineEnabled:hotel.offlinePaymentEnabled
+          }
         };
       })
     );

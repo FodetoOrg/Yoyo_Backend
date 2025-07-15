@@ -117,14 +117,38 @@ export const SearchHotelsResponseSchema = z.object({
   }),
 });
 
-const CustomHotelSearchResultSchema = HotelSearchResultSchema.extend({
-  distance: z.number().optional(), // 👈 override from nullable to optional (or any custom rule)
+// Separate schema for latest hotels (no distance field)
+export const LatestHotelResultSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  description: z.string().nullable(),
+  address: z.string(),
+  city: z.string(),
+  starRating: z.number().min(0).max(5),
+  amenities: z.array(z.string()),
+  coordinates: CoordinatesSchema,
+  rating: HotelRatingSchema,
+  pricing: HotelPricingSchema.nullable(),
+  offers: z.array(HotelOfferSchema).optional(),
+  images: HotelImageSchema,
+  paymentOptions: z.object({
+    onlineEnabled: z.boolean(),
+    offlineEnabled: z.boolean(),
+  }),
 });
 
 export const HomeTabResponseSchema = z.object({
   success: z.boolean(),
   data: z.object({
     hotels: z.array(HotelSearchResultSchema),
+    type: z.enum(['nearby', 'latest', 'offers']),
+  }),
+});
+
+export const LatestHotelsResponseSchema = z.object({
+  success: z.boolean(),
+  data: z.object({
+    hotels: z.array(LatestHotelResultSchema), // Uses schema without distance field
     type: z.enum(['nearby', 'latest', 'offers']),
   }),
 });
@@ -164,7 +188,7 @@ export const getLatestHotelsSchema = {
     limit: z.number().int().min(1).max(20).default(10),
   })),
   response: {
-    200: zodToJsonSchema(HomeTabResponseSchema),
+    200: zodToJsonSchema(LatestHotelsResponseSchema), // Uses dedicated latest hotels schema
     500: zodToJsonSchema(z.object({
       success: z.boolean(),
       message: z.string(),
