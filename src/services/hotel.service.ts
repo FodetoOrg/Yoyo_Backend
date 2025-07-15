@@ -485,6 +485,67 @@ export class HotelService {
     return formattedRooms;
   }
 
+  // Get hotel reviews with rating breakdown
+  async getHotelReviews(hotelId: string) {
+    const db = this.fastify.db;
+    
+    // Get all reviews for this hotel
+    const reviews = await db.query.hotelReviews.findMany({
+      where: and(
+        eq(hotelReviews.hotelId, hotelId),
+        eq(hotelReviews.isApproved, true)
+      ),
+      with: {
+        user: {
+          columns: {
+            id: true,
+            name: true,
+          }
+        }
+      },
+      orderBy: [desc(hotelReviews.createdAt)],
+      limit: 10, // Limit to most recent 10 reviews
+    });
+    
+    // Calculate overall rating
+    const totalReviews = reviews.length;
+    const overallRating = totalReviews > 0 
+      ? reviews.reduce((sum, review) => sum + review.overallRating, 0) / totalReviews 
+      : 0;
+    
+    // Calculate rating breakdown
+    const ratingBreakdown = {
+      '5': 0,
+      '4': 0,
+      '3': 0,
+      '2': 0,
+      '1': 0
+    };
+    
+    reviews.forEach(review => {
+      const rating = Math.round(review.overallRating);
+      if (rating >= 1 && rating <= 5) {
+        ratingBreakdown[rating.toString()]++;
+      }
+    });
+    
+    // Format reviews for response
+    const formattedReviews = reviews.map(review => ({
+      id: review.id,
+      user: review.user.name || 'Anonymous',
+      comment: review.comment || '',
+      rating: review.overallRating,
+      date: new Date(review.createdAt).toISOString().split('T')[0]
+    }));
+    
+    return {
+      overallRating: Math.round(overallRating * 10) / 10,
+      totalReviews,
+      ratingBreakdown,
+      reviews: formattedReviews
+    };
+  }
+
   // Update room details
   async updateRoom(roomId: string, roomData: Partial<RoomCreateParams>) {
     const db = this.fastify.db;

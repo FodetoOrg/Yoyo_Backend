@@ -89,6 +89,71 @@ export class HotelController {
     }
   }
 
+  async getHotelDetails(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { id } = GetHotelParamsSchema.parse(request.params);
+      const hotel = await this.hotelService.getHotelById(id);
+
+      if (!hotel) {
+        return reply.code(404).send({
+          success: false,
+          message: "Hotel not found",
+        });
+      }
+
+      // Get reviews data
+      const reviewsData = await this.hotelService.getHotelReviews(id);
+      
+      // Get room upgrade options
+      const rooms = await this.hotelService.getRoomsByHotelIdEnhanced(id);
+      
+      // Sort rooms by price
+      const sortedRooms = rooms.sort((a, b) => a.pricePerNight - b.pricePerNight);
+      
+      // Create room upgrade data structure
+      const roomUpgradeData = {
+        currentRoom: sortedRooms.length > 0 ? {
+          id: sortedRooms[0].id,
+          name: sortedRooms[0].name,
+          image: sortedRooms[0].images.length > 0 ? sortedRooms[0].images[0].url : null,
+          features: sortedRooms[0].description || sortedRooms[0].amenities.join(', '),
+          pricePerNight: sortedRooms[0].pricePerNight,
+          isCurrent: true
+        } : null,
+        upgradeOptions: sortedRooms.slice(1).map(room => ({
+          id: room.id,
+          name: room.name,
+          image: room.images.length > 0 ? room.images[0].url : null,
+          features: room.description || room.amenities.join(', '),
+          pricePerNight: room.pricePerNight
+        }))
+      };
+
+      return reply.code(200).send({
+        success: true,
+        data: { 
+          hotel: {
+            ...hotel,
+            rating: reviewsData.overallRating,
+            reviewCount: reviewsData.totalReviews,
+            price: sortedRooms.length > 0 ? sortedRooms[0].pricePerNight : null,
+            reviewsData,
+            roomUpgradeData
+          }
+        },
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({
+          success: false,
+          message: "Validation error",
+          errors: error.errors,
+        });
+      }
+      throw error;
+    }
+  }
+
   async createHotel(request: AuthenticatedRequest, reply: FastifyReply) {
     try {
       const hotelData = CreateHotelBodySchema.parse(request.body);
