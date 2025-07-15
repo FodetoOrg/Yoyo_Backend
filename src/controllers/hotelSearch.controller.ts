@@ -1,14 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { HotelSearchService } from '../services/hotelSearch.service';
 import { z } from 'zod';
-import {
-  SearchHotelsRequestSchema,
-  HomeTabQuerySchema,
-  searchHotelsSchema,
-  getNearbyHotelsSchema,
-  getLatestHotelsSchema,
-  getOffersHotelsSchema
-} from '../schemas/hotelSearch.schema';
+import { SearchHotelsRequestSchema, HomeTabQuerySchema } from '../schemas/hotelSearch.schema';
 
 export class HotelSearchController {
   private hotelSearchService: HotelSearchService;
@@ -24,7 +17,17 @@ export class HotelSearchController {
   // Main hotel search
   async searchHotels(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const searchData = SearchHotelsRequestSchema.parse(request.body);
+      // Parse and validate the search data
+      let searchData;
+      try {
+        searchData = SearchHotelsRequestSchema.parse(request.body);
+      } catch (validationError) {
+        return reply.code(400).send({
+          success: false,
+          message: 'Validation error',
+          errors: validationError.errors || [{ message: validationError.message }]
+        });
+      }
       
       const searchFilters = {
         coordinates: searchData.coordinates,
@@ -107,9 +110,16 @@ export class HotelSearchController {
   // Home page - Latest hotels
   async getLatestHotels(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const { limit } = z.object({
+      // Only validate the limit parameter
+      const querySchema = z.object({
         limit: z.number().int().min(1).max(20).default(10),
-      }).parse(request.query);
+        coordinates: z.object({
+          lat: z.number(),
+          lng: z.number()
+        }).optional().nullable()
+      });
+      
+      const { limit } = querySchema.parse(request.query);
       const userId = (request as any).user?.id;
       
       const hotels = await this.hotelSearchService.getLatestHotels({
@@ -137,9 +147,16 @@ export class HotelSearchController {
   // Home page - Hotels with offers
   async getOffersHotels(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const { limit } = z.object({
+      // Only validate the limit parameter
+      const querySchema = z.object({
         limit: z.number().int().min(1).max(20).default(10),
-      }).parse(request.query);
+        coordinates: z.object({
+          lat: z.number(),
+          lng: z.number()
+        }).optional().nullable()
+      });
+      
+      const { limit } = querySchema.parse(request.query);
       const userId = (request as any).user?.id;
       
       const hotels = await this.hotelSearchService.getOffersHotels({
