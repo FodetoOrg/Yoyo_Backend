@@ -8,8 +8,8 @@ export const CoordinatesSchema = z.object({
 });
 
 export const DateRangeSchema = z.object({
-  startDate: z.string().datetime(),
-  endDate: z.string().datetime(),
+  startDate: z.string(),
+  endDate: z.string(),
 });
 
 export const GuestsSchema = z.object({
@@ -31,7 +31,7 @@ export const SearchHotelsRequestSchema = z.object({
   dateRange: DateRangeSchema.optional(),
   guests: GuestsSchema,
   priceRange: PriceRangeSchema.optional(),
-  starRating: z.number().int().min(1).max(5).optional(),
+  starRating: z.number().int().min(0).max(5).optional(),
   amenities: z.array(z.string()).optional(),
   sortBy: z.enum(['recommended', 'price_low', 'price_high', 'rating', 'distance']).default('recommended'),
   page: z.number().int().min(1).default(1),
