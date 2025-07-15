@@ -38,8 +38,10 @@ export default async function customerProfileRoutes(fastify: FastifyInstance) {
 
  // Complete onboarding
  fastify.post('/onboarding/complete', {
+
    schema: completeOnboardingSchema,
    security: [{ bearerAuth: [] }]
+
  }, (request, reply) => customerProfileController.completeOnboarding(request, reply));
  
  // Skip onboarding

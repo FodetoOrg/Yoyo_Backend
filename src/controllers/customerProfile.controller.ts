@@ -117,7 +117,7 @@ export class CustomerProfileController {
      
      const processedData = {
        ...onboardingData,
-       dateOfBirth: onboardingData.dateOfBirth ? new Date(onboardingData.dateOfBirth) : undefined,
+    
      };
      
      const profile = await this.customerProfileService.completeOnboarding(userId, processedData);
