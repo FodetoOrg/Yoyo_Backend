@@ -22,9 +22,9 @@ export class AuthController {
 
   async login(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const { idToken } = LoginRequestSchema.parse(request.body);
+      const { idToken, role } = LoginRequestSchema.parse(request.body);
 
-      const result = await this.authService.loginWithFirebase(idToken);
+      const result = await this.authService.loginWithFirebase(idToken, role);
       
       const response = LoginResponseSchema.parse({
         success: true,
@@ -57,11 +57,11 @@ export class AuthController {
     try {
       const { refreshToken } = RefreshTokenRequestSchema.parse(request.body);
 
-      const tokens = await this.authService.refreshToken(refreshToken);
+      const result = await this.authService.refreshToken(refreshToken);
 
       const response = RefreshTokenResponseSchema.parse({
         success: true,
-        data: tokens,
+        data: result,
       });
 
       return reply.status(HttpStatus.OK).send(response);

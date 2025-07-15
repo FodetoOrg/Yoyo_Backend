@@ -23,6 +23,7 @@ export const AuthTokensSchema = z.object({
 // Request schemas
 export const LoginRequestSchema = z.object({
   idToken: z.string(),
+  role: z.enum(["user", "hotel", "staff", "superAdmin"]).default("user"),
 });
 
 export const RefreshTokenRequestSchema = z.object({
@@ -41,6 +42,7 @@ export const RefreshTokenResponseSchema = z.object({
   data: z.object({
     accessToken: z.string(),
     refreshToken: z.string(),
+    user: UserSchema,
   }),
 });
 
