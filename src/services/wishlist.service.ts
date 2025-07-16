@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify";
-import { wishlists, hotels, hotelImages, hotelReviews } from "../models/schema";
-import { eq, and, desc, avg, count } from "drizzle-orm";
+import { wishlists, hotels, hotelImages, hotelReviews, rooms } from "../models/schema";
+import { eq, and, desc, avg, count, asc } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { NotFoundError, ConflictError } from "../types/errors";
 
@@ -67,6 +67,7 @@ export class WishlistService {
             starRating: parseInt(item.hotel.starRating || '0'),
             amenities: item.hotel.amenities ? JSON.parse(item.hotel.amenities) : [],
             coordinates: this.parseCoordinates(item.hotel.mapCoordinates),
+            distance:0,
             rating: {
               average: Math.round(avgRating * 10) / 10,
               count: reviews.length,
