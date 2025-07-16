@@ -208,8 +208,8 @@ export const getHotelsSchema = {
 
 export const getHotelDetailsQuerySchema = z.object({
   guests: z.number().int().min(1).optional(),
-  checkIn: z.string().datetime().optional(),
-  checkOut: z.string().datetime().optional(),
+  checkIn: z.string().optional(),
+  checkOut: z.string().optional(),
 });
 
 export const getHotelDetailsSchema = {
@@ -221,11 +221,12 @@ export const getHotelDetailsSchema = {
   },
 };
 
-export const getHotelUsersSchema = {
+const getHotelUsersSchema = {
   params: zodToJsonSchema(
     z.object({
       hotelId: z.string().default(""),
-    })
+    }),
+    { name: "ParamsSchema" }
   ),
   response: {
     200: zodToJsonSchema(
@@ -234,7 +235,10 @@ export const getHotelUsersSchema = {
           id: z.string().uuid(),
           phone: z.string(),
         })
-      )
+      ),
+      { name: "HotelUserResponse" }
     ),
-  ),
+  },
 };
+
+

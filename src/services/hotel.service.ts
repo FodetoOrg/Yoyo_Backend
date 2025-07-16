@@ -11,6 +11,7 @@ import {
   Hotel,
   hotelReviews,
   bookings,
+  bookings,
 } from "../models/schema";
 import { v4 as uuidv4 } from "uuid";
 import { eq, and, like, inArray, exists, not, isNull, desc, or, sql } from "drizzle-orm";
