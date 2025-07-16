@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { hotels, hotelImages, rooms, hotelReviews, wishlists, coupons, couponMappings, bookings } from "../models/schema";
-import { eq, and, like, between, sql, desc, asc, inArray, exists, avg, count } from "drizzle-orm";
+import { eq, and, like, between, sql, desc, asc, inArray, exists, avg, count, not, or } from "drizzle-orm";
 
 interface SearchFilters {
   // Location
