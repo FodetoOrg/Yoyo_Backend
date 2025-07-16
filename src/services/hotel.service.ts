@@ -684,6 +684,53 @@ export class HotelService {
     return true;
   }
 
+  // Check room availability for specific dates
+  async checkRoomAvailability(roomId: string, checkInDate: Date, checkOutDate: Date): Promise<boolean> {
+    const db = this.fastify.db;
+    
+    // Get room from database
+    const room = await db.query.rooms.findFirst({
+      where: eq(rooms.id, roomId)
+    });
+    
+    if (!room || room.status !== 'available') {
+      return false;
+    }
+    
+    // Check for overlapping bookings that are not cancelled
+    const overlappingBookings = await db.query.bookings.findMany({
+      where: and(
+        eq(bookings.roomId, roomId),
+        not(eq(bookings.status, 'cancelled')),
+        or(
+          // New booking starts during existing booking
+          and(
+            sql`datetime(${bookings.checkInDate}) <= datetime(${checkInDate.toISOString()})`,
+            sql`datetime(${bookings.checkOutDate}) > datetime(${checkInDate.toISOString()})`
+          ),
+          // New booking ends during existing booking
+          and(
+            sql`datetime(${bookings.checkInDate}) < datetime(${checkOutDate.toISOString()})`,
+            sql`datetime(${bookings.checkOutDate}) >= datetime(${checkOutDate.toISOString()})`
+          ),
+          // New booking completely encompasses existing booking
+          and(
+            sql`datetime(${checkInDate.toISOString()}) <= datetime(${bookings.checkInDate})`,
+            sql`datetime(${checkOutDate.toISOString()}) >= datetime(${bookings.checkOutDate})`
+          ),
+          // Existing booking completely encompasses new booking
+          and(
+            sql`datetime(${bookings.checkInDate}) <= datetime(${checkInDate.toISOString()})`,
+            sql`datetime(${bookings.checkOutDate}) >= datetime(${checkOutDate.toISOString()})`
+          )
+        )
+      ),
+      limit: 1
+    });
+    
+    return overlappingBookings.length === 0;
+  }
+
   async getHotelUsers(hotelId: string) {
     const db = this.fastify.db;
     // added for testing

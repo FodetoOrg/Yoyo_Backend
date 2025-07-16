@@ -6,6 +6,7 @@ import {
   updateHotelSchema,
   createRoomSchema,
   getHotelSchema,
+  getHotelDetailsSchema,
   getHotelUsersSchema,
 } from "../schemas/hotel.schema";
 
@@ -94,6 +95,7 @@ export default async function hotelRoutes(fastify: FastifyInstance) {
     "/:id/details",
     {
       schema: {
+        ...getHotelDetailsSchema,
         tags: ["hotels"],
         summary: "Get detailed hotel information",
       },

@@ -462,21 +462,42 @@ async searchHotels(filters: SearchFilters) {
 
     let roomConditions: any[] = [eq(rooms.hotelId, hotelId)];
     
+    // Always filter by guest capacity if provided
     if (guestCount) {
       roomConditions.push(sql`${rooms.capacity} >= ${guestCount}`);
     }
 
-    const hotelRooms = await db.query.rooms.findMany({
+    let availableRooms = await db.query.rooms.findMany({
       where: and(...roomConditions),
       orderBy: [asc(rooms.pricePerNight)],
     });
 
-    if (hotelRooms.length === 0) {
+    // If dates are provided, further filter by availability
+    if (checkIn && checkOut && availableRooms.length > 0) {
+      const availableRoomIds = [];
+      
+      for (const room of availableRooms) {
+        const hasConflict = await this.checkRoomBookingConflict(
+          room.id,
+          checkIn,
+          checkOut
+        );
+        
+        if (!hasConflict) {
+          availableRoomIds.push(room.id);
+        }
+      }
+      
+      // Filter to only available rooms
+      availableRooms = availableRooms.filter(room => availableRoomIds.includes(room.id));
+    }
+
+    if (availableRooms.length === 0) {
       return null;
     }
 
-    const minPrice = Math.min(...hotelRooms.map(r => r.pricePerNight));
-    const maxPrice = Math.max(...hotelRooms.map(r => r.pricePerNight));
+    const minPrice = Math.min(...availableRooms.map(r => r.pricePerNight));
+    const maxPrice = Math.max(...availableRooms.map(r => r.pricePerNight));
 
     let totalPrice = null;
     if (checkIn && checkOut) {

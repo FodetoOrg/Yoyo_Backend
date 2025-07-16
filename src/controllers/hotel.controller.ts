@@ -5,6 +5,7 @@ import {
   CreateHotelBodySchema,
   UpdateHotelBodySchema,
   GetHotelParamsSchema,
+  getHotelDetailsQuerySchema,
   CreateRoomBodySchema,
   HotelSearchQuerySchema
 } from "../schemas/hotel.schema";
@@ -92,6 +93,8 @@ export class HotelController {
   async getHotelDetails(request: FastifyRequest, reply: FastifyReply) {
     try {
       const { id } = GetHotelParamsSchema.parse(request.params);
+      const { guests, checkIn, checkOut } = getHotelDetailsQuerySchema.parse(request.query);
+      
       const hotel = await this.hotelService.getHotelById(id);
 
       if (!hotel) {
@@ -104,10 +107,30 @@ export class HotelController {
       // Get reviews data
       const reviewsData = await this.hotelService.getHotelReviews(id);
       
-      // Get room upgrade options
-      const rooms = await this.hotelService.getRoomsByHotelIdEnhanced(id);
+      // Get all rooms for the hotel
+      let rooms = await this.hotelService.getRoomsByHotelIdEnhanced(id);
       
-      // Sort rooms by price
+      // Filter rooms by guest capacity if provided
+      if (guests) {
+        rooms = rooms.filter(room => room.capacity >= guests);
+      }
+      
+      // If dates are provided, filter by availability
+      if (checkIn && checkOut && rooms.length > 0) {
+        const checkInDate = new Date(checkIn);
+        const checkOutDate = new Date(checkOut);
+        
+        const availableRooms = [];
+        for (const room of rooms) {
+          const isAvailable = await this.hotelService.checkRoomAvailability(room.id, checkInDate, checkOutDate);
+          if (isAvailable) {
+            availableRooms.push(room);
+          }
+        }
+        rooms = availableRooms;
+      }
+      
+      // Sort available rooms by price
       const sortedRooms = rooms.sort((a, b) => a.pricePerNight - b.pricePerNight);
       
       // Create room upgrade data structure
@@ -118,6 +141,7 @@ export class HotelController {
           image: sortedRooms[0].images.length > 0 ? sortedRooms[0].images[0].url : null,
           features: sortedRooms[0].description || sortedRooms[0].amenities.join(', '),
           pricePerNight: sortedRooms[0].pricePerNight,
+          capacity: sortedRooms[0].capacity,
           isCurrent: true
         } : null,
         upgradeOptions: sortedRooms.slice(1).map(room => ({
@@ -125,8 +149,10 @@ export class HotelController {
           name: room.name,
           image: room.images.length > 0 ? room.images[0].url : null,
           features: room.description || room.amenities.join(', '),
-          pricePerNight: room.pricePerNight
-        }))
+          pricePerNight: room.pricePerNight,
+          capacity: room.capacity
+        })),
+        totalAvailableRooms: sortedRooms.length
       };
 
       return reply.code(200).send({
@@ -137,8 +163,14 @@ export class HotelController {
             rating: reviewsData.overallRating,
             reviewCount: reviewsData.totalReviews,
             price: sortedRooms.length > 0 ? sortedRooms[0].pricePerNight : null,
+            availableRooms: sortedRooms.length,
             reviewsData,
-            roomUpgradeData
+            roomUpgradeData,
+            searchCriteria: {
+              guests,
+              checkIn,
+              checkOut
+            }
           }
         },
       });
