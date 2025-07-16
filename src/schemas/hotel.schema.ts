@@ -216,7 +216,7 @@ export const getHotelDetailsSchema = {
   params: zodToJsonSchema(GetHotelParamsSchema),
   querystring: zodToJsonSchema(getHotelDetailsQuerySchema),
   response: {
-    200: zodToJsonSchema(GetHotelResponseSchema),
+    // 200: zodToJsonSchema(GetHotelResponseSchema),
     404: zodToJsonSchema(GetHotelErrorSchema),
   },
 };

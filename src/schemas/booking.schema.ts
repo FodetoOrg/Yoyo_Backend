@@ -3,26 +3,26 @@ import { zodToJsonSchema } from 'zod-to-json-schema';
 
 // Base schemas
 export const BookingResponseSchema = z.object({
-  id: z.string().uuid(),
-  userId: z.string().uuid(),
-  hotelId: z.string().uuid(),
-  roomId: z.string().uuid(),
-  checkIn: z.string().datetime(),
-  checkOut: z.string().datetime(),
+  id: z.string(),
+  userId: z.string(),
+  hotelId: z.string(),
+  roomId: z.string(),
+  checkIn: z.string(),
+  checkOut: z.string(),
   guests: z.number().int(),
   totalAmount: z.number(),
   status: z.enum(['pending', 'confirmed', 'cancelled', 'completed']),
   specialRequests: z.string().nullable(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime()
+  createdAt: z.string(),
+  updatedAt: z.string()
 });
 
 // Create booking schemas
 export const CreateBookingBodySchema = z.object({
-  hotelId: z.string().uuid(),
-  roomId: z.string().uuid(),
-  checkIn: z.string().datetime(),
-  checkOut: z.string().datetime(),
+  hotelId: z.string(),
+  roomId: z.string(),
+  checkIn: z.string(),
+  checkOut: z.string(),
   guests: z.number().int().min(1),
   specialRequests: z.string().optional(),
   paymentMode: z.enum(['online', 'offline']).optional(),

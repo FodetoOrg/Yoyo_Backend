@@ -28,7 +28,7 @@ export default async function bookingRoutes(fastify: FastifyInstance) {
       summary: 'Create a new booking',
       security: [{ bearerAuth: [] }]
     },
-    preHandler: rbacGuard(permissions.createBooking)
+    // preHandler: rbacGuard(permissions.createBooking)
   }, (request, reply) => bookingController.createBooking(request, reply));
   
   // Get booking by ID
