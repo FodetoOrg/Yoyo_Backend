@@ -39,16 +39,16 @@ export class BookingService {
   // Check if a room is available for the given dates
   async checkRoomAvailability(roomId: string, checkInDate: Date, checkOutDate: Date, bookingType: 'daily' | 'hourly' = 'daily') {
     const db = this.fastify.db;
-    
+
     // Get room from database
     const room = await db.query.rooms.findFirst({
       where: eq(rooms.id, roomId)
     });
-    
+
     if (!room || !room.available) {
       return false;
     }
-    
+
     // Check if there are any overlapping bookings
     const overlappingBookings = await db.query.bookings.findMany({
       where: and(
@@ -73,41 +73,52 @@ export class BookingService {
         )
       )
     });
-    
+
     return overlappingBookings.length === 0;
   }
 
   // Create a new booking
-  async createBooking(bookingData: BookingCreateParams) {
+  async createBooking(bookingData: {
+    hotelId: string;
+    roomId: string;
+    userId: string;
+    checkIn: Date;
+    checkOut: Date;
+    guests: number;
+    totalAmount: number;
+    specialRequests?: string;
+    paymentMode?: string;
+    advanceAmount?: number;
+  }) {
     const db = this.fastify.db;
     const bookingId = uuidv4();
-    
+
     return await db.transaction(async (tx) => {
       // Get hotel payment configuration
       const hotel = await tx.query.hotels.findFirst({
         where: eq(hotels.id, bookingData.hotelId)
       });
-      
+
       if (!hotel) {
         throw new Error('Hotel not found');
       }
-      
+
       // Determine payment mode based on hotel configuration and user preference
       let finalPaymentMode = bookingData.paymentMode || 'offline';
       let requiresOnlinePayment = false;
       let paymentDueDate = null;
       let remainingAmount = bookingData.totalAmount;
       let advanceAmount = 0;
-      
+
       // Validate payment mode against hotel configuration
       if (finalPaymentMode === 'online' && !hotel.onlinePaymentEnabled) {
         throw new Error('Online payment is not enabled for this hotel');
       }
-      
+
       if (finalPaymentMode === 'offline' && !hotel.offlinePaymentEnabled) {
         throw new Error('Offline payment is not enabled for this hotel');
       }
-      
+
       // Set payment requirements based on mode
       if (finalPaymentMode === 'online') {
         requiresOnlinePayment = true;
@@ -115,25 +126,25 @@ export class BookingService {
         // For offline payments, set due date (e.g., 24 hours before check-in)
         paymentDueDate = new Date(bookingData.checkInDate);
         paymentDueDate.setHours(paymentDueDate.getHours() - 24);
-        
+
         // Handle advance payment if specified
         if (bookingData.advanceAmount && bookingData.advanceAmount > 0) {
           advanceAmount = Math.min(bookingData.advanceAmount, bookingData.totalAmount);
           remainingAmount = bookingData.totalAmount - advanceAmount;
         }
       }
-      
+
       // Create booking
       await tx.insert(bookings).values({
         id: bookingId,
         userId: bookingData.userId,
         hotelId: bookingData.hotelId,
         roomId: bookingData.roomId,
-        checkInDate: bookingData.checkInDate,
-        checkOutDate: bookingData.checkOutDate,
-        bookingType: bookingData.bookingType,
-        totalHours: bookingData.totalHours,
-        guestCount: bookingData.guestCount,
+        checkInDate: bookingData.checkIn,
+        checkOutDate: bookingData.checkOut,
+        bookingType: 'daily', // Assuming default booking type is daily
+        totalHours: 24, // Assuming default total hours is 24
+        guestCount: bookingData.guests,
         totalAmount: bookingData.totalAmount,
         paymentMode: finalPaymentMode,
         requiresOnlinePayment,
@@ -144,7 +155,7 @@ export class BookingService {
         status: finalPaymentMode === 'offline' ? 'confirmed' : 'pending',
         paymentStatus: finalPaymentMode === 'offline' ? 'pending' : 'pending',
       });
-      
+
       // If offline payment, create initial payment record
       if (finalPaymentMode === 'offline') {
         const paymentId = uuidv4();
@@ -161,7 +172,7 @@ export class BookingService {
           transactionDate: new Date(),
         });
       }
-      
+
       // Get the created booking
       const booking = await this.getBookingById(bookingId);
       return booking;
@@ -171,7 +182,7 @@ export class BookingService {
   // Get booking by ID
   async getBookingById(bookingId: string) {
     const db = this.fastify.db;
-    
+
     const booking = await db.query.bookings.findFirst({
       where: eq(bookings.id, bookingId),
       with: {
@@ -181,11 +192,11 @@ export class BookingService {
         payment: true
       }
     });
-    
+
     if (!booking) {
       return null;
     }
-    
+
     // Format booking data
     return {
       id: booking.id,
@@ -242,7 +253,7 @@ export class BookingService {
   // Get bookings by user ID
   async getBookingsByUserId(userId: string) {
     const db = this.fastify.db;
-    
+
     const userBookings = await db.query.bookings.findMany({
       where: eq(bookings.userId, userId),
       with: {
@@ -251,7 +262,7 @@ export class BookingService {
       },
       orderBy: (bookings, { desc }) => [desc(bookings.createdAt)]
     });
-    
+
     // Format bookings
     return userBookings.map(booking => ({
       id: booking.id,
@@ -278,7 +289,7 @@ export class BookingService {
   // Get bookings by hotel ID
   async getBookingsByHotelId(hotelId: string) {
     const db = this.fastify.db;
-    
+
     const hotelBookings = await db.query.bookings.findMany({
       where: eq(bookings.hotelId, hotelId),
       with: {
@@ -287,7 +298,7 @@ export class BookingService {
       },
       orderBy: (bookings, { desc }) => [desc(bookings.createdAt)]
     });
-    
+
     // Format bookings
     return hotelBookings.map(booking => ({
       id: booking.id,
@@ -316,7 +327,7 @@ export class BookingService {
   // Cancel a booking
   async cancelBooking(bookingId: string) {
     const db = this.fastify.db;
-    
+
     await db
       .update(bookings)
       .set({
@@ -324,7 +335,7 @@ export class BookingService {
         updatedAt: new Date()
       })
       .where(eq(bookings.id, bookingId));
-    
+
     // Get the updated booking
     const booking = await this.getBookingById(bookingId);
     return booking;
@@ -339,12 +350,12 @@ export class BookingService {
         receipt: `receipt_${bookingId}`,
         payment_capture: 1
       };
-      
+
       const order = await this.razorpay.orders.create(options);
-      
+
       // Save order to database
       await this.savePaymentOrder(bookingId, order);
-      
+
       return {
         orderId: order.id,
         amount: order.amount / 100, // Convert back to rupees
@@ -360,13 +371,13 @@ export class BookingService {
   private async savePaymentOrder(bookingId: string, order: any) {
     const db = this.fastify.db;
     const booking = await this.getBookingById(bookingId);
-    
+
     if (!booking) {
       throw new Error('Booking not found');
     }
-    
+
     const paymentId = uuidv4();
-    
+
     await db.insert(payments).values({
       id: paymentId,
       bookingId,
@@ -381,11 +392,11 @@ export class BookingService {
   // Verify payment and update status
   async verifyPayment(bookingId: string, razorpayPaymentId: string, razorpayOrderId: string, razorpaySignature: string) {
     const db = this.fastify.db;
-    
+
     // In a real-world implementation, we would verify the signature here
     // using Razorpay's SDK
     const isValidPayment = true; // Replace with actual verification
-    
+
     if (isValidPayment) {
       // Update payment in database
       await db
@@ -401,7 +412,7 @@ export class BookingService {
           eq(payments.bookingId, bookingId),
           eq(payments.razorpayOrderId, razorpayOrderId)
         ));
-      
+
       // Update booking status
       await db
         .update(bookings)
@@ -411,7 +422,7 @@ export class BookingService {
           updatedAt: new Date()
         })
         .where(eq(bookings.id, bookingId));
-      
+
       return true;
     } else {
       throw new Error('Payment verification failed');

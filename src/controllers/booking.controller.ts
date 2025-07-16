@@ -3,27 +3,16 @@ import { z } from 'zod';
 import { BookingService } from '../services/booking.service';
 import { HotelService } from '../services/hotel.service';
 
-// Validation schemas
-const createBookingSchema = z.object({
-  hotelId: z.string().uuid(),
-  roomId: z.string().uuid(),
-  checkInDate: z.string().refine(val => !isNaN(Date.parse(val)), {
-    message: "Invalid date format for check-in date"
-  }),
-  checkOutDate: z.string().refine(val => !isNaN(Date.parse(val)), {
-    message: "Invalid date format for check-out date"
-  }),
-  bookingType: z.enum(['daily', 'hourly']).default('daily'),
-  totalHours: z.number().int().positive().optional(),
-  guestCount: z.number().int().positive().default(1),
-  specialRequests: z.string().optional(),
-  paymentMode: z.enum(['online', 'offline']).optional(),
-  advanceAmount: z.number().positive().optional(),
-});
+// Import validation schemas from schema file
+import {
+  CreateBookingBodySchema,
+  GetBookingParamsSchema,
+  GetUserBookingsQuerySchema,
+  GetHotelBookingsParamsSchema,
+  CancelBookingParamsSchema
+} from '../schemas/booking.schema';
 
-const bookingIdParamSchema = z.object({
-  id: z.string().uuid()
-});
+
 
 export class BookingController {
   private bookingService: BookingService;
@@ -37,7 +26,7 @@ export class BookingController {
   // Create a new booking
   async createBooking(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const bookingData = createBookingSchema.parse(request.body);
+      const bookingData = CreateBookingBodySchema.parse(request.body);
       const userId = request.user.id as string;
       
       // Check if room exists and is available
@@ -68,9 +57,8 @@ export class BookingController {
       // Check if the room is already booked for the requested dates
       const isRoomAvailable = await this.bookingService.checkRoomAvailability(
         bookingData.roomId,
-        new Date(bookingData.checkInDate),
-        new Date(bookingData.checkOutDate),
-        bookingData.bookingType
+        new Date(bookingData.checkIn),
+        new Date(bookingData.checkOut)
       );
       
       if (!isRoomAvailable) {
@@ -80,34 +68,24 @@ export class BookingController {
         });
       }
       
-      // Calculate total amount based on booking type (hourly or daily)
-      let totalAmount = 0;
+      // Calculate total amount based on daily booking
+      const checkInDate = new Date(bookingData.checkIn);
+      const checkOutDate = new Date(bookingData.checkOut);
+      const diffTime = Math.abs(checkOutDate.getTime() - checkInDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
       
-      if (bookingData.bookingType === 'hourly') {
-        if (!bookingData.totalHours || !room.pricePerHour) {
-          return reply.code(400).send({
-            success: false,
-            message: 'Total hours must be provided for hourly booking or room does not support hourly booking',
-          });
-        }
-        totalAmount = room.pricePerHour * bookingData.totalHours;
-      } else {
-        // Calculate number of days
-        const checkInDate = new Date(bookingData.checkInDate);
-        const checkOutDate = new Date(bookingData.checkOutDate);
-        const diffTime = Math.abs(checkOutDate.getTime() - checkInDate.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        
-        totalAmount = room.pricePerNight * diffDays;
-      }
+      const totalAmount = room.pricePerNight * diffDays;
       
       // Create booking
       const booking = await this.bookingService.createBooking({
-        ...bookingData,
+        hotelId: bookingData.hotelId,
+        roomId: bookingData.roomId,
         userId,
+        checkIn: checkInDate,
+        checkOut: checkOutDate,
+        guests: bookingData.guests,
         totalAmount,
-        checkInDate: new Date(bookingData.checkInDate),
-        checkOutDate: new Date(bookingData.checkOutDate),
+        specialRequests: bookingData.specialRequests,
         paymentMode: bookingData.paymentMode,
         advanceAmount: bookingData.advanceAmount,
       });
@@ -149,7 +127,7 @@ export class BookingController {
   // Get booking by ID
   async getBookingById(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const { id } = bookingIdParamSchema.parse(request.params);
+      const { id } = GetBookingParamsSchema.parse(request.params);
       const userId = request.user.id as string;
       const role = request.user.role as string;
       
@@ -226,7 +204,7 @@ export class BookingController {
   // Cancel a booking
   async cancelBooking(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const { id } = bookingIdParamSchema.parse(request.params);
+      const { id } = CancelBookingParamsSchema.parse(request.params);
       const userId = request.user.id;
       const role = request.user.role;
       
@@ -295,7 +273,7 @@ export class BookingController {
   // Get hotel bookings (for hotel owners and admins)
   async getHotelBookings(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const { id } = hotelIdParamSchema.parse(request.params);
+      const { id } = GetHotelBookingsParamsSchema.parse(request.params);
       const userId = request.user.id;
       const role = request.user.role;
       
