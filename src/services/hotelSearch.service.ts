@@ -1,5 +1,5 @@
 import { FastifyInstance } from "fastify";
-import { hotels, hotelImages, rooms, hotelReviews, wishlists, coupons, couponMappings } from "../models/schema";
+import { hotels, hotelImages, rooms, hotelReviews, wishlists, coupons, couponMappings, bookings } from "../models/schema";
 import { eq, and, like, between, sql, desc, asc, inArray, exists, avg, count } from "drizzle-orm";
 
 interface SearchFilters {
@@ -376,7 +376,7 @@ export class HotelSearchService {
 
     let roomConditions: any[] = [
       sql`${rooms.capacity} >= ${guestCount}`,
-      eq(rooms.status, 'available'),
+      // Remove the status check as we'll check availability based on bookings
     ];
 
     if (priceRange?.min) {
@@ -386,14 +386,73 @@ export class HotelSearchService {
       roomConditions.push(sql`${rooms.pricePerNight} <= ${priceRange.max}`);
     }
 
-    // Get rooms that are not booked during the requested period
-    const availableRooms = await db
-      .select({ hotelId: rooms.hotelId })
+    // Get all rooms that match criteria
+    const allRooms = await db
+      .select({ 
+        roomId: rooms.id,
+        hotelId: rooms.hotelId 
+      })
       .from(rooms)
-      .where(and(...roomConditions))
-      .groupBy(rooms.hotelId);
+      .where(and(...roomConditions));
 
-    return availableRooms.map(r => r.hotelId);
+    // Check each room for booking conflicts
+    const availableHotelIds = new Set<string>();
+
+    for (const room of allRooms) {
+      const hasConflict = await this.checkRoomBookingConflict(
+        room.roomId,
+        checkIn,
+        checkOut
+      );
+
+      if (!hasConflict) {
+        availableHotelIds.add(room.hotelId);
+      }
+    }
+
+    return Array.from(availableHotelIds);
+  }
+
+  private async checkRoomBookingConflict(
+    roomId: string,
+    checkIn: Date,
+    checkOut: Date
+  ): Promise<boolean> {
+    const db = this.fastify.db;
+
+    // Check for overlapping bookings that are not cancelled
+    const conflictingBookings = await db.query.bookings.findMany({
+      where: and(
+        eq(bookings.roomId, roomId),
+        not(eq(bookings.status, 'cancelled')),
+        // Check for date overlap using proper date comparison
+        or(
+          // New booking starts during existing booking
+          and(
+            sql`datetime(${bookings.checkInDate}) <= datetime(${checkIn.toISOString()})`,
+            sql`datetime(${bookings.checkOutDate}) > datetime(${checkIn.toISOString()})`
+          ),
+          // New booking ends during existing booking
+          and(
+            sql`datetime(${bookings.checkInDate}) < datetime(${checkOut.toISOString()})`,
+            sql`datetime(${bookings.checkOutDate}) >= datetime(${checkOut.toISOString()})`
+          ),
+          // New booking completely encompasses existing booking
+          and(
+            sql`datetime(${checkIn.toISOString()}) <= datetime(${bookings.checkInDate})`,
+            sql`datetime(${checkOut.toISOString()}) >= datetime(${bookings.checkOutDate})`
+          ),
+          // Existing booking completely encompasses new booking
+          and(
+            sql`datetime(${bookings.checkInDate}) <= datetime(${checkIn.toISOString()})`,
+            sql`datetime(${bookings.checkOutDate}) >= datetime(${checkOut.toISOString()})`
+          )
+        )
+      ),
+      limit: 1
+    });
+
+    return conflictingBookings.length > 0;
   }
 
   private async getHotelPricing(hotelId: string, checkIn?: Date, checkOut?: Date, guestCount?: number) {

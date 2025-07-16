@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify";
-import { rooms, roomImages, hotels, roomTypes, users } from "../models/schema";
-import { eq, and, like, inArray, desc } from "drizzle-orm";
+import { rooms, hotels, roomImages, roomTypes, bookings } from '../models/schema';
+import { eq, and, like, desc, asc, count, sql, not, or } from 'drizzle-orm';
 import { v4 as uuidv4 } from "uuid";
 import { uploadToS3 } from "../config/aws";
 import { NotFoundError, ConflictError, ForbiddenError } from "../types/errors";
@@ -351,7 +351,7 @@ export class RoomService {
       if (roomData.images && roomData.images.length > 0) {
         // Delete existing images
         await tx.delete(roomImages).where(eq(roomImages.roomId, roomId));
-        
+
         imageUrls = await Promise.all(
           roomData.images.map(async (base64Image, index) => {
             if (base64Image.startsWith('data:image/')) {
@@ -366,12 +366,12 @@ export class RoomService {
 
       // Process data for update
       let processedData: any = { ...roomData };
-      
+
       // Handle amenities
       if (roomData.amenities) {
         processedData.amenities = JSON.stringify(roomData.amenities);
       }
-      
+
       // Handle boolean conversions
       if (roomData.isHourlyBooking !== undefined) {
         processedData.isHourlyBooking = roomData.isHourlyBooking === 'Active' || roomData.isHourlyBooking === true;
@@ -379,12 +379,12 @@ export class RoomService {
       if (roomData.isDailyBooking !== undefined) {
         processedData.isDailyBooking = roomData.isDailyBooking === 'Active' || roomData.isDailyBooking === true;
       }
-      
+
       // Map capacity to maxGuests if provided
       if (roomData.capacity) {
         processedData.maxGuests = roomData.capacity;
       }
-      
+
       // Remove images from processed data as we handle them separately
       delete processedData.images;
       processedData.updatedAt = new Date();
