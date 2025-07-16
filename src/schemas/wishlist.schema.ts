@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
-import { HotelSearchResultSchema } from './hotelSearch.schema';
 
 // Request schemas
 export const AddToWishlistSchema = z.object({
@@ -20,11 +19,46 @@ export const WishlistQuerySchema = z.object({
   limit: z.number().int().min(1).max(50).default(10),
 });
 
+// Hotel schema for wishlist that matches the actual returned data
+export const WishlistHotelSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  description: z.string().nullable(),
+  address: z.string(),
+  city: z.string(),
+  starRating: z.number().int(),
+  amenities: z.array(z.string()),
+  coordinates: z.object({
+    lat: z.number(),
+    lng: z.number(),
+  }),
+  rating: z.object({
+    average: z.number(),
+    count: z.number().int(),
+  }),
+  pricing: z.object({
+    startingFrom: z.number(),
+    range: z.object({
+      min: z.number(),
+      max: z.number(),
+    }),
+    currency: z.string(),
+    perNight: z.boolean(),
+  }).nullable(),
+  images: z.object({
+    primary: z.string().url().nullable(),
+  }),
+  paymentOptions: z.object({
+    onlineEnabled: z.boolean(),
+    offlineEnabled: z.boolean(),
+  }),
+});
+
 // Response schemas
 export const WishlistItemSchema = z.object({
   id: z.string().uuid(),
   addedAt: z.string().datetime(),
-  hotel: HotelSearchResultSchema,
+  hotel: WishlistHotelSchema,
 });
 
 export const WishlistResponseSchema = z.object({
