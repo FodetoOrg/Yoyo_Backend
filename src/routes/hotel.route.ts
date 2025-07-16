@@ -97,7 +97,7 @@ export default async function hotelRoutes(fastify: FastifyInstance) {
       schema: {
         ...getHotelDetailsSchema,
         tags: ["hotels"],
-        summary: "Get detailed hotel information",
+        summary: "Get detailed hotel information with room upgrades",
       },
       preHandler: [],
     },

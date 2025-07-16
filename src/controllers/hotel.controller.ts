@@ -93,7 +93,8 @@ export class HotelController {
   async getHotelDetails(request: FastifyRequest, reply: FastifyReply) {
     try {
       const { id } = GetHotelParamsSchema.parse(request.params);
-      const { guests, checkIn, checkOut } = getHotelDetailsQuerySchema.parse(request.query);
+      const queryParams = request.query as any;
+      const { guests, checkIn, checkOut } = getHotelDetailsQuerySchema.parse(queryParams);
       
       const hotel = await this.hotelService.getHotelById(id);
 
@@ -111,7 +112,7 @@ export class HotelController {
       let rooms = await this.hotelService.getRoomsByHotelIdEnhanced(id);
       
       // Filter rooms by guest capacity if provided
-      if (guests) {
+      if (guests && guests > 0) {
         rooms = rooms.filter(room => room.capacity >= guests);
       }
       
@@ -130,10 +131,10 @@ export class HotelController {
         rooms = availableRooms;
       }
       
-      // Sort available rooms by price
+      // Sort available rooms by price (ascending order - cheapest first)
       const sortedRooms = rooms.sort((a, b) => a.pricePerNight - b.pricePerNight);
       
-      // Create room upgrade data structure
+      // Create room upgrade data structure - only if there are available rooms
       const roomUpgradeData = {
         currentRoom: sortedRooms.length > 0 ? {
           id: sortedRooms[0].id,
@@ -175,6 +176,7 @@ export class HotelController {
         },
       });
     } catch (error) {
+      request.log.error(error);
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
           success: false,

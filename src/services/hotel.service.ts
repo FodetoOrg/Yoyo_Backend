@@ -10,12 +10,13 @@ import {
   hotelCities,
   Hotel,
   hotelReviews,
+  bookings,
 } from "../models/schema";
 import { v4 as uuidv4 } from "uuid";
-import { eq, and, like, inArray, exists, not, isNull, desc } from "drizzle-orm";
-import { v4 as uuidv4 } from "uuid";
+import { eq, and, like, inArray, exists, not, isNull, desc, or, sql } from "drizzle-orm";
 import { UserRole } from "../types/common";
 import { ForbiddenError } from "../types/errors";
+import { uploadToS3 } from "../config/aws";
 
 interface HotelSearchParams {
   city: string;
@@ -143,7 +144,7 @@ export class HotelService {
       offlinePaymentEnabled: hotel.offlinePaymentEnabled,
       createdAt: hotel.createdAt,
       updatedAt: hotel.updatedAt,
-      cityId: hotel.city.cityId,
+      cityId: hotel.city ? hotel.city.cityId : null,
       mapCoordinates: hotel.mapCoordinates,
       images: hotel.images.map((image) => ({
         id: image.id,
