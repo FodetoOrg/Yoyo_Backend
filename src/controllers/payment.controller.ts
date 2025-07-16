@@ -32,6 +32,16 @@ const processRefundSchema = z.object({
   reason: z.string(),
 });
 
+const recordOfflinePaymentSchema = z.object({
+  bookingId: z.string().uuid(),
+  amount: z.number().positive(),
+  paymentMethod: z.string().min(1), // cash, card, upi, bank_transfer, etc.
+  receivedBy: z.string().min(1), // Staff member who received payment
+  receiptNumber: z.string().optional(),
+  transactionDate: z.string().datetime().optional(),
+  notes: z.string().optional(),
+});
+
 export class PaymentController {
   private paymentService: PaymentService;
 
@@ -195,18 +205,22 @@ export class PaymentController {
   // Get payment history
   async getPaymentHistory(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const { bookingId, userId, status, page = 1, limit = 10 } = request.query as any;
+      const { bookingId, status, paymentMode, page = 1, limit = 10 } = request.query as any;
+      const userId = (request as any).user.id;
+      const userRole = (request as any).user.role;
       
-      // Implementation would fetch from payments table with filters
-      // This is a placeholder response
+      const result = await this.paymentService.getPaymentHistory({
+        userId: userRole === 'user' ? userId : undefined, // Only filter by userId for regular users
+        bookingId,
+        status,
+        paymentMode,
+        page,
+        limit
+      });
+      
       return reply.code(200).send({
         success: true,
-        data: {
-          payments: [],
-          total: 0,
-          page,
-          limit,
-        },
+        data: result,
       });
     } catch (error) {
       request.log.error(error);
@@ -221,9 +235,11 @@ export class PaymentController {
   async recordOfflinePayment(request: FastifyRequest, reply: FastifyReply) {
     try {
       const paymentData = recordOfflinePaymentSchema.parse(request.body);
+      const recordedBy = (request as any).user.id;
       
       const processedData = {
         ...paymentData,
+        recordedBy,
         transactionDate: paymentData.transactionDate ? new Date(paymentData.transactionDate) : undefined,
       };
       

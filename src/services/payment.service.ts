@@ -32,6 +32,15 @@ interface AdminPaymentParams {
   metadata?: any;
 }
 
+interface PaymentHistoryFilters {
+  userId?: string;
+  bookingId?: string;
+  status?: string;
+  paymentMode?: string;
+  page?: number;
+  limit?: number;
+}
+
 export class PaymentService {
   private fastify!: FastifyInstance;
   private razorpay: Razorpay;
@@ -264,92 +273,6 @@ export class PaymentService {
     });
   }
 
-  // Handle Razorpay webhooks
-  async handleWebhook(signature: string, payload: string) {
-    const db = this.fastify.db;
-
-    try {
-      // Verify webhook signature
-      const isValidSignature = this.verifyWebhookSignature(signature, payload);
-      if (!isValidSignature) {
-        throw new Error('Invalid webhook signature');
-      }
-
-      const event = JSON.parse(payload);
-      const webhookId = uuidv4();
-
-      // Store webhook for processing
-      await db.insert(paymentWebhooks).values({
-        id: webhookId,
-        razorpayEventId: event.event_id || uuidv4(),
-        event: event.event,
-        paymentId: event.payload?.payment?.entity?.id,
-        orderId: event.payload?.payment?.entity?.order_id,
-        signature,
-        payload,
-      });
-
-      // Process webhook asynchronously
-      setImmediate(() => this.processWebhook(webhookId));
-
-      return { success: true };
-
-    } catch (error) {
-      console.error('Webhook handling failed:', error);
-      throw error;
-    }
-  }
-
-  // Process webhook events
-  private async processWebhook(webhookId: string) {
-    const db = this.fastify.db;
-
-    try {
-      const webhook = await db.query.paymentWebhooks.findFirst({
-        where: eq(paymentWebhooks.id, webhookId)
-      });
-
-      if (!webhook || webhook.processed) {
-        return;
-      }
-
-      const event = JSON.parse(webhook.payload);
-
-      switch (webhook.event) {
-        case 'payment.captured':
-          await this.handlePaymentCaptured(event);
-          break;
-        case 'payment.failed':
-          await this.handlePaymentFailed(event);
-          break;
-        case 'order.paid':
-          await this.handleOrderPaid(event);
-          break;
-        default:
-          console.log(`Unhandled webhook event: ${webhook.event}`);
-      }
-
-      // Mark as processed
-      await db.update(paymentWebhooks)
-        .set({ 
-          processed: true,
-          processedAt: new Date()
-        })
-        .where(eq(paymentWebhooks.id, webhookId));
-
-    } catch (error) {
-      console.error(`Webhook processing failed for ${webhookId}:`, error);
-      
-      // Update retry count
-      await db.update(paymentWebhooks)
-        .set({ 
-          retryCount: webhook.retryCount + 1,
-          error: error.message
-        })
-        .where(eq(paymentWebhooks.id, webhookId));
-    }
-  }
-
   // Admin payment to hotels
   async createHotelPayment(params: AdminPaymentParams) {
     const db = this.fastify.db;
@@ -436,6 +359,319 @@ export class PaymentService {
     } catch (error) {
       console.error('Refund processing failed:', error);
       throw error;
+    }
+  }
+
+  // Record offline payment
+  async recordOfflinePayment(data: {
+    bookingId: string;
+    amount: number;
+    paymentMethod: string;
+    receivedBy: string;
+    recordedBy: string;
+    receiptNumber?: string;
+    transactionDate?: Date;
+    notes?: string;
+  }) {
+    const db = this.fastify.db;
+    
+    return await db.transaction(async (tx) => {
+      try {
+        // Get booking details
+        const booking = await tx.query.bookings.findFirst({
+          where: eq(bookings.id, data.bookingId),
+          with: {
+            user: true,
+            hotel: true,
+            room: true
+          }
+        });
+
+        if (!booking) {
+          throw new Error('Booking not found');
+        }
+
+        // Validate payment mode
+        if (booking.paymentMode !== 'offline' && booking.paymentMode !== 'both') {
+          throw new Error('This booking does not support offline payments');
+        }
+
+        // Check if amount is valid
+        if (data.amount <= 0 || data.amount > booking.remainingAmount) {
+          throw new Error(`Invalid amount. Maximum allowed: ₹${booking.remainingAmount}`);
+        }
+
+        // Generate receipt number if not provided
+        const receiptNumber = data.receiptNumber || 
+          `RCP-${booking.id.substring(0, 6)}-${Date.now().toString().substring(7)}`;
+
+        // Create payment record
+        const paymentId = uuidv4();
+        const transactionDate = data.transactionDate || new Date();
+        
+        // Determine payment type
+        let paymentType = 'partial';
+        if (data.amount === booking.totalAmount) {
+          paymentType = 'full';
+        } else if (data.amount === booking.remainingAmount) {
+          paymentType = 'remaining';
+        } else if (booking.advanceAmount === 0) {
+          paymentType = 'advance';
+        }
+
+        // Create payment record
+        await tx.insert(payments).values({
+          id: paymentId,
+          bookingId: data.bookingId,
+          userId: booking.userId,
+          amount: data.amount,
+          currency: 'INR',
+          paymentType,
+          paymentMethod: data.paymentMethod,
+          paymentMode: 'offline',
+          offlinePaymentDetails: JSON.stringify({
+            receivedBy: data.receivedBy,
+            recordedBy: data.recordedBy,
+            notes: data.notes,
+            location: booking.hotel.name
+          }),
+          receivedBy: data.receivedBy,
+          receiptNumber,
+          status: 'completed',
+          transactionDate,
+        });
+
+        // Update booking
+        const newRemainingAmount = booking.remainingAmount - data.amount;
+        const newAdvanceAmount = booking.advanceAmount + data.amount;
+        const isFullyPaid = newRemainingAmount === 0;
+
+        await tx.update(bookings)
+          .set({
+            remainingAmount: newRemainingAmount,
+            advanceAmount: newAdvanceAmount,
+            paymentStatus: isFullyPaid ? 'completed' : 'partial',
+            status: isFullyPaid ? 'confirmed' : booking.status,
+            updatedAt: new Date()
+          })
+          .where(eq(bookings.id, data.bookingId));
+
+        // Send notifications
+        await this.notificationService.sendNotificationFromTemplate('offline_payment_received', booking.userId, {
+          amount: data.amount,
+          paymentType,
+          receiptNumber,
+          hotelName: booking.hotel.name,
+          bookingId: booking.id
+        });
+
+        // If fully paid, send booking confirmation
+        if (isFullyPaid) {
+          await this.notificationService.sendNotificationFromTemplate('booking_confirmed_offline', booking.userId, {
+            hotelName: booking.hotel.name,
+            checkIn: booking.checkInDate.toISOString(),
+            checkOut: booking.checkOutDate.toISOString(),
+            totalAmount: booking.totalAmount,
+            bookingId: booking.id
+          });
+        }
+
+        // Notify hotel owner if exists
+        if (booking.hotel.ownerId) {
+          await this.notificationService.sendNotificationFromTemplate('new_booking_hotel', booking.hotel.ownerId, {
+            bookingId: booking.id,
+            guestName: booking.user.name || 'Guest',
+            amount: data.amount,
+            checkIn: booking.checkInDate.toISOString()
+          });
+        }
+
+        return {
+          paymentId,
+          bookingId: booking.id,
+          amount: data.amount,
+          receiptNumber,
+          paymentMethod: data.paymentMethod,
+          status: 'completed',
+          isFullPayment: isFullyPaid,
+          remainingAmount: newRemainingAmount,
+          transactionDate
+        };
+
+      } catch (error) {
+        console.error('Offline payment recording failed:', error);
+        throw error;
+      }
+    });
+  }
+
+  // Get payment history
+  async getPaymentHistory(filters: PaymentHistoryFilters) {
+    const db = this.fastify.db;
+    const { userId, bookingId, status, paymentMode, page = 1, limit = 10 } = filters;
+
+    let whereConditions: any[] = [];
+
+    if (userId) {
+      whereConditions.push(eq(payments.userId, userId));
+    }
+
+    if (bookingId) {
+      whereConditions.push(eq(payments.bookingId, bookingId));
+    }
+
+    if (status) {
+      whereConditions.push(eq(payments.status, status));
+    }
+
+    if (paymentMode) {
+      whereConditions.push(eq(payments.paymentMode, paymentMode));
+    }
+
+    const paymentHistory = await db.query.payments.findMany({
+      where: whereConditions.length > 0 ? and(...whereConditions) : undefined,
+      with: {
+        booking: {
+          with: {
+            hotel: {
+              columns: {
+                id: true,
+                name: true,
+              }
+            },
+            room: {
+              columns: {
+                id: true,
+                name: true,
+                roomNumber: true,
+              }
+            }
+          }
+        }
+      },
+      orderBy: [desc(payments.createdAt)],
+      limit,
+      offset: (page - 1) * limit,
+    });
+
+    // Get total count
+    const totalPayments = await db.query.payments.findMany({
+      where: whereConditions.length > 0 ? and(...whereConditions) : undefined,
+    });
+
+    return {
+      payments: paymentHistory.map(payment => ({
+        id: payment.id,
+        bookingId: payment.bookingId,
+        amount: payment.amount,
+        currency: payment.currency,
+        paymentType: payment.paymentType,
+        paymentMethod: payment.paymentMethod,
+        paymentMode: payment.paymentMode,
+        status: payment.status,
+        receiptNumber: payment.receiptNumber,
+        transactionDate: payment.transactionDate,
+        createdAt: payment.createdAt,
+        booking: {
+          id: payment.booking.id,
+          checkInDate: payment.booking.checkInDate,
+          checkOutDate: payment.booking.checkOutDate,
+          totalAmount: payment.booking.totalAmount,
+          hotel: payment.booking.hotel,
+          room: payment.booking.room,
+        },
+        offlineDetails: payment.offlinePaymentDetails ? JSON.parse(payment.offlinePaymentDetails) : null,
+      })),
+      total: totalPayments.length,
+      page,
+      limit,
+      totalPages: Math.ceil(totalPayments.length / limit),
+    };
+  }
+
+  // Handle Razorpay webhooks
+  async handleWebhook(signature: string, payload: string) {
+    const db = this.fastify.db;
+
+    try {
+      // Verify webhook signature
+      const isValidSignature = this.verifyWebhookSignature(signature, payload);
+      if (!isValidSignature) {
+        throw new Error('Invalid webhook signature');
+      }
+
+      const event = JSON.parse(payload);
+      const webhookId = uuidv4();
+
+      // Store webhook for processing
+      await db.insert(paymentWebhooks).values({
+        id: webhookId,
+        razorpayEventId: event.event_id || uuidv4(),
+        event: event.event,
+        paymentId: event.payload?.payment?.entity?.id,
+        orderId: event.payload?.payment?.entity?.order_id,
+        signature,
+        payload,
+      });
+
+      // Process webhook asynchronously
+      setImmediate(() => this.processWebhook(webhookId));
+
+      return { success: true };
+
+    } catch (error) {
+      console.error('Webhook handling failed:', error);
+      throw error;
+    }
+  }
+
+  // Process webhook events
+  private async processWebhook(webhookId: string) {
+    const db = this.fastify.db;
+
+    try {
+      const webhook = await db.query.paymentWebhooks.findFirst({
+        where: eq(paymentWebhooks.id, webhookId)
+      });
+
+      if (!webhook || webhook.processed) {
+        return;
+      }
+
+      const event = JSON.parse(webhook.payload);
+
+      switch (webhook.event) {
+        case 'payment.captured':
+          await this.handlePaymentCaptured(event);
+          break;
+        case 'payment.failed':
+          await this.handlePaymentFailed(event);
+          break;
+        case 'order.paid':
+          await this.handleOrderPaid(event);
+          break;
+        default:
+          console.log(`Unhandled webhook event: ${webhook.event}`);
+      }
+
+      // Mark as processed
+      await db.update(paymentWebhooks)
+        .set({ 
+          processed: true,
+          processedAt: new Date()
+        })
+        .where(eq(paymentWebhooks.id, webhookId));
+
+    } catch (error) {
+      console.error(`Webhook processing failed for ${webhookId}:`, error);
+      
+      // Update retry count
+      await db.update(paymentWebhooks)
+        .set({ 
+          retryCount: webhookId.retryCount + 1,
+          error: error.message
+        })
+        .where(eq(paymentWebhooks.id, webhookId));
     }
   }
 

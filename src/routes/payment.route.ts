@@ -1,5 +1,13 @@
 import { FastifyInstance } from 'fastify';
 import { PaymentController } from '../controllers/payment.controller';
+import {
+  createPaymentOrderSchema,
+  verifyPaymentSchema,
+  createHotelPaymentSchema,
+  processRefundSchema,
+  recordOfflinePaymentSchema,
+  getPaymentHistorySchema
+} from '../schemas/payment.schema';
 import { rbacGuard } from '../plugins/rbacGuard';
 import { permissions } from '../utils/rbac';
 
@@ -11,21 +19,13 @@ export default async function paymentRoutes(fastify: FastifyInstance) {
 
   // Create payment order (authenticated users)
   fastify.post('/orders', {
-    schema: {
-      tags: ['payments'],
-      summary: 'Create payment order',
-      security: [{ bearerAuth: [] }]
-    },
+    schema: createPaymentOrderSchema,
     preHandler: [fastify.authenticate]
   }, (request, reply) => paymentController.createPaymentOrder(request, reply));
 
   // Verify payment (authenticated users)
   fastify.post('/verify', {
-    schema: {
-      tags: ['payments'],
-      summary: 'Verify payment',
-      security: [{ bearerAuth: [] }]
-    },
+    schema: verifyPaymentSchema,
     preHandler: [fastify.authenticate]
   }, (request, reply) => paymentController.verifyPayment(request, reply));
 
@@ -39,11 +39,7 @@ export default async function paymentRoutes(fastify: FastifyInstance) {
 
   // Create hotel payment (Super admin only)
   fastify.post('/admin/hotel-payment', {
-    schema: {
-      tags: ['payments'],
-      summary: 'Create hotel payment',
-      security: [{ bearerAuth: [] }]
-    },
+    schema: createHotelPaymentSchema,
     preHandler: [
       fastify.authenticate,
       rbacGuard(permissions.manageRevenue)
@@ -52,11 +48,7 @@ export default async function paymentRoutes(fastify: FastifyInstance) {
 
   // Process refund (Super admin only)
   fastify.post('/admin/refund', {
-    schema: {
-      tags: ['payments'],
-      summary: 'Process refund',
-      security: [{ bearerAuth: [] }]
-    },
+    schema: processRefundSchema,
     preHandler: [
       fastify.authenticate,
       rbacGuard(permissions.manageRevenue)
@@ -65,21 +57,13 @@ export default async function paymentRoutes(fastify: FastifyInstance) {
 
   // Get payment history
   fastify.get('/history', {
-    schema: {
-      tags: ['payments'],
-      summary: 'Get payment history',
-      security: [{ bearerAuth: [] }]
-    },
+    schema: getPaymentHistorySchema,
     preHandler: [fastify.authenticate]
   }, (request, reply) => paymentController.getPaymentHistory(request, reply));
 
   // Record offline payment
   fastify.post('/offline', {
-    schema: {
-      tags: ['payments'],
-      summary: 'Record offline payment',
-      security: [{ bearerAuth: [] }]
-    },
+    schema: recordOfflinePaymentSchema,
     preHandler: [fastify.authenticate]
   }, (request, reply) => paymentController.recordOfflinePayment(request, reply));
 }
