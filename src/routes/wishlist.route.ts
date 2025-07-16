@@ -4,6 +4,7 @@ import {
   getWishlistSchema,
   addToWishlistSchema,
   removeFromWishlistSchema,
+  removeWishlistItemSchema,
   checkWishlistSchema,
   getWishlistCountSchema,
   clearWishlistSchema
@@ -35,6 +36,12 @@ export default async function wishlistRoutes(fastify: FastifyInstance) {
     schema: removeFromWishlistSchema,
     security: [{ bearerAuth: [] }]
   }, (request, reply) => wishlistController.removeFromWishlist(request, reply));
+
+  // Remove wishlist item by ID
+  fastify.delete('/:itemId', {
+    schema: removeWishlistItemSchema,
+    security: [{ bearerAuth: [] }]
+  }, (request, reply) => wishlistController.removeWishlistItem(request, reply));
 
   // Check if hotel is in wishlist
   fastify.get('/check', {

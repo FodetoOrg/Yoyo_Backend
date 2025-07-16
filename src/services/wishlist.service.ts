@@ -157,6 +157,33 @@ export class WishlistService {
     };
   }
 
+  // Remove wishlist item by ID (with ownership validation)
+  async removeWishlistItem(userId: string, itemId: string) {
+    const db = this.fastify.db;
+
+    // First check if the wishlist item exists and belongs to the user
+    const wishlistItem = await db.query.wishlists.findFirst({
+      where: eq(wishlists.id, itemId)
+    });
+
+    if (!wishlistItem) {
+      throw new NotFoundError('Wishlist item not found');
+    }
+
+    if (wishlistItem.userId !== userId) {
+      throw new NotFoundError('Wishlist item not found');
+    }
+
+    // Remove the wishlist item
+    await db
+      .delete(wishlists)
+      .where(eq(wishlists.id, itemId));
+
+    return {
+      message: 'Wishlist item removed successfully'
+    };
+  }
+
   // Check if hotel is in user's wishlist
   async isInWishlist(userId: string, hotelId: string) {
     const db = this.fastify.db;

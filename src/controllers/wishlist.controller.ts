@@ -4,6 +4,7 @@ import { z } from 'zod';
 import {
   AddToWishlistSchema,
   RemoveFromWishlistSchema,
+  RemoveWishlistItemSchema,
   CheckWishlistSchema,
   WishlistQuerySchema
 } from '../schemas/wishlist.schema';
@@ -107,6 +108,37 @@ export class WishlistController {
       return reply.code(statusCode).send({
         success: false,
         message: error.message || 'Failed to remove from wishlist',
+      });
+    }
+  }
+
+  // Remove wishlist item by ID
+  async removeWishlistItem(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const userId = (request as any).user.id;
+      const { itemId } = (request.params as any);
+      
+      const result = await this.wishlistService.removeWishlistItem(userId, itemId);
+      
+      return reply.code(200).send({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      request.log.error(error);
+      
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({
+          success: false,
+          message: 'Validation error',
+          errors: error.errors,
+        });
+      }
+      
+      const statusCode = error.statusCode || 500;
+      return reply.code(statusCode).send({
+        success: false,
+        message: error.message || 'Failed to remove wishlist item',
       });
     }
   }

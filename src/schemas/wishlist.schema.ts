@@ -10,6 +10,10 @@ export const RemoveFromWishlistSchema = z.object({
   hotelId: z.string().uuid(),
 });
 
+export const RemoveWishlistItemSchema = z.object({
+  itemId: z.string().uuid(),
+});
+
 export const CheckWishlistSchema = z.object({
   hotelId: z.string().uuid(),
 });
@@ -167,6 +171,24 @@ export const removeFromWishlistSchema = {
   tags: ['wishlist'],
   summary: 'Remove hotel from wishlist',
   description: 'Remove a hotel from the user\'s wishlist',
+};
+
+export const removeWishlistItemSchema = {
+  params: zodToJsonSchema(RemoveWishlistItemSchema),
+  response: {
+    200: zodToJsonSchema(RemoveFromWishlistResponseSchema),
+    400: zodToJsonSchema(z.object({
+      success: z.boolean(),
+      message: z.string(),
+    })),
+    404: zodToJsonSchema(z.object({
+      success: z.boolean(),
+      message: z.string(),
+    })),
+  },
+  tags: ['wishlist'],
+  summary: 'Remove wishlist item by ID',
+  description: 'Remove a wishlist item by its ID from the user\'s wishlist',
 };
 
 export const checkWishlistSchema = {
