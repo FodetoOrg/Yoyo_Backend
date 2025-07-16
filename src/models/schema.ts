@@ -1,5 +1,3 @@
-
-
 // Export everything from individual model files
 export * from './User';
 export * from './Hotel';

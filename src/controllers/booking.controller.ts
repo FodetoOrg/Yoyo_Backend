@@ -17,6 +17,8 @@ const createBookingSchema = z.object({
   totalHours: z.number().int().positive().optional(),
   guestCount: z.number().int().positive().default(1),
   specialRequests: z.string().optional(),
+  paymentMode: z.enum(['online', 'offline']).optional(),
+  advanceAmount: z.number().positive().optional(),
 });
 
 const bookingIdParamSchema = z.object({
@@ -106,6 +108,8 @@ export class BookingController {
         totalAmount,
         checkInDate: new Date(bookingData.checkInDate),
         checkOutDate: new Date(bookingData.checkOutDate),
+        paymentMode: bookingData.paymentMode,
+        advanceAmount: bookingData.advanceAmount,
       });
       
       return reply.code(201).send({

@@ -24,7 +24,9 @@ export const CreateBookingBodySchema = z.object({
   checkIn: z.string().datetime(),
   checkOut: z.string().datetime(),
   guests: z.number().int().min(1),
-  specialRequests: z.string().optional()
+  specialRequests: z.string().optional(),
+  paymentMode: z.enum(['online', 'offline']).optional(),
+  advanceAmount: z.number().positive().optional()
 });
 
 export const CreateBookingResponseSchema = z.object({
