@@ -128,9 +128,12 @@ export const LatestHotelResultSchema = z.object({
   amenities: z.array(z.string()),
   coordinates: CoordinatesSchema,
   rating: HotelRatingSchema,
-  pricing: HotelPricingSchema.nullable(),
+  pricing: HotelPricingSchema.extend({
+    availableRooms: z.number().optional()
+  }).nullable(),
   offers: z.array(HotelOfferSchema).optional(),
   images: HotelImageSchema,
+  isNew: z.boolean().optional(),
   paymentOptions: z.object({
     onlineEnabled: z.boolean(),
     offlineEnabled: z.boolean(),
