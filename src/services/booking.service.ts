@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
 import { bookings, payments, rooms } from '../models/schema';
-import { eq, and, not, between, or } from 'drizzle-orm';
+import { eq, and, not, between, or, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import Razorpay from 'razorpay';
 
@@ -59,28 +59,8 @@ export class BookingService {
       where: and(
         eq(bookings.roomId, roomId),
         not(eq(bookings.status, 'cancelled')),
-        or(
-          // New booking starts during existing booking
-          and(
-            sql`datetime(${bookings.checkInDate}) <= datetime(${checkInDate.toISOString()})`,
-            sql`datetime(${bookings.checkOutDate}) > datetime(${checkInDate.toISOString()})`
-          ),
-          // New booking ends during existing booking
-          and(
-            sql`datetime(${bookings.checkInDate}) < datetime(${checkOutDate.toISOString()})`,
-            sql`datetime(${bookings.checkOutDate}) >= datetime(${checkOutDate.toISOString()})`
-          ),
-          // New booking completely encompasses existing booking
-          and(
-            sql`datetime(${checkInDate.toISOString()}) <= datetime(${bookings.checkInDate})`,
-            sql`datetime(${checkOutDate.toISOString()}) >= datetime(${bookings.checkOutDate})`
-          ),
-          // Existing booking completely encompasses new booking
-          and(
-            sql`datetime(${bookings.checkInDate}) <= datetime(${checkInDate.toISOString()})`,
-            sql`datetime(${bookings.checkOutDate}) >= datetime(${checkOutDate.toISOString()})`
-          )
-        )
+        // Check for any date overlap: booking conflicts if checkIn < existing.checkOut AND checkOut > existing.checkIn
+        sql`datetime(${checkInDate.toISOString()}) < datetime(${bookings.checkOutDate}) AND datetime(${checkOutDate.toISOString()}) > datetime(${bookings.checkInDate})`
       )
     });
 
