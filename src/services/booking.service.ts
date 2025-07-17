@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
-import { bookings, payments, rooms } from '../models/schema';
-import { eq, and, not, between, or } from 'drizzle-orm';
+import { bookings, hotels, payments, rooms } from '../models/schema';
+import { eq, and, not, between, or, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import Razorpay from 'razorpay';
 
@@ -156,7 +156,7 @@ export class BookingService {
         requiresOnlinePayment = true;
       } else {
         // For offline payments, set due date (e.g., 24 hours before check-in)
-        paymentDueDate = new Date(bookingData.checkInDate);
+        paymentDueDate = new Date(bookingData.checkIn);
         paymentDueDate.setHours(paymentDueDate.getHours() - 24);
 
         // Handle advance payment if specified
