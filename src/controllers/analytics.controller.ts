@@ -44,6 +44,7 @@ export class AnalyticsController {
       
       const analytics = await this.analyticsService.getDashboardAnalytics(type, hotelId);
       
+      console.log('analytics ',analytics)
       return reply.code(200).send({
         success: true,
         data: analytics,

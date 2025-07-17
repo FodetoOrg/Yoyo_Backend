@@ -30,6 +30,7 @@ export class AnalyticsService {
 
   // Super admin dashboard analytics
   private async getSuperAdminDashboard() {
+    console.log('called super')
     const db = this.fastify.db;
     
     // Get current date ranges

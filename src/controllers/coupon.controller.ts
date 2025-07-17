@@ -15,8 +15,8 @@ const createCouponSchema = z.object({
   discountValue: z.number().positive(),
   maxDiscountAmount: z.number().positive().optional(),
   minOrderAmount: z.number().min(0).default(0),
-  validFrom: z.string().datetime(),
-  validTo: z.string().datetime(),
+  validFrom: z.string(),
+  validTo: z.string(),
   usageLimit: z.number().int().positive().optional(),
   priceIncreasePercentage: z.number().min(0).default(0),
   mappings: z.object({
