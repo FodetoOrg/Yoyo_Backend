@@ -215,15 +215,18 @@ export class BookingController {
   async getUserBookings(request: FastifyRequest, reply: FastifyReply) {
     try {
       const userId = request.user.id;
+      const { status, page = 1, limit = 10 } = request.query as any;
 
-      const bookings = await this.bookingService.getBookingsByUserId(userId);
+      const result = await this.bookingService.getBookingsByUserId(userId, { status, page, limit });
       
       return reply.code(200).send({
         success: true,
         message: 'User bookings fetched successfully',
         data: {
-          bookings,
-          count: bookings.length
+          bookings: result.bookings,
+          total: result.total,
+          page: result.page,
+          limit: result.limit
         }
       });
     } catch (error) {
@@ -232,6 +235,42 @@ export class BookingController {
       return reply.code(500).send({
         success: false,
         message: error.message || 'Failed to fetch user bookings',
+      });
+    }
+  }
+
+  // Get all bookings (admin)
+  async getAllBookings(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { status, page = 1, limit = 10 } = request.query as any;
+      const role = request.user.role;
+
+      // Only admin can access all bookings
+      if (role !== 'admin') {
+        return reply.code(403).send({
+          success: false,
+          message: 'Unauthorized. Only admin can view all bookings',
+        });
+      }
+
+      const result = await this.bookingService.getAllBookings({ status, page, limit });
+      
+      return reply.code(200).send({
+        success: true,
+        message: 'All bookings fetched successfully',
+        data: {
+          bookings: result.bookings,
+          total: result.total,
+          page: result.page,
+          limit: result.limit
+        }
+      });
+    } catch (error) {
+      request.log.error(error);
+      
+      return reply.code(500).send({
+        success: false,
+        message: error.message || 'Failed to fetch all bookings',
       });
     }
   }
@@ -343,6 +382,7 @@ export class BookingController {
       const { id } = GetHotelBookingsParamsSchema.parse(request.params);
       const userId = request.user.id;
       const role = request.user.role;
+      const { status, page = 1, limit = 10 } = request.query as any;
       
       const hotel = await this.hotelService.getHotelById(id);
       
@@ -363,16 +403,18 @@ export class BookingController {
         });
       }
       
-      const bookings = await this.bookingService.getBookingsByHotelId(id);
+      const result = await this.bookingService.getBookingsByHotelId(id, { status, page, limit });
 
-      console.log('bookings ',bookings)
+      console.log('bookings ',result.bookings)
       
       return reply.code(200).send({
         success: true,
         message: 'Hotel bookings fetched successfully',
         data: {
-          bookings,
-          count: bookings.length
+          bookings: result.bookings,
+          total: result.total,
+          page: result.page,
+          limit: result.limit
         }
       });
     } catch (error) {

@@ -6,7 +6,8 @@ import {
   getUserBookingsSchema,
   getHotelBookingsSchema,
   cancelBookingSchema,
-  getBookingDetailsSchema
+  getBookingDetailsSchema,
+  getAllBookingsSchema
 } from '../schemas/booking.schema';
 import { rbacGuard } from '../plugins/rbacGuard';
 import { permissions } from '../utils/rbac';
@@ -52,6 +53,17 @@ export default async function bookingRoutes(fastify: FastifyInstance) {
     }
   }, (request, reply) => bookingController.getBookingDetails(request, reply));
   
+  // Get all bookings (admin only)
+  fastify.get('/', {
+    schema: {
+      ...getAllBookingsSchema,
+      tags: ['bookings'],
+      summary: 'Get all bookings (admin only)',
+      security: [{ bearerAuth: [] }]
+    },
+    preHandler: [fastify.authenticate]
+  }, (request, reply) => bookingController.getAllBookings(request, reply));
+
   // Get user's bookings
   fastify.get('/user/me', {
     schema: {
@@ -67,6 +79,14 @@ export default async function bookingRoutes(fastify: FastifyInstance) {
   fastify.get('/hotel/:id', {
     schema: {
       ...getHotelBookingsSchema,
+      querystring: {
+        type: 'object',
+        properties: {
+          status: { type: 'string', enum: ['pending', 'confirmed', 'cancelled', 'completed'] },
+          page: { type: 'number', minimum: 1, default: 1 },
+          limit: { type: 'number', minimum: 1, maximum: 100, default: 10 }
+        }
+      },
       tags: ['bookings'],
       summary: 'Get hotel bookings',
       security: [{ bearerAuth: [] }]
