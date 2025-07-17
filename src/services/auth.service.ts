@@ -80,7 +80,7 @@ export class AuthService {
             throw new Error("User not found after creation");
           }
           user=user[0]
-        
+
       }
 
       if (!user) {
@@ -96,7 +96,7 @@ export class AuthService {
         });
         hotelId = hotelUser?.hotelId || null;
       }
-      
+
       console.log("user ", user);
       console.log("generating token");
       // Generate JWT tokens
@@ -240,37 +240,112 @@ export class AuthService {
     };
   }
 
-  // Update user profile
-  async updateProfile(userId: string, data: { name?: string; phone?: string }) {
+  async updateProfile(userId: string, userRole: string, updateData: any) {
     const db = this.fastify.db;
 
-    await db
-      .update(users)
-      .set({
-        ...data,
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, userId));
+    // If user is a customer, update both users table and customer_profiles table
+    if (userRole === 'user') {
+      return await db.transaction(async (tx) => {
+        // Update user table if name is provided
+        if (updateData.name) {
+          await tx
+            .update(users)
+            .set({
+              name: updateData.name,
+              updatedAt: new Date(),
+            })
+            .where(eq(users.id, userId));
+        }
 
-    // Get updated user
-    const updatedUser = await db.query.users.findFirst({
-      where: eq(users.id, userId),
-    });
+        // Check if customer profile exists
+        const existingProfile = await tx.query.customerProfiles.findFirst({
+          where: eq(customerProfiles.userId, userId)
+        });
 
-    if (!updatedUser) {
-      throw new Error("User not found after update");
+        if (existingProfile) {
+          // Update existing customer profile
+          const profileUpdateData: any = {
+            updatedAt: new Date(),
+          };
+
+          if (updateData.fullName) profileUpdateData.fullName = updateData.fullName;
+          if (updateData.email) profileUpdateData.email = updateData.email;
+          if (updateData.gender) profileUpdateData.gender = updateData.gender;
+
+          // Handle notification preferences
+          if (updateData.bookingUpdates !== undefined) profileUpdateData.bookingUpdatesEnabled = updateData.bookingUpdates;
+          if (updateData.checkinReminders !== undefined) profileUpdateData.checkinRemindersEnabled = updateData.checkinReminders;
+          if (updateData.securityAlerts !== undefined) profileUpdateData.securityAlertsEnabled = updateData.securityAlerts;
+          if (updateData.promotionalOffers !== undefined) profileUpdateData.promotionalOffersEnabled = updateData.promotionalOffers;
+
+          await tx
+            .update(customerProfiles)
+            .set(profileUpdateData)
+            .where(eq(customerProfiles.userId, userId));
+        } else {
+          // Create new customer profile
+          const { v4: uuidv4 } = await import('uuid');
+          await tx.insert(customerProfiles).values({
+            id: uuidv4(),
+            userId,
+            fullName: updateData.fullName || null,
+            email: updateData.email || null,
+            gender: updateData.gender || null,
+            bookingUpdatesEnabled: updateData.bookingUpdates ?? true,
+            checkinRemindersEnabled: updateData.checkinReminders ?? true,
+            securityAlertsEnabled: updateData.securityAlerts ?? true,
+            promotionalOffersEnabled: updateData.promotionalOffers ?? false,
+          });
+        }
+
+        // Return updated profile with customer profile data
+        const updatedUser = await tx.query.users.findFirst({
+          where: eq(users.id, userId),
+          with: {
+            customerProfile: true
+          }
+        });
+
+        if (updatedUser?.customerProfile) {
+          return {
+            user: {
+              id: updatedUser.id,
+              name: updatedUser.name,
+              phone: updatedUser.phone,
+              role: updatedUser.role,
+              status: updatedUser.status,
+              hasOnboarded: updatedUser.hasOnboarded,
+              createdAt: updatedUser.createdAt,
+              updatedAt: updatedUser.updatedAt,
+            },
+            profile: {
+              fullName: updatedUser.customerProfile.fullName,
+              email: updatedUser.customerProfile.email,
+              gender: updatedUser.customerProfile.gender,
+              notifications: {
+                bookingUpdates: updatedUser.customerProfile.bookingUpdatesEnabled,
+                checkinReminders: updatedUser.customerProfile.checkinRemindersEnabled,
+                securityAlerts: updatedUser.customerProfile.securityAlertsEnabled,
+                promotionalOffers: updatedUser.customerProfile.promotionalOffersEnabled,
+              }
+            }
+          };
+        }
+
+        return { user: updatedUser };
+      });
+    } else {
+      // For non-customer users, update only users table
+      await db
+        .update(users)
+        .set({
+          ...updateData,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, userId));
+
+      return { user: await this.getUserById(userId) };
     }
-
-    // Remove sensitive information
-    return {
-      id: updatedUser.id,
-      email: updatedUser.email,
-      name: updatedUser.name,
-      phone: updatedUser.phone,
-      role: updatedUser.role,
-      createdAt: updatedUser.createdAt,
-      updatedAt: updatedUser.updatedAt,
-    };
   }
 
   async getAllUsers(page: number, limit: number, role: string) {
@@ -309,7 +384,7 @@ export class AuthService {
       status: user.status,
       role: user.role,
       hotelId
-      
+
     };
   }
 
@@ -323,7 +398,7 @@ export class AuthService {
         eq(users.role, UserRole.HOTEL_ADMIN)
       ),
     });
-    
+
     if (user) {
       console.log("user already exists with this phone number");
       throw new ConflictError("User already exists with this phone number");
@@ -344,3 +419,7 @@ export class AuthService {
 
 
 }
+import { users } from "../models/User";
+import { customerProfiles } from "../models/CustomerProfile";
+import { NotFoundError, UnauthorizedError } from "../types/errors";
+import { eq } from "drizzle-orm";

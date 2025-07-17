@@ -162,8 +162,47 @@ export const profileSchema = {
   security: [{ bearerAuth: [] }],
 };
 
+// Update profile schemas
+export const UpdateProfileRequestSchema = z.object({
+  name: z.string().min(1).optional(),
+  fullName: z.string().min(1).optional(),
+  email: z.string().email().optional(),
+  gender: z.enum(['male', 'female', 'other', 'prefer_not_to_say']).optional(),
+  // Notification preferences (optional)
+  bookingUpdates: z.boolean().optional(),
+  checkinReminders: z.boolean().optional(),
+  securityAlerts: z.boolean().optional(),
+  promotionalOffers: z.boolean().optional(),
+});
+
+export const UpdateProfileResponseSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  data: z.object({
+    user: UserSchema,
+    profile: z.object({
+      fullName: z.string().nullable(),
+      email: z.string().nullable(),
+      gender: z.string().nullable(),
+      notifications: z.object({
+        bookingUpdates: z.boolean(),
+        checkinReminders: z.boolean(),
+        securityAlerts: z.boolean(),
+        promotionalOffers: z.boolean(),
+      })
+    }).optional()
+  }),
+});
+
 export const updateProfileSchema = {
+  body: zodToJsonSchema(UpdateProfileRequestSchema),
+  response: {
+    200: zodToJsonSchema(UpdateProfileResponseSchema),
+    400: zodToJsonSchema(ErrorResponseSchema),
+    500: zodToJsonSchema(ErrorResponseSchema),
+  },
   tags: ["auth"],
   summary: "Update user profile",
+  description: "Update user profile. For customers, can update fullName, email, gender and notification preferences",
   security: [{ bearerAuth: [] }],
 };

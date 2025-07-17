@@ -100,30 +100,27 @@ export class AuthController {
     }
   }
 
-  // Update user profile
   async updateProfile(request: FastifyRequest, reply: FastifyReply) {
     try {
       const userId = (request as any).user.id;
-      const profile = await this.authService.updateProfile(
-        userId,
-        request.body
-      );
+      const userRole = (request as any).user.role;
+      const updateData = request.body as any;
 
-      return reply.status(HttpStatus.OK).send({
+      const updatedProfile = await this.authService.updateProfile(userId, userRole, updateData);
+
+      return reply.code(200).send({
         success: true,
-        message: "Profile updated successfully",
-        data: { profile },
+        message: 'Profile updated successfully',
+        data: updatedProfile,
       });
     } catch (error) {
-      logger.error(
-        {
-          error,
-          userId: (request as any).user?.id,
-          body: request.body,
-        },
-        "Error updating profile"
-      );
-      throw error;
+      request.log.error(error);
+
+      const statusCode = error.statusCode || 500;
+      return reply.code(statusCode).send({
+        success: false,
+        message: error.message || 'Failed to update profile',
+      });
     }
   }
 
