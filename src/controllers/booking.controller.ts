@@ -172,6 +172,45 @@ export class BookingController {
     }
   }
 
+  // Get detailed booking information for user
+  async getBookingDetails(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { id } = GetBookingParamsSchema.parse(request.params);
+      const userId = request.user.id as string;
+      
+      const bookingDetails = await this.bookingService.getBookingDetails(id, userId);
+      
+      if (!bookingDetails) {
+        return reply.code(404).send({
+          success: false,
+          message: 'Booking not found',
+        });
+      }
+      
+      return reply.code(200).send({
+        success: true,
+        data: {
+          booking: bookingDetails
+        }
+      });
+    } catch (error) {
+      request.log.error(error);
+      
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({
+          success: false,
+          message: 'Validation error',
+          errors: error.errors,
+        });
+      }
+      
+      return reply.code(500).send({
+        success: false,
+        message: error.message || 'Failed to fetch booking details',
+      });
+    }
+  }
+
   // Get user's bookings
   async getUserBookings(request: FastifyRequest, reply: FastifyReply) {
     try {
