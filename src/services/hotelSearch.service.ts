@@ -288,9 +288,16 @@ async searchHotels(filters: SearchFilters) {
             average: Math.round(avgRating * 10) / 10,
             count: reviews.length,
           },
-          pricing,
+          pricing: pricing ? {
+            startingFrom: pricing.startingFrom,
+            range: pricing.range,
+            currency: pricing.currency,
+            totalPrice: pricing.totalPrice,
+            perNight: pricing.perNight
+          } : null,
           images: {
             primary: hotel.images[0]?.url || null,
+            gallery: []
           },
           isNew: true,
           paymentOptions:{
