@@ -155,39 +155,45 @@ async searchHotels(filters: SearchFilters) {
     hotelsData = this.sortHotels(hotelsData, sortBy);
   }
 
-  // Get pricing for each hotel
-  const hotelsWithPricing = await Promise.all(
-    hotelsData.map(async (hotelData) => {
-      const pricing = await this.getHotelPricing(hotelData.hotel.id, checkIn, checkOut, totalGuests);
-      const offers = await this.getHotelOffers(hotelData.hotel.id);
-      
-      return {
-        id: hotelData.hotel.id,
-        name: hotelData.hotel.name,
-        description: hotelData.hotel.description,
-        address: hotelData.hotel.address,
-        city: hotelData.hotel.city,
-        starRating: parseInt(hotelData.hotel.starRating || '0'),
-        amenities: hotelData.hotel.amenities ? JSON.parse(hotelData.hotel.amenities) : [],
-        coordinates: this.parseCoordinates(hotelData.hotel.mapCoordinates),
-        distance: hotelData.distance || null,
-        rating: {
-          average: Math.round((hotelData.avgRating || 0) * 10) / 10,
-          count: hotelData.reviewCount || 0,
-        },
-        pricing: pricing,
-        offers: offers,
-        images: {
-          primary: hotelData.primaryImage,
-          gallery: await this.getHotelImages(hotelData.hotel.id),
-        },
-        paymentOptions: {
-          onlineEnabled: hotelData.hotel.onlinePaymentEnabled,
-          offlineEnabled: hotelData.hotel.offlinePaymentEnabled,
-        }
-      };
-    })
-  );
+  // Get pricing for each hotel and filter out hotels with no available rooms
+  const hotelsWithPricing = [];
+  
+  for (const hotelData of hotelsData) {
+    const pricing = await this.getHotelPricing(hotelData.hotel.id, checkIn, checkOut, totalGuests);
+    
+    // Skip hotels with no available rooms (pricing will be null)
+    if (!pricing) {
+      continue;
+    }
+    
+    const offers = await this.getHotelOffers(hotelData.hotel.id);
+    
+    hotelsWithPricing.push({
+      id: hotelData.hotel.id,
+      name: hotelData.hotel.name,
+      description: hotelData.hotel.description,
+      address: hotelData.hotel.address,
+      city: hotelData.hotel.city,
+      starRating: parseInt(hotelData.hotel.starRating || '0'),
+      amenities: hotelData.hotel.amenities ? JSON.parse(hotelData.hotel.amenities) : [],
+      coordinates: this.parseCoordinates(hotelData.hotel.mapCoordinates),
+      distance: hotelData.distance || null,
+      rating: {
+        average: Math.round((hotelData.avgRating || 0) * 10) / 10,
+        count: hotelData.reviewCount || 0,
+      },
+      pricing: pricing,
+      offers: offers,
+      images: {
+        primary: hotelData.primaryImage,
+        gallery: await this.getHotelImages(hotelData.hotel.id),
+      },
+      paymentOptions: {
+        onlineEnabled: hotelData.hotel.onlinePaymentEnabled,
+        offlineEnabled: hotelData.hotel.offlinePaymentEnabled,
+      }
+    });
+  }
 
   // Pagination
   const total = hotelsWithPricing.length;
@@ -423,33 +429,12 @@ async searchHotels(filters: SearchFilters) {
     const db = this.fastify.db;
 
     // Check for overlapping bookings that are not cancelled
+    // Two bookings overlap if: checkIn < existing.checkOut AND checkOut > existing.checkIn
     const conflictingBookings = await db.query.bookings.findMany({
       where: and(
         eq(bookings.roomId, roomId),
         not(eq(bookings.status, 'cancelled')),
-        // Check for date overlap using proper date comparison
-        or(
-          // New booking starts during existing booking
-          and(
-            sql`datetime(${bookings.checkInDate}) <= datetime(${checkIn.toISOString()})`,
-            sql`datetime(${bookings.checkOutDate}) > datetime(${checkIn.toISOString()})`
-          ),
-          // New booking ends during existing booking
-          and(
-            sql`datetime(${bookings.checkInDate}) < datetime(${checkOut.toISOString()})`,
-            sql`datetime(${bookings.checkOutDate}) >= datetime(${checkOut.toISOString()})`
-          ),
-          // New booking completely encompasses existing booking
-          and(
-            sql`datetime(${checkIn.toISOString()}) <= datetime(${bookings.checkInDate})`,
-            sql`datetime(${checkOut.toISOString()}) >= datetime(${bookings.checkOutDate})`
-          ),
-          // Existing booking completely encompasses new booking
-          and(
-            sql`datetime(${bookings.checkInDate}) <= datetime(${checkIn.toISOString()})`,
-            sql`datetime(${bookings.checkOutDate}) >= datetime(${checkOut.toISOString()})`
-          )
-        )
+        sql`datetime(${checkIn.toISOString()}) < datetime(${bookings.checkOutDate}) AND datetime(${checkOut.toISOString()}) > datetime(${bookings.checkInDate})`
       ),
       limit: 1
     });
@@ -460,7 +445,10 @@ async searchHotels(filters: SearchFilters) {
   private async getHotelPricing(hotelId: string, checkIn?: Date, checkOut?: Date, guestCount?: number) {
     const db = this.fastify.db;
 
-    let roomConditions: any[] = [eq(rooms.hotelId, hotelId)];
+    let roomConditions: any[] = [
+      eq(rooms.hotelId, hotelId),
+      eq(rooms.status, 'available') // Only include available rooms
+    ];
     
     // Always filter by guest capacity if provided
     if (guestCount) {
@@ -472,9 +460,9 @@ async searchHotels(filters: SearchFilters) {
       orderBy: [asc(rooms.pricePerNight)],
     });
 
-    // If dates are provided, further filter by availability
+    // If dates are provided, further filter by booking availability
     if (checkIn && checkOut && availableRooms.length > 0) {
-      const availableRoomIds = [];
+      const actuallyAvailableRooms = [];
       
       for (const room of availableRooms) {
         const hasConflict = await this.checkRoomBookingConflict(
@@ -484,14 +472,14 @@ async searchHotels(filters: SearchFilters) {
         );
         
         if (!hasConflict) {
-          availableRoomIds.push(room.id);
+          actuallyAvailableRooms.push(room);
         }
       }
       
-      // Filter to only available rooms
-      availableRooms = availableRooms.filter(room => availableRoomIds.includes(room.id));
+      availableRooms = actuallyAvailableRooms;
     }
 
+    // Return null if no rooms are available (this will exclude hotel from search results)
     if (availableRooms.length === 0) {
       return null;
     }
@@ -511,6 +499,7 @@ async searchHotels(filters: SearchFilters) {
       currency: 'INR',
       totalPrice,
       perNight: true,
+      availableRooms: availableRooms.length
     };
   }
 

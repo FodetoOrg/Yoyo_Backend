@@ -700,32 +700,12 @@ export class HotelService {
     }
     
     // Check for overlapping bookings that are not cancelled
+    // Two bookings overlap if: checkIn < existing.checkOut AND checkOut > existing.checkIn
     const overlappingBookings = await db.query.bookings.findMany({
       where: and(
         eq(bookings.roomId, roomId),
         not(eq(bookings.status, 'cancelled')),
-        or(
-          // New booking starts during existing booking
-          and(
-            sql`datetime(${bookings.checkInDate}) <= datetime(${checkInDate.toISOString()})`,
-            sql`datetime(${bookings.checkOutDate}) > datetime(${checkInDate.toISOString()})`
-          ),
-          // New booking ends during existing booking
-          and(
-            sql`datetime(${bookings.checkInDate}) < datetime(${checkOutDate.toISOString()})`,
-            sql`datetime(${bookings.checkOutDate}) >= datetime(${checkOutDate.toISOString()})`
-          ),
-          // New booking completely encompasses existing booking
-          and(
-            sql`datetime(${checkInDate.toISOString()}) <= datetime(${bookings.checkInDate})`,
-            sql`datetime(${checkOutDate.toISOString()}) >= datetime(${bookings.checkOutDate})`
-          ),
-          // Existing booking completely encompasses new booking
-          and(
-            sql`datetime(${bookings.checkInDate}) <= datetime(${checkInDate.toISOString()})`,
-            sql`datetime(${bookings.checkOutDate}) >= datetime(${checkOutDate.toISOString()})`
-          )
-        )
+        sql`datetime(${checkInDate.toISOString()}) < datetime(${bookings.checkOutDate}) AND datetime(${checkOutDate.toISOString()}) > datetime(${bookings.checkInDate})`
       ),
       limit: 1
     });
