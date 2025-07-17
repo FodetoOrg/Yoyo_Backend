@@ -29,7 +29,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
   }, (request, reply) => analyticsController.getDashboardAnalytics(request, reply));
 
   // Get city analytics
-  fastify.get('/dashboard/cities', {
+  fastify.get('/dashboard/cities/:id', {
     schema: {
       ...getCityAnalyticsSchema,
       tags: ['analytics'],

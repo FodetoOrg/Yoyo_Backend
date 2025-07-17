@@ -160,10 +160,28 @@ export const RevenueAnalyticsResponseSchema = z.object({
 export const getDashboardAnalyticsSchema = {
   querystring: zodToJsonSchema(DashboardQuerySchema),
   response: {
-    200: zodToJsonSchema(z.union([
-      SuperAdminDashboardResponseSchema,
-      HotelDashboardResponseSchema,
-    ])),
+    200: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        data: { type: 'object' }
+      }
+    },
+    400: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+        errors: { type: 'array' }
+      }
+    },
+    500: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' }
+      }
+    }
   },
   tags: ['analytics'],
   summary: 'Get dashboard analytics',
@@ -173,11 +191,27 @@ export const getDashboardAnalyticsSchema = {
 export const getCityAnalyticsSchema = {
   params: zodToJsonSchema(CityAnalyticsParamsSchema),
   response: {
-    200: zodToJsonSchema(CityAnalyticsResponseSchema),
-    404: zodToJsonSchema(z.object({
-      success: z.boolean(),
-      message: z.string(),
-    })),
+    200: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        data: { type: 'object' }
+      }
+    },
+    404: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' }
+      }
+    },
+    500: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' }
+      }
+    }
   },
   tags: ['analytics'],
   summary: 'Get city analytics',
@@ -187,7 +221,27 @@ export const getCityAnalyticsSchema = {
 export const getRevenueAnalyticsSchema = {
   querystring: zodToJsonSchema(RevenueAnalyticsQuerySchema),
   response: {
-    200: zodToJsonSchema(RevenueAnalyticsResponseSchema),
+    200: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        data: { type: 'object' }
+      }
+    },
+    400: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' }
+      }
+    },
+    500: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' }
+      }
+    }
   },
   tags: ['analytics'],
   summary: 'Get revenue analytics',
