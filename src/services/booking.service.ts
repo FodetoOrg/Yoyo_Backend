@@ -560,12 +560,11 @@ export class BookingService {
       }
     }
 
+    console.log('booking.hotel.amenities ',booking.hotel.amenities)
+
     // Get amenities (assuming these are stored in room type or hotel)
-    const amenities = [
-      'Free Wi-Fi',
-      'Air Conditioning',
-      ...(booking.hotel.amenities || [])
-    ];
+    const amenities = JSON.parse(booking.hotel.amenities) || []  
+    
 
     return {
       id: booking.id,
