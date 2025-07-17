@@ -122,6 +122,39 @@ export const CancelBookingErrorSchema = z.object({
   message: z.string()
 });
 
+// Booking details schemas
+export const BookingDetailsResponseSchema = z.object({
+  id: z.string(),
+  bookingReference: z.string(),
+  status: z.string(),
+  hotelName: z.string(),
+  hotelPhone: z.string(),
+  hotelEmail: z.string(),
+  address: z.string(),
+  image: z.string(),
+  roomType: z.string(),
+  checkIn: z.string(),
+  checkOut: z.string(),
+  guests: z.number(),
+  nights: z.number(),
+  amenities: z.array(z.string()),
+  priceBreakdown: z.object({
+    roomRate: z.number(),
+    subtotal: z.number(),
+    taxes: z.number(),
+    serviceFee: z.number()
+  }),
+  totalAmount: z.number(),
+  cancellationPolicy: z.string()
+});
+
+export const GetBookingDetailsResponseSchema = z.object({
+  success: z.boolean(),
+  data: z.object({
+    booking: BookingDetailsResponseSchema
+  })
+});
+
 // Export Fastify schema objects
 export const createBookingSchema = {
   body: zodToJsonSchema(CreateBookingBodySchema),
@@ -157,5 +190,13 @@ export const cancelBookingSchema = {
   response: {
     200: zodToJsonSchema(CancelBookingResponseSchema),
     404: zodToJsonSchema(CancelBookingErrorSchema)
+  }
+};
+
+export const getBookingDetailsSchema = {
+  params: zodToJsonSchema(GetBookingParamsSchema),
+  response: {
+    200: zodToJsonSchema(GetBookingDetailsResponseSchema),
+    404: zodToJsonSchema(GetBookingErrorSchema)
   }
 }; 

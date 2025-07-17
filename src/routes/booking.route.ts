@@ -5,7 +5,8 @@ import {
   getBookingByIdSchema,
   getUserBookingsSchema,
   getHotelBookingsSchema,
-  cancelBookingSchema
+  cancelBookingSchema,
+  getBookingDetailsSchema
 } from '../schemas/booking.schema';
 import { rbacGuard } from '../plugins/rbacGuard';
 import { permissions } from '../utils/rbac';
@@ -44,56 +45,7 @@ export default async function bookingRoutes(fastify: FastifyInstance) {
   // Get detailed booking information
   fastify.get('/:id/details', {
     schema: {
-      params: {
-        type: 'object',
-        properties: {
-          id: { type: 'string', format: 'uuid' }
-        },
-        required: ['id']
-      },
-      response: {
-        200: {
-          type: 'object',
-          properties: {
-            success: { type: 'boolean' },
-            data: {
-              type: 'object',
-              properties: {
-                booking: {
-                  type: 'object',
-                  properties: {
-                    id: { type: 'string' },
-                    bookingReference: { type: 'string' },
-                    status: { type: 'string' },
-                    hotelName: { type: 'string' },
-                    hotelPhone: { type: 'string' },
-                    hotelEmail: { type: 'string' },
-                    address: { type: 'string' },
-                    image: { type: 'string' },
-                    roomType: { type: 'string' },
-                    checkIn: { type: 'string' },
-                    checkOut: { type: 'string' },
-                    guests: { type: 'number' },
-                    nights: { type: 'number' },
-                    amenities: { type: 'array', items: { type: 'string' } },
-                    priceBreakdown: {
-                      type: 'object',
-                      properties: {
-                        roomRate: { type: 'number' },
-                        subtotal: { type: 'number' },
-                        taxes: { type: 'number' },
-                        serviceFee: { type: 'number' }
-                      }
-                    },
-                    totalAmount: { type: 'number' },
-                    cancellationPolicy: { type: 'string' }
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
+      ...getBookingDetailsSchema,
       tags: ['bookings'],
       summary: 'Get detailed booking information',
       security: [{ bearerAuth: [] }]
