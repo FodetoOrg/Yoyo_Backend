@@ -64,10 +64,28 @@ export const GetUserBookingsQuerySchema = z.object({
 export const GetUserBookingsResponseSchema = z.object({
   success: z.boolean(),
   data: z.object({
-    bookings: z.array(BookingResponseSchema),
-    total: z.number().int().min(0),
-    page: z.number().int().min(1),
-    limit: z.number().int().min(1)
+    bookings: z.array(z.object({
+      id: z.string().uuid(),
+      checkInDate: z.string().datetime(),
+      checkOutDate: z.string().datetime(),
+      bookingType: z.string(),
+      totalAmount: z.number(),
+      status: z.string(),
+      paymentStatus: z.string(),
+      bookingDate: z.string().datetime(),
+      hotel: z.object({
+        id: z.string().uuid(),
+        name: z.string(),
+        city: z.string()
+      }),
+      room: z.object({
+        id: z.string(),
+        name: z.string(),
+        roomType: z.string().optional()
+      })
+    })),
+    // page: z.number().int().min(1),
+    // limit: z.number().int().min(1)
   })
 });
 

@@ -48,7 +48,8 @@ export default async function bookingRoutes(fastify: FastifyInstance) {
       tags: ['bookings'],
       summary: 'Get user\'s bookings',
       security: [{ bearerAuth: [] }]
-    }
+    },
+    preHandler:[fastify.authenticate]
   }, (request, reply) => bookingController.getUserBookings(request, reply));
   
   // Get hotel bookings

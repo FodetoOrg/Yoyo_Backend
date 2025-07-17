@@ -176,7 +176,7 @@ export class BookingController {
   async getUserBookings(request: FastifyRequest, reply: FastifyReply) {
     try {
       const userId = request.user.id;
-      
+
       const bookings = await this.bookingService.getBookingsByUserId(userId);
       
       return reply.code(200).send({
