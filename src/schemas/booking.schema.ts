@@ -188,7 +188,7 @@ export const getHotelBookingsSchema = {
 export const cancelBookingSchema = {
   params: zodToJsonSchema(CancelBookingParamsSchema),
   response: {
-    200: zodToJsonSchema(CancelBookingResponseSchema),
+    // 200: zodToJsonSchema(CancelBookingResponseSchema),
     404: zodToJsonSchema(CancelBookingErrorSchema)
   }
 };
