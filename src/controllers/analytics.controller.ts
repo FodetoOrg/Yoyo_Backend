@@ -50,7 +50,7 @@ export class AnalyticsController {
       });
     } catch (error) {
       request.log.error(error);
-      
+      console.log('error ',error)
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
           success: false,

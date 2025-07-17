@@ -18,7 +18,12 @@ export const PaymentOrderSchema = z.object({
 export const PaymentSchema = z.object({
   id: z.string().uuid(),
   bookingId: z.string().uuid(),
-  userId: z.string().uuid(),
+  user:z.object({
+    id:z.string(),
+    name:z.string(),
+    phone:z.string()
+
+  }),
   amount: z.number().positive(),
   currency: z.string(),
   paymentType: z.enum(['full', 'advance', 'remaining', 'partial']),
@@ -28,7 +33,6 @@ export const PaymentSchema = z.object({
   razorpayOrderId: z.string().nullable(),
   razorpaySignature: z.string().nullable(),
   offlinePaymentDetails: z.string().nullable(),
-  receivedBy: z.string().nullable(),
   receiptNumber: z.string().nullable(),
   status: z.enum(['pending', 'completed', 'failed', 'refunded']),
   transactionDate: z.string().datetime(),
@@ -243,3 +247,4 @@ export const getPaymentHistorySchema = {
   description: 'Get payment history with filters',
   security: [{ bearerAuth: [] }]
 };
+

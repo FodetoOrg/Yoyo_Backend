@@ -25,108 +25,108 @@ export class AuthService {
   // Login or register user with Firebase ID token
   async loginWithFirebase(idToken: string, role: string = "user"): Promise<any> {
 
-      console.log("idToken in start of loginWithFirebase  ", idToken);
+    console.log("idToken in start of loginWithFirebase  ", idToken);
 
-      const payload = JSON.parse(Buffer.from(idToken.split('.')[1], 'base64').toString());
-      console.log("Full token received:", idToken.length, idToken.slice(0, 50));
+    const payload = JSON.parse(Buffer.from(idToken.split('.')[1], 'base64').toString());
+    console.log("Full token received:", idToken.length, idToken.slice(0, 50));
 
-      console.log("🔍 Decoded Token Payload: ", payload);
+    console.log("🔍 Decoded Token Payload: ", payload);
 
-      const decodedToken = await admin.auth().verifyIdToken(idToken);
-
-
+    const decodedToken = await admin.auth().verifyIdToken(idToken);
 
 
-      console.log("decodedToken ", decodedToken);
-      console.log("idToken ", idToken);
-      const db = this.fastify.db;
 
-      const userFromFirebase = await admin.auth().getUser(decodedToken.uid);
-      console.log("userFromFirebase ", userFromFirebase);
-      if (!userFromFirebase) {
-        throw new Error("User not found in Firebase");
-      }
-      console.log("userFromFirebase ", userFromFirebase);
-      // Check if user exists
-      let user = await db.query.users.findFirst({
-        where: and(
-          eq(users.phone, decodedToken.phone_number),
-          eq(users.role, role)
-        ),
-      });
-      console.log('user from db ',user)
-      if (!user && (role === UserRole.SUPER_ADMIN || role === UserRole.HOTEL_ADMIN || role === UserRole.STAFF)) {
-        console.log('throwing this')
-        throw new NotFoundError("User not found ");
 
-      }
+    console.log("decodedToken ", decodedToken);
+    console.log("idToken ", idToken);
+    const db = this.fastify.db;
 
-      // If user doesn't exist, create a new user
-      if (!user && role === UserRole.USER) {
-        const userId = uuidv4();
-        const now = new Date();
+    const userFromFirebase = await admin.auth().getUser(decodedToken.uid);
+    console.log("userFromFirebase ", userFromFirebase);
+    if (!userFromFirebase) {
+      throw new Error("User not found in Firebase");
+    }
+    console.log("userFromFirebase ", userFromFirebase);
+    // Check if user exists
+    let user = await db.query.users.findFirst({
+      where: and(
+        eq(users.phone, decodedToken.phone_number),
+        eq(users.role, role)
+      ),
+    });
+    console.log('user from db ', user)
+    if (!user && (role === UserRole.SUPER_ADMIN || role === UserRole.HOTEL_ADMIN || role === UserRole.STAFF)) {
+      console.log('throwing this')
+      throw new NotFoundError("User not found ");
 
-        // Determine hasOnboarded based on role
+    }
 
-        user = await db
-          .insert(users)
-          .values({
-            id: userId,
-            email: "",
-            name: userFromFirebase.displayName || null,
-            phone: userFromFirebase.phoneNumber || null,
-            role: role as any,
-            hasOnboarded: false,
-            firebaseUid: decodedToken.uid,
-            createdAt: now,
-            updatedAt: now,
-          })
-          .returning();
-        if (!user) {
-          throw new NotFoundError("User not found ");
-        }
-        user = user[0]
+    // If user doesn't exist, create a new user
+    if (!user && role === UserRole.USER) {
+      const userId = uuidv4();
+      const now = new Date();
 
-      }
-      console.log('came here ')
+      // Determine hasOnboarded based on role
 
+      user = await db
+        .insert(users)
+        .values({
+          id: userId,
+          email: "",
+          name: userFromFirebase.displayName || null,
+          phone: userFromFirebase.phoneNumber || null,
+          role: role as any,
+          hasOnboarded: false,
+          firebaseUid: decodedToken.uid,
+          createdAt: now,
+          updatedAt: now,
+        })
+        .returning();
       if (!user) {
-        throw new Error("User not found ");
+        throw new NotFoundError("User not found ");
       }
+      user = user[0]
+
+    }
+    console.log('came here ')
+
+    if (!user) {
+      throw new Error("User not found ");
+    }
 
 
-      // Get hotel ID if user is hotel admin
-      let hotelId = null;
-      if (user.role === UserRole.HOTEL_ADMIN) {
-        const hotelUser = await db.query.hotelUsers.findFirst({
-          where: eq(hotelUsers.userId, user.id),
-        });
-        hotelId = hotelUser?.hotelId || null;
+    // Get hotel ID if user is hotel admin
+    let hotelId = null;
+    if (user.role === UserRole.HOTEL_ADMIN) {
+      const hotelUser = await db.query.hotelUsers.findFirst({
+        where: eq(hotelUsers.userId, user.id),
+      });
+      hotelId = hotelUser?.hotelId || null;
+    }
+
+    console.log("user ", user);
+    console.log("generating token");
+    // Generate JWT tokens
+    const tokens = await this.generateTokens(user);
+
+    console.log("tokens ", tokens);
+
+    return {
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken,
+      user: {
+        id: user.id,
+        name: user.name || '',
+        phone: user.phone,
+        hasOnboarded: user.hasOnboarded,
+        createdAt: new Date(user.createdAt).toString() || '',
+        updatedAt: new Date(user.updatedAt).toString() || '',
+        status: user.status,
+        role: user.role,
+        hotelId
       }
+    };
 
-      console.log("user ", user);
-      console.log("generating token");
-      // Generate JWT tokens
-      const tokens = await this.generateTokens(user);
-
-      console.log("tokens ", tokens);
-
-      return {
-        accessToken: tokens.accessToken,
-        refreshToken: tokens.refreshToken,
-        user: {
-          id: user.id,
-          name: user.name || '',
-          phone: user.phone,
-          hasOnboarded: user.hasOnboarded,
-          createdAt: new Date(user.createdAt).toString() || '',
-          updatedAt: new Date(user.updatedAt).toString() || '',
-          status: user.status,
-          role: user.role,
-          hotelId
-        }
-      };
-  
   }
 
   // Generate access and refresh tokens
@@ -139,6 +139,7 @@ export class AuthService {
       {
         id: user.id,
         phone: user.phone,
+        role: user.role
       },
       {
         expiresIn: "30m",
@@ -149,6 +150,7 @@ export class AuthService {
       {
         id: user.id,
         phone: user.phone,
+        role: user.role
       },
       {
         expiresIn: "7d",

@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { paymentOrders, paymentWebhooks, payments, bookings, adminPayments } from '../models/schema';
+import { paymentOrders, paymentWebhooks, payments, bookings, adminPayments, hotels } from '../models/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import Razorpay from 'razorpay';
@@ -39,6 +39,7 @@ interface PaymentHistoryFilters {
   paymentMode?: string;
   page?: number;
   limit?: number;
+  hotelId?:string;
 }
 
 export class PaymentService {
@@ -144,7 +145,7 @@ export class PaymentService {
 
     } catch (error) {
       console.error('Error creating payment order:', error);
-      
+
       // Send error notification
       await this.notificationService.sendNotificationFromTemplate('payment_order_failed', userId, {
         bookingId,
@@ -192,7 +193,7 @@ export class PaymentService {
 
         // Update payment order status
         await tx.update(paymentOrders)
-          .set({ 
+          .set({
             status: 'paid',
             updatedAt: new Date()
           })
@@ -250,11 +251,11 @@ export class PaymentService {
 
       } catch (error) {
         console.error('Payment verification failed:', error);
-        
+
         // Update order status to failed
         if (paymentOrder) {
           await tx.update(paymentOrders)
-            .set({ 
+            .set({
               status: 'failed',
               attempts: paymentOrder.attempts + 1,
               updatedAt: new Date()
@@ -374,7 +375,7 @@ export class PaymentService {
     notes?: string;
   }) {
     const db = this.fastify.db;
-    
+
     return await db.transaction(async (tx) => {
       try {
         // Get booking details
@@ -402,13 +403,13 @@ export class PaymentService {
         }
 
         // Generate receipt number if not provided
-        const receiptNumber = data.receiptNumber || 
+        const receiptNumber = data.receiptNumber ||
           `RCP-${booking.id.substring(0, 6)}-${Date.now().toString().substring(7)}`;
 
         // Create payment record
         const paymentId = uuidv4();
         const transactionDate = data.transactionDate || new Date();
-        
+
         // Determine payment type
         let paymentType = 'partial';
         if (data.amount === booking.totalAmount) {
@@ -508,7 +509,13 @@ export class PaymentService {
   // Get payment history
   async getPaymentHistory(filters: PaymentHistoryFilters) {
     const db = this.fastify.db;
-    const { userId, bookingId, status, paymentMode, page = 1, limit = 10 } = filters;
+    const { userId, bookingId, status, paymentMode, page = 1, limit = 10,hotelId } = filters;
+
+    console.log('userid ',userId)
+    console.log(bookingId)
+    console.log(paymentMode)
+    console.log('sttaus ',status)
+    console.log(hotelId)
 
     let whereConditions: any[] = [];
 
@@ -527,17 +534,28 @@ export class PaymentService {
     if (paymentMode) {
       whereConditions.push(eq(payments.paymentMode, paymentMode));
     }
+    // if(hotelId){
+    //   whereConditions.push(eq(hotels.id, hotelId));
+    // }
 
     const paymentHistory = await db.query.payments.findMany({
       where: whereConditions.length > 0 ? and(...whereConditions) : undefined,
       with: {
+        user: {
+          columns: {
+            id: true,
+            name:true,
+            phone:true
+          }
+        },
         booking: {
           with: {
             hotel: {
               columns: {
                 id: true,
                 name: true,
-              }
+              },
+              where:hotelId ? eq(hotels.id,hotelId) :eq(1,1)
             },
             room: {
               columns: {
@@ -562,6 +580,12 @@ export class PaymentService {
     return {
       payments: paymentHistory.map(payment => ({
         id: payment.id,
+        user:{
+          id:payment.user.id,
+          name:payment.user.name,
+          phone:payment.user.phone
+        },
+       
         bookingId: payment.bookingId,
         amount: payment.amount,
         currency: payment.currency,
@@ -572,6 +596,10 @@ export class PaymentService {
         receiptNumber: payment.receiptNumber,
         transactionDate: payment.transactionDate,
         createdAt: payment.createdAt,
+        razorpayOrderId:payment.razorpayOrderId || null,
+        razorpayPaymentId:payment.razorpayPaymentId || null,
+        razorpaySignature:payment.razorpaySignature || null,
+        hotelId:payment.booking.hotel.id,
         booking: {
           id: payment.booking.id,
           checkInDate: payment.booking.checkInDate,
@@ -580,7 +608,7 @@ export class PaymentService {
           hotel: payment.booking.hotel,
           room: payment.booking.room,
         },
-        offlineDetails: payment.offlinePaymentDetails ? JSON.parse(payment.offlinePaymentDetails) : null,
+        offlinePaymentDetails: payment.offlinePaymentDetails ? JSON.parse(payment.offlinePaymentDetails) : null,
       })),
       total: totalPayments.length,
       page,
@@ -656,7 +684,7 @@ export class PaymentService {
 
       // Mark as processed
       await db.update(paymentWebhooks)
-        .set({ 
+        .set({
           processed: true,
           processedAt: new Date()
         })
@@ -664,10 +692,10 @@ export class PaymentService {
 
     } catch (error) {
       console.error(`Webhook processing failed for ${webhookId}:`, error);
-      
+
       // Update retry count
       await db.update(paymentWebhooks)
-        .set({ 
+        .set({
           retryCount: webhookId.retryCount + 1,
           error: error.message
         })
@@ -682,7 +710,7 @@ export class PaymentService {
       .createHmac('sha256', process.env.RAZORPAY_KEY_SECRET || '')
       .update(body.toString())
       .digest('hex');
-    
+
     return expectedSignature === signature;
   }
 
@@ -691,7 +719,7 @@ export class PaymentService {
       .createHmac('sha256', process.env.RAZORPAY_WEBHOOK_SECRET || '')
       .update(payload)
       .digest('hex');
-    
+
     return expectedSignature === signature;
   }
 

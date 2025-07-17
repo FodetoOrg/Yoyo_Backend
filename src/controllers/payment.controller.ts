@@ -217,6 +217,8 @@ export class PaymentController {
         page,
         limit
       });
+
+      console.log('result payment history ',result)
       
       return reply.code(200).send({
         success: true,
@@ -224,12 +226,49 @@ export class PaymentController {
       });
     } catch (error) {
       request.log.error(error);
+      console.log('error ',error)
       return reply.code(500).send({
         success: false,
         message: 'Failed to fetch payment history',
       });
     }
   }
+
+  // Get payment history
+  async getPaymentHistoryForHotel(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { bookingId, status, paymentMode, page = 1, limit = 10 } = request.query as any;
+
+      const {id}= request.params;
+      const userId = (request as any).user.id;
+      const userRole = (request as any).user.role;
+      
+      const result = await this.paymentService.getPaymentHistory({
+        userId: userRole === 'user' ? userId : undefined, // Only filter by userId for regular users
+        bookingId,
+        status,
+        paymentMode,
+        page,
+        limit,
+        hotelId:id
+      });
+
+      console.log('result payment history ',result)
+      
+      return reply.code(200).send({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      request.log.error(error);
+      console.log('error ',error)
+      return reply.code(500).send({
+        success: false,
+        message: 'Failed to fetch payment history',
+      });
+    }
+  }
+
 
   // Record offline payment
   async recordOfflinePayment(request: FastifyRequest, reply: FastifyReply) {
