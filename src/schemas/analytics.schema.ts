@@ -2,26 +2,56 @@ import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
 // Base schemas
+export const MonthlyDataSchema = z.object({
+  date: z.string(),
+  sales: z.number().int().min(0),
+  revenue: z.number().min(0),
+  profit: z.number().min(0),
+});
+
 export const DashboardOverviewSchema = z.object({
   totalHotels: z.number().int().min(0),
   totalUsers: z.number().int().min(0),
   totalBookings: z.number().int().min(0),
-  totalRooms: z.number().int().min(0),
   monthlyRevenue: z.number().min(0),
-  lastMonthRevenue: z.number().min(0),
-  monthlyBookings: z.number().int().min(0),
-  lastMonthBookings: z.number().int().min(0),
+  monthlyData: z.array(MonthlyDataSchema),
+});
+
+export const BookingsAnalyticsSchema = z.object({
+  confirmedBookings: z.number().int().min(0),
+  pendingBookings: z.number().int().min(0),
+  cancelledBookings: z.number().int().min(0),
+  monthlyData: z.array(MonthlyDataSchema),
+});
+
+export const RevenueAnalyticsSchema = z.object({
+  totalRevenue: z.number().min(0),
+  pendingRevenue: z.number().min(0),
+  refundedAmount: z.number().min(0),
+});
+
+export const TimeSeriesDataSchema = z.object({
+  month: z.string(),
+  bookings: z.number().int().min(0),
+  revenue: z.number().min(0),
+});
+
+export const HotelTimeSeriesDataSchema = z.object({
+  month: z.string(),
+  bookings: z.number().int().min(0),
+  revenue: z.number().min(0),
+  occupancy: z.number().min(0).max(100),
 });
 
 export const HotelOverviewSchema = z.object({
   totalRooms: z.number().int().min(0),
-  availableRooms: z.number().int().min(0),
-  occupiedRooms: z.number().int().min(0),
   occupancyRate: z.number().min(0).max(100),
-  monthlyBookings: z.number().int().min(0),
-  lastMonthBookings: z.number().int().min(0),
   monthlyRevenue: z.number().min(0),
-  lastMonthRevenue: z.number().min(0),
+});
+
+export const DistributionSchema = z.object({
+  name: z.string(),
+  value: z.number().int().min(0),
 });
 
 export const TopHotelSchema = z.object({
@@ -84,47 +114,31 @@ export const SuperAdminDashboardResponseSchema = z.object({
   success: z.boolean(),
   data: z.object({
     overview: DashboardOverviewSchema,
-    topHotels: z.array(TopHotelSchema),
-    cityAnalytics: z.array(CityAnalyticsSchema),
-    recentBookings: z.array(RecentBookingSchema),
+    bookings: BookingsAnalyticsSchema,
+    revenue: RevenueAnalyticsSchema,
   }),
 });
 
 export const HotelDashboardResponseSchema = z.object({
   success: z.boolean(),
   data: z.object({
-    hotel: z.object({
-      id: z.string().uuid(),
-      name: z.string(),
-      city: z.string(),
-      address: z.string(),
-    }),
     overview: HotelOverviewSchema,
-    recentBookings: z.array(RecentBookingSchema),
-    roomPerformance: z.array(RoomPerformanceSchema),
+    timeSeriesData: z.array(HotelTimeSeriesDataSchema),
+    roomTypeDistribution: z.array(DistributionSchema),
   }),
 });
 
 export const CityAnalyticsResponseSchema = z.object({
   success: z.boolean(),
   data: z.object({
-    city: z.object({
-      id: z.string().uuid(),
-      name: z.string(),
-      state: z.string(),
-    }),
     overview: z.object({
       totalHotels: z.number().int().min(0),
       totalRooms: z.number().int().min(0),
       totalBookings: z.number().int().min(0),
       totalRevenue: z.number().min(0),
     }),
-    hotels: z.array(z.object({
-      hotelId: z.string().uuid(),
-      name: z.string(),
-      bookings: z.number().int().min(0),
-      revenue: z.number().min(0),
-    })),
+    timeSeriesData: z.array(TimeSeriesDataSchema),
+    hotelDistribution: z.array(DistributionSchema),
   }),
 });
 

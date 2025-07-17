@@ -17,27 +17,38 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
   // All analytics routes require authentication
   fastify.addHook('onRequest', fastify.authenticate);
 
-  // Get dashboard analytics
+  // Get dashboard analytics (super admin)
   fastify.get('/dashboard', {
     schema: {
       ...getDashboardAnalyticsSchema,
       tags: ['analytics'],
-      summary: 'Get dashboard analytics',
+      summary: 'Get super admin dashboard analytics',
       security: [{ bearerAuth: [] }]
     },
     preHandler: rbacGuard(permissions.viewAnalytics)
   }, (request, reply) => analyticsController.getDashboardAnalytics(request, reply));
 
   // Get city analytics
-  fastify.get('/cities/:id', {
+  fastify.get('/dashboard/cities', {
     schema: {
       ...getCityAnalyticsSchema,
       tags: ['analytics'],
-      summary: 'Get city analytics',
+      summary: 'Get city analytics dashboard',
       security: [{ bearerAuth: [] }]
     },
     preHandler: rbacGuard(permissions.viewAnalytics)
   }, (request, reply) => analyticsController.getCityAnalytics(request, reply));
+
+  // Get hotel analytics
+  fastify.get('/dashboard/hotel', {
+    schema: {
+      ...getDashboardAnalyticsSchema,
+      tags: ['analytics'],
+      summary: 'Get hotel dashboard analytics',
+      security: [{ bearerAuth: [] }]
+    },
+    preHandler: rbacGuard(permissions.viewAnalytics)
+  }, (request, reply) => analyticsController.getDashboardAnalytics(request, reply));
 
   // Get revenue analytics
   fastify.get('/revenue', {
