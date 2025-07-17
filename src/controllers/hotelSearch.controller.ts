@@ -49,6 +49,8 @@ export class HotelSearchController {
       }
 
       const result = await this.hotelSearchService.searchHotels(searchFilters);
+
+      console.log('result ',JSON.stringify(result))
       
       return reply.code(200).send({
         success: true,
@@ -56,6 +58,7 @@ export class HotelSearchController {
       });
     } catch (error) {
       request.log.error(error);
+      console.log('error ',error)
       
       if (error instanceof z.ZodError) {
         return reply.code(400).send({

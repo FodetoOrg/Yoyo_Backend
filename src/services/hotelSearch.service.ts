@@ -1,6 +1,6 @@
 import { FastifyInstance } from "fastify";
 import { hotels, hotelImages, rooms, hotelReviews, wishlists, coupons, couponMappings, bookings } from "../models/schema";
-import { eq, and, like, between, sql, desc, asc, inArray, exists, avg, count, not, or } from "drizzle-orm";
+import { eq, and, like, between, sql, desc, asc, inArray, exists, avg, count, not, or, lt, gt } from "drizzle-orm";
 
 interface SearchFilters {
   // Location
@@ -437,14 +437,20 @@ async searchHotels(filters: SearchFilters) {
 
     // Check for overlapping bookings that are not cancelled
     // Two bookings overlap if: checkIn < existing.checkOut AND checkOut > existing.checkIn
-    const conflictingBookings = await db.query.bookings.findMany({
+    console.log('checkin ',checkIn)
+    console.log('checkout ',checkOut)
+
+   const conflictingBookings = await db.query.bookings.findMany({
       where: and(
         eq(bookings.roomId, roomId),
         not(eq(bookings.status, 'cancelled')),
-        sql`datetime(${checkIn.toISOString()}) < datetime(${bookings.checkOutDate}) AND datetime(${checkOut.toISOString()}) > datetime(${bookings.checkInDate})`
+        lt(bookings.checkInDate, checkOut), // existing booking starts before new booking ends
+        gt(bookings.checkOutDate, checkIn)  // existing booking ends after new booking starts
       ),
       limit: 1
     });
+
+    console.log('conflictingBookings ',conflictingBookings)
 
     return conflictingBookings.length > 0;
   }

@@ -11,10 +11,9 @@ import {
   Hotel,
   hotelReviews,
   bookings,
-  bookings,
 } from "../models/schema";
 import { v4 as uuidv4 } from "uuid";
-import { eq, and, like, inArray, exists, not, isNull, desc, or, sql } from "drizzle-orm";
+import { eq, and, like, inArray, exists, not, isNull, desc, or, sql, lt, gt } from "drizzle-orm";
 import { UserRole } from "../types/common";
 import { ForbiddenError } from "../types/errors";
 import { uploadToS3 } from "../config/aws";
@@ -695,9 +694,9 @@ export class HotelService {
       where: eq(rooms.id, roomId)
     });
     
-    if (!room || room.status !== 'available') {
-      return false;
-    }
+    // if (!room || room.status !== 'available') {
+    //   return false;
+    // }
     
     // Check for overlapping bookings that are not cancelled
     // Two bookings overlap if: checkIn < existing.checkOut AND checkOut > existing.checkIn
@@ -705,7 +704,8 @@ export class HotelService {
       where: and(
         eq(bookings.roomId, roomId),
         not(eq(bookings.status, 'cancelled')),
-        sql`datetime(${checkInDate.toISOString()}) < datetime(${bookings.checkOutDate}) AND datetime(${checkOutDate.toISOString()}) > datetime(${bookings.checkInDate})`
+        lt(bookings.checkInDate, checkOutDate), // existing booking starts before new booking ends
+        gt(bookings.checkOutDate, checkInDate)  // existing booking ends after new booking starts
       ),
       limit: 1
     });

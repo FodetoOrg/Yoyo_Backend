@@ -63,6 +63,7 @@ export const HotelPricingSchema = z.object({
   currency: z.string(),
   totalPrice: z.number().nullable(),
   perNight: z.boolean(),
+  availableRooms:z.number().optional()
 });
 
 export const HotelOfferSchema = z.object({
