@@ -504,4 +504,92 @@ export class BookingService {
       throw new Error('Payment verification failed');
     }
   }
+
+  // Get detailed booking information for user
+  async getBookingDetails(bookingId: string, userId: string) {
+    const db = this.fastify.db;
+
+    const booking = await db.query.bookings.findFirst({
+      where: eq(bookings.id, bookingId),
+      with: {
+        user: true,
+        hotel: {
+          with: {
+            images: true
+          }
+        },
+        room: {
+          with: {
+            roomType: true
+          }
+        }
+      }
+    });
+
+    if (!booking) {
+      return null;
+    }
+
+    // Check if user is authorized to view this booking
+    if (booking.userId !== userId) {
+      throw new Error('Unauthorized. You do not have permission to view this booking');
+    }
+
+    // Calculate nights
+    const checkInDate = new Date(booking.checkInDate);
+    const checkOutDate = new Date(booking.checkOutDate);
+    const nights = Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    // Calculate price breakdown
+    const roomRate = booking.room.pricePerNight;
+    const subtotal = roomRate * nights;
+    const taxes = Math.round(subtotal * 0.12); // 12% GST
+    const serviceFee = 100; // Fixed service fee
+    const totalCalculated = subtotal + taxes + serviceFee;
+
+    // Determine status based on dates and booking status
+    let status = booking.status;
+    const now = new Date();
+    if (booking.status === 'confirmed') {
+      if (now < checkInDate) {
+        status = 'upcoming';
+      } else if (now > checkOutDate) {
+        status = 'completed';
+      } else {
+        status = 'confirmed';
+      }
+    }
+
+    // Get amenities (assuming these are stored in room type or hotel)
+    const amenities = [
+      'Free Wi-Fi',
+      'Air Conditioning',
+      ...(booking.hotel.amenities || [])
+    ];
+
+    return {
+      id: booking.id,
+      bookingReference: `REF${booking.id.slice(-9).toUpperCase()}`,
+      status,
+      hotelName: booking.hotel.name,
+      hotelPhone: booking.hotel.contactNumber || '+91 9876543210',
+      hotelEmail: booking.hotel.contactEmail || 'info@hotel.com',
+      address: `${booking.hotel.address}, ${booking.hotel.city}, ${booking.hotel.state}`,
+      image: booking.hotel.images?.[0]?.url || 'https://example.com/hotel.jpg',
+      roomType: booking.room.roomType?.name || booking.room.name,
+      checkIn: checkInDate.toISOString(),
+      checkOut: checkOutDate.toISOString(),
+      guests: booking.guestCount,
+      nights,
+      amenities,
+      priceBreakdown: {
+        roomRate,
+        subtotal,
+        taxes,
+        serviceFee
+      },
+      totalAmount: booking.totalAmount,
+      cancellationPolicy: booking.hotel.cancellationPolicy || 'Free cancellation up to 24 hours before check-in. After that, a 1-night charge will apply.'
+    };
+  }
 }
