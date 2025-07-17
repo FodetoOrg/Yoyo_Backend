@@ -77,9 +77,9 @@ export class AnalyticsService {
 
       monthlyData.push({
         date: monthStart.toISOString().substring(0, 7), // Format: "2024-01"
-        sales: monthData[0]?.sales || 0,
-        revenue: monthData[0]?.revenue || 0,
-        profit: Math.round((monthData[0]?.revenue || 0) * 0.5), // Assuming 50% profit margin
+        sales: Number(monthData[0]?.sales || 0),
+        revenue: Number(monthData[0]?.revenue || 0),
+        profit: Math.round(Number(monthData[0]?.revenue || 0) * 0.5), // Assuming 50% profit margin
       });
     }
 
@@ -122,22 +122,22 @@ export class AnalyticsService {
 
     return {
       overview: {
-        totalHotels: totalHotels[0]?.count || 0,
-        totalUsers: totalUsers[0]?.count || 0,
-        totalBookings: totalBookings[0]?.count || 0,
-        monthlyRevenue: monthlyRevenue[0]?.total || 0,
+        totalHotels: Number(totalHotels[0]?.count || 0),
+        totalUsers: Number(totalUsers[0]?.count || 0),
+        totalBookings: Number(totalBookings[0]?.count || 0),
+        monthlyRevenue: Number(monthlyRevenue[0]?.total || 0),
         monthlyData: monthlyData,
       },
       bookings: {
-        confirmedBookings: confirmedBookings[0]?.count || 0,
-        pendingBookings: pendingBookings[0]?.count || 0,
-        cancelledBookings: cancelledBookings[0]?.count || 0,
+        confirmedBookings: Number(confirmedBookings[0]?.count || 0),
+        pendingBookings: Number(pendingBookings[0]?.count || 0),
+        cancelledBookings: Number(cancelledBookings[0]?.count || 0),
         monthlyData: monthlyData,
       },
       revenue: {
-        totalRevenue: totalRevenue[0]?.total || 0,
-        pendingRevenue: pendingRevenue[0]?.total || 0,
-        refundedAmount: refundedAmount[0]?.total || 0,
+        totalRevenue: Number(totalRevenue[0]?.total || 0),
+        pendingRevenue: Number(pendingRevenue[0]?.total || 0),
+        refundedAmount: Number(refundedAmount[0]?.total || 0),
       },
     };
   }
@@ -208,9 +208,9 @@ export class AnalyticsService {
 
       timeSeriesData.push({
         month: months[monthStart.getMonth()],
-        bookings: monthData[0]?.bookings || 0,
-        revenue: monthData[0]?.revenue || 0,
-        occupancy: monthOccupancy,
+        bookings: Number(monthData[0]?.bookings || 0),
+        revenue: Number(monthData[0]?.revenue || 0),
+        occupancy: Number(monthOccupancy),
       });
     }
 
@@ -226,14 +226,14 @@ export class AnalyticsService {
 
     return {
       overview: {
-        totalRooms: totalRooms[0]?.count || 0,
-        occupancyRate: occupancyRate,
-        monthlyRevenue: monthlyRevenue[0]?.total || 0,
+        totalRooms: Number(totalRooms[0]?.count || 0),
+        occupancyRate: Number(occupancyRate),
+        monthlyRevenue: Number(monthlyRevenue[0]?.total || 0),
       },
       timeSeriesData: timeSeriesData,
       roomTypeDistribution: roomTypeDistribution.map(room => ({
         name: room.roomType,
-        value: room.count || 0,
+        value: Number(room.count || 0),
       })),
     };
   }
