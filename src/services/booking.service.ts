@@ -36,8 +36,8 @@ export class BookingService {
     this.fastify = fastify;
   }
 
-  // Check if a room is available for the given dates
-  async checkRoomAvailability(roomId: string, checkInDate: Date, checkOutDate: Date, bookingType: 'daily' | 'hourly' = 'daily') {
+  // Check if a room is available for the given dates and guest count
+  async checkRoomAvailability(roomId: string, checkInDate: Date, checkOutDate: Date, guestCount: number, bookingType: 'daily' | 'hourly' = 'daily') {
     const db = this.fastify.db;
 
     // Get room from database
@@ -45,8 +45,13 @@ export class BookingService {
       where: eq(rooms.id, roomId)
     });
 
-    if (!room || !room.available) {
-      return false;
+    if (!room || room.status !== 'available') {
+      return { available: false, reason: 'Room not found or not available' };
+    }
+
+    // Check guest capacity
+    if (room.capacity < guestCount) {
+      return { available: false, reason: `Room capacity (${room.capacity}) is less than requested guests (${guestCount})` };
     }
 
     // Check if there are any overlapping bookings
@@ -55,26 +60,35 @@ export class BookingService {
         eq(bookings.roomId, roomId),
         not(eq(bookings.status, 'cancelled')),
         or(
-          // Check if the new booking's check-in date falls between an existing booking
+          // New booking starts during existing booking
           and(
-            between(bookings.checkInDate, checkInDate, checkOutDate),
-            not(eq(bookings.checkInDate, checkOutDate))
+            sql`datetime(${bookings.checkInDate}) <= datetime(${checkInDate.toISOString()})`,
+            sql`datetime(${bookings.checkOutDate}) > datetime(${checkInDate.toISOString()})`
           ),
-          // Check if the new booking's check-out date falls between an existing booking
+          // New booking ends during existing booking
           and(
-            between(bookings.checkOutDate, checkInDate, checkOutDate),
-            not(eq(bookings.checkOutDate, checkInDate))
+            sql`datetime(${bookings.checkInDate}) < datetime(${checkOutDate.toISOString()})`,
+            sql`datetime(${bookings.checkOutDate}) >= datetime(${checkOutDate.toISOString()})`
           ),
-          // Check if an existing booking completely encompasses the new booking
+          // New booking completely encompasses existing booking
           and(
-            bookings.checkInDate <= checkInDate,
-            bookings.checkOutDate >= checkOutDate
+            sql`datetime(${checkInDate.toISOString()}) <= datetime(${bookings.checkInDate})`,
+            sql`datetime(${checkOutDate.toISOString()}) >= datetime(${bookings.checkOutDate})`
+          ),
+          // Existing booking completely encompasses new booking
+          and(
+            sql`datetime(${bookings.checkInDate}) <= datetime(${checkInDate.toISOString()})`,
+            sql`datetime(${bookings.checkOutDate}) >= datetime(${checkOutDate.toISOString()})`
           )
         )
       )
     });
 
-    return overlappingBookings.length === 0;
+    if (overlappingBookings.length > 0) {
+      return { available: false, reason: 'Room is already booked for the selected dates' };
+    }
+
+    return { available: true, reason: null };
   }
 
   // Create a new booking
@@ -86,6 +100,7 @@ export class BookingService {
     checkOut: Date;
     guests: number;
     totalAmount: number;
+    frontendPrice: number;
     specialRequests?: string;
     paymentMode?: string;
     advanceAmount?: number;
@@ -94,13 +109,30 @@ export class BookingService {
     const bookingId = uuidv4();
 
     return await db.transaction(async (tx) => {
-      // Get hotel payment configuration
+      // Get hotel and room details
       const hotel = await tx.query.hotels.findFirst({
         where: eq(hotels.id, bookingData.hotelId)
       });
 
       if (!hotel) {
         throw new Error('Hotel not found');
+      }
+
+      const room = await tx.query.rooms.findFirst({
+        where: eq(rooms.id, bookingData.roomId)
+      });
+
+      if (!room) {
+        throw new Error('Room not found');
+      }
+
+      // Calculate expected price
+      const nights = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60 * 24));
+      const expectedPrice = room.pricePerNight * nights;
+
+      // Validate price from frontend matches calculated price
+      if (Math.abs(bookingData.frontendPrice - expectedPrice) > 0.01) {
+        throw new Error(`Price mismatch: Expected ${expectedPrice}, received ${bookingData.frontendPrice}`);
       }
 
       // Determine payment mode based on hotel configuration and user preference
@@ -156,20 +188,35 @@ export class BookingService {
         paymentStatus: finalPaymentMode === 'offline' ? 'pending' : 'pending',
       });
 
-      // If offline payment, create initial payment record
-      if (finalPaymentMode === 'offline') {
-        const paymentId = uuidv4();
+      // Create payment record
+      const paymentId = uuidv4();
+      await tx.insert(payments).values({
+        id: paymentId,
+        bookingId,
+        userId: bookingData.userId,
+        amount: finalPaymentMode === 'offline' && advanceAmount > 0 ? advanceAmount : bookingData.totalAmount,
+        currency: 'INR',
+        paymentType: finalPaymentMode === 'offline' && advanceAmount > 0 ? 'advance' : 'full',
+        paymentMethod: finalPaymentMode === 'offline' ? (hotel.defaultPaymentMethod || 'cash') : 'razorpay',
+        paymentMode: finalPaymentMode,
+        status: 'pending',
+        transactionDate: new Date(),
+      });
+
+      // If there's remaining amount for offline payment, create another payment record
+      if (finalPaymentMode === 'offline' && remainingAmount > 0) {
+        const remainingPaymentId = uuidv4();
         await tx.insert(payments).values({
-          id: paymentId,
+          id: remainingPaymentId,
           bookingId,
           userId: bookingData.userId,
-          amount: bookingData.totalAmount,
+          amount: remainingAmount,
           currency: 'INR',
-          paymentType: 'full',
+          paymentType: 'remaining',
           paymentMethod: hotel.defaultPaymentMethod || 'cash',
           paymentMode: 'offline',
           status: 'pending',
-          transactionDate: new Date(),
+          transactionDate: paymentDueDate || new Date(),
         });
       }
 
@@ -387,6 +434,53 @@ export class BookingService {
       razorpayOrderId: order.id,
       status: 'pending',
     });
+  }
+
+  // Get checkout price details
+  async getCheckoutPriceDetails(roomId: string, checkInDate: Date, checkOutDate: Date, guestCount: number) {
+    const db = this.fastify.db;
+
+    // Get room details
+    const room = await db.query.rooms.findFirst({
+      where: eq(rooms.id, roomId),
+      with: {
+        hotel: true
+      }
+    });
+
+    if (!room) {
+      throw new Error('Room not found');
+    }
+
+    // Check availability
+    const availabilityCheck = await this.checkRoomAvailability(roomId, checkInDate, checkOutDate, guestCount);
+    if (!availabilityCheck.available) {
+      throw new Error(availabilityCheck.reason || 'Room not available');
+    }
+
+    // Calculate pricing
+    const nights = Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24));
+    const basePrice = room.pricePerNight * nights;
+    
+    // You can add additional charges, taxes, etc. here
+    const taxes = basePrice * 0.12; // 12% GST
+    const totalAmount = basePrice + taxes;
+
+    return {
+      roomId: room.id,
+      roomName: room.name,
+      pricePerNight: room.pricePerNight,
+      nights,
+      basePrice,
+      taxes,
+      totalAmount,
+      currency: 'INR',
+      checkInDate,
+      checkOutDate,
+      guestCount,
+      hotelName: room.hotel.name,
+      available: true
+    };
   }
 
   // Verify payment and update status

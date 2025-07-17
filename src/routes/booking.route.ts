@@ -61,6 +61,25 @@ export default async function bookingRoutes(fastify: FastifyInstance) {
     }
   }, (request, reply) => bookingController.getHotelBookings(request, reply));
   
+  // Get checkout price details
+  fastify.get('/checkout/price-details', {
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          roomId: { type: 'string' },
+          checkIn: { type: 'string', format: 'date' },
+          checkOut: { type: 'string', format: 'date' },
+          guests: { type: 'number', minimum: 1 }
+        },
+        required: ['roomId', 'checkIn', 'checkOut', 'guests']
+      },
+      tags: ['bookings'],
+      summary: 'Get checkout price details',
+      security: [{ bearerAuth: [] }]
+    }
+  }, (request, reply) => bookingController.getCheckoutPriceDetails(request, reply));
+
   // Cancel a booking
   fastify.put('/:id/cancel', {
     schema: {

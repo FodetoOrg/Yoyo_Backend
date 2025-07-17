@@ -54,17 +54,18 @@ export class BookingController {
         });
       }
       
-      // Check if the room is already booked for the requested dates
-      const isRoomAvailable = await this.bookingService.checkRoomAvailability(
+      // Check if the room is available for the requested dates and guest count
+      const availabilityCheck = await this.bookingService.checkRoomAvailability(
         bookingData.roomId,
         new Date(bookingData.checkIn),
-        new Date(bookingData.checkOut)
+        new Date(bookingData.checkOut),
+        bookingData.guests
       );
       
-      if (!isRoomAvailable) {
+      if (!availabilityCheck.available) {
         return reply.code(400).send({
           success: false,
-          message: 'Room is not available for the selected dates',
+          message: availabilityCheck.reason || 'Room is not available',
         });
       }
       
@@ -85,6 +86,7 @@ export class BookingController {
         checkOut: checkOutDate,
         guests: bookingData.guests,
         totalAmount,
+        frontendPrice: bookingData.totalAmount, // Pass frontend price for validation
         specialRequests: bookingData.specialRequests,
         paymentMode: bookingData.paymentMode,
         advanceAmount: bookingData.advanceAmount,
@@ -197,6 +199,38 @@ export class BookingController {
       return reply.code(500).send({
         success: false,
         message: error.message || 'Failed to fetch user bookings',
+      });
+    }
+  }
+
+  // Get checkout price details
+  async getCheckoutPriceDetails(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { roomId, checkIn, checkOut, guests } = request.query as any;
+      
+      if (!roomId || !checkIn || !checkOut || !guests) {
+        return reply.code(400).send({
+          success: false,
+          message: 'Missing required parameters: roomId, checkIn, checkOut, guests',
+        });
+      }
+
+      const priceDetails = await this.bookingService.getCheckoutPriceDetails(
+        roomId,
+        new Date(checkIn),
+        new Date(checkOut),
+        parseInt(guests)
+      );
+
+      return reply.send({
+        success: true,
+        data: priceDetails,
+      });
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send({
+        success: false,
+        message: error.message || 'Failed to get price details',
       });
     }
   }
