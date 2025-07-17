@@ -4,7 +4,7 @@ import { ErrorResponseSchema, SuccessResponseSchema } from "../types/common";
 
 // User schema
 export const UserSchema = z.object({
-  id: z.string().uuid(),
+  id: z.string(),
   name: z.string().optional(),
   phone: z.string().optional(),
   createdAt: z.string(),

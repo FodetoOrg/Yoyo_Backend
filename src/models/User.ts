@@ -17,7 +17,7 @@ export const users = sqliteTable("users", {
   id: text("id").primaryKey(),
   email: text("email"),
   name: text("name"),
-  phone: text("phone").unique(),
+  phone: text("phone"),
   hasOnboarded: integer("has_onboarded", { mode: "boolean" })
     .notNull()
     .default(false),
@@ -31,7 +31,7 @@ export const users = sqliteTable("users", {
   })
     .notNull()
     .default(UserStatus.ACTIVE),
-  firebaseUid: text("firebase_uid").notNull().unique(),
+  firebaseUid: text("firebase_uid").notNull(),
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(new Date()),

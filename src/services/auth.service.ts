@@ -24,7 +24,7 @@ export class AuthService {
 
   // Login or register user with Firebase ID token
   async loginWithFirebase(idToken: string, role: string = "user"): Promise<any> {
-    try {
+
       console.log("idToken in start of loginWithFirebase  ", idToken);
 
       const payload = JSON.parse(Buffer.from(idToken.split('.')[1], 'base64').toString());
@@ -54,14 +54,20 @@ export class AuthService {
           eq(users.role, role)
         ),
       });
+      console.log('user from db ',user)
+      if (!user && (role === UserRole.SUPER_ADMIN || role === UserRole.HOTEL_ADMIN || role === UserRole.STAFF)) {
+        console.log('throwing this')
+        throw new NotFoundError("User not found ");
+
+      }
 
       // If user doesn't exist, create a new user
-      if (!user) {
+      if (!user && role === UserRole.USER) {
         const userId = uuidv4();
         const now = new Date();
 
         // Determine hasOnboarded based on role
-        const hasOnboarded = role === "hotel" || role === "superAdmin";
+
         user = await db
           .insert(users)
           .values({
@@ -70,21 +76,22 @@ export class AuthService {
             name: userFromFirebase.displayName || null,
             phone: userFromFirebase.phoneNumber || null,
             role: role as any,
-            hasOnboarded,
+            hasOnboarded: false,
             firebaseUid: decodedToken.uid,
             createdAt: now,
             updatedAt: now,
           })
           .returning();
-          if (!user) {
-            throw new Error("User not found after creation");
-          }
-          user=user[0]
+        if (!user) {
+          throw new NotFoundError("User not found ");
+        }
+        user = user[0]
 
       }
+      console.log('came here ')
 
       if (!user) {
-        throw new Error("User not found after creation");
+        throw new Error("User not found ");
       }
 
 
@@ -107,21 +114,19 @@ export class AuthService {
       return {
         accessToken: tokens.accessToken,
         refreshToken: tokens.refreshToken,
-        user:{
-          id:user.id,
-          name:user.name || '',
-          phone:user.phone,
+        user: {
+          id: user.id,
+          name: user.name || '',
+          phone: user.phone,
           hasOnboarded: user.hasOnboarded,
-          createdAt:new Date(user.createdAt).toString() || '',
-          updatedAt:new Date(user.updatedAt).toString() || '',
-          status:user.status,
-          role:user.role,
+          createdAt: new Date(user.createdAt).toString() || '',
+          updatedAt: new Date(user.updatedAt).toString() || '',
+          status: user.status,
+          role: user.role,
           hotelId
         }
       };
-    } catch (error) {
-      throw new Error("Invalid Firebase ID token " + error);
-    }
+  
   }
 
   // Generate access and refresh tokens
@@ -358,14 +363,14 @@ export class AuthService {
     return allUsers;
   }
 
-  async getUserById(id:string){
+  async getUserById(id: string) {
     const db = this.fastify.db;
-    const user =await  db.query.users.findFirst({
-      where:eq(users.id,id)
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, id)
     })
-    console.log('user from db ',user)
-    if(!user){
-      throw new  NotFoundError('User Not Found');
+    console.log('user from db ', user)
+    if (!user) {
+      throw new NotFoundError('User Not Found');
     }
     let hotelId;
     if (user.role === UserRole.HOTEL_ADMIN) {

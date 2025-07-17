@@ -98,9 +98,8 @@ export const GetHotelBookingsResponseSchema = z.object({
   success: z.boolean(),
   data: z.object({
     bookings: z.array(BookingResponseSchema),
-    total: z.number().int().min(0),
-    page: z.number().int().min(1),
-    limit: z.number().int().min(1)
+    // page: z.number().int().min(1),
+    // limit: z.number().int().min(1)
   })
 });
 

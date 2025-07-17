@@ -1,5 +1,5 @@
 import { FastifyInstance } from "fastify";
-import { rooms, hotels, roomImages, roomTypes, bookings } from '../models/schema';
+import { rooms, hotels, roomImages, roomTypes, bookings, users } from '../models/schema';
 import { eq, and, like, desc, asc, count, sql, not, or } from 'drizzle-orm';
 import { v4 as uuidv4 } from "uuid";
 import { uploadToS3 } from "../config/aws";

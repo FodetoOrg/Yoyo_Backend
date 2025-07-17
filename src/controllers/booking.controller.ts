@@ -346,6 +346,7 @@ export class BookingController {
       
       const hotel = await this.hotelService.getHotelById(id);
       
+      
       if (!hotel) {
         return reply.code(404).send({
           success: false,
@@ -363,6 +364,8 @@ export class BookingController {
       }
       
       const bookings = await this.bookingService.getBookingsByHotelId(id);
+
+      console.log('bookings ',bookings)
       
       return reply.code(200).send({
         success: true,
