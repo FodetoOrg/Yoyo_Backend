@@ -39,12 +39,6 @@ export class BookingController {
         });
       }
       
-      if (!room.available) {
-        return reply.code(400).send({
-          success: false,
-          message: 'Room is not available for booking',
-        });
-      }
       
       // Validate room belongs to the specified hotel
       if (room.hotelId !== bookingData.hotelId) {
@@ -100,11 +94,11 @@ export class BookingController {
           paymentInfo: {
             totalAmount,
             currency: 'INR',
-            paymentMode: booking.paymentMode,
-            requiresOnlinePayment: booking.requiresOnlinePayment,
-            advanceAmount: booking.advanceAmount,
-            remainingAmount: booking.remainingAmount,
-            paymentDueDate: booking.paymentDueDate
+            paymentMode: booking?.paymentMode,
+            requiresOnlinePayment: booking?.requiresOnlinePayment,
+            advanceAmount: booking?.advanceAmount,
+            remainingAmount: booking?.remainingAmount,
+            paymentDueDate: booking?.paymentDueDate
           }
         }
       });
