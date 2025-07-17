@@ -61,6 +61,13 @@ export const GetUserBookingsQuerySchema = z.object({
   limit: z.number().int().min(1).max(100).default(10)
 });
 
+// Get all bookings schemas (admin)
+export const GetAllBookingsQuerySchema = z.object({
+  status: z.enum(['pending', 'confirmed', 'cancelled', 'completed']).optional(),
+  page: z.number().int().min(1).default(1),
+  limit: z.number().int().min(1).max(100).default(10)
+});
+
 export const GetUserBookingsResponseSchema = z.object({
   success: z.boolean(),
   data: z.object({
@@ -84,8 +91,45 @@ export const GetUserBookingsResponseSchema = z.object({
         roomType: z.string().optional()
       })
     })),
-    // page: z.number().int().min(1),
-    // limit: z.number().int().min(1)
+    total: z.number().int(),
+    page: z.number().int().min(1),
+    limit: z.number().int().min(1)
+  })
+});
+
+export const GetAllBookingsResponseSchema = z.object({
+  success: z.boolean(),
+  data: z.object({
+    bookings: z.array(z.object({
+      id: z.string().uuid(),
+      checkInDate: z.string().datetime(),
+      checkOutDate: z.string().datetime(),
+      bookingType: z.string(),
+      guestCount: z.number(),
+      totalAmount: z.number(),
+      paymentMode: z.string(),
+      status: z.string(),
+      paymentStatus: z.string(),
+      bookingDate: z.string().datetime(),
+      user: z.object({
+        id: z.string().uuid(),
+        name: z.string(),
+        phone: z.string()
+      }),
+      hotel: z.object({
+        id: z.string().uuid(),
+        name: z.string(),
+        city: z.string()
+      }),
+      room: z.object({
+        id: z.string(),
+        name: z.string(),
+        roomType: z.string().optional()
+      })
+    })),
+    total: z.number().int(),
+    page: z.number().int().min(1),
+    limit: z.number().int().min(1)
   })
 });
 
@@ -97,9 +141,31 @@ export const GetHotelBookingsParamsSchema = z.object({
 export const GetHotelBookingsResponseSchema = z.object({
   success: z.boolean(),
   data: z.object({
-    bookings: z.array(BookingResponseSchema),
-    // page: z.number().int().min(1),
-    // limit: z.number().int().min(1)
+    bookings: z.array(z.object({
+      id: z.string().uuid(),
+      checkInDate: z.string().datetime(),
+      checkOutDate: z.string().datetime(),
+      bookingType: z.string(),
+      guestCount: z.number(),
+      totalAmount: z.number(),
+      paymentMode: z.string(),
+      status: z.string(),
+      paymentStatus: z.string(),
+      bookingDate: z.string().datetime(),
+      user: z.object({
+        id: z.string().uuid(),
+        name: z.string(),
+        phone: z.string()
+      }),
+      room: z.object({
+        id: z.string(),
+        name: z.string(),
+        roomType: z.string().optional()
+      })
+    })),
+    total: z.number().int(),
+    page: z.number().int().min(1),
+    limit: z.number().int().min(1)
   })
 });
 
@@ -197,5 +263,12 @@ export const getBookingDetailsSchema = {
   response: {
     200: zodToJsonSchema(GetBookingDetailsResponseSchema),
     404: zodToJsonSchema(GetBookingErrorSchema)
+  }
+};
+
+export const getAllBookingsSchema = {
+  querystring: zodToJsonSchema(GetAllBookingsQuerySchema),
+  response: {
+    200: zodToJsonSchema(GetAllBookingsResponseSchema)
   }
 }; 

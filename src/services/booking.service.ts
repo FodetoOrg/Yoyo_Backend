@@ -280,20 +280,36 @@ export class BookingService {
   }
 
   // Get bookings by user ID
-  async getBookingsByUserId(userId: string) {
+  async getBookingsByUserId(userId: string, options: { status?: string; page?: number; limit?: number } = {}) {
     const db = this.fastify.db;
+    const { status, page = 1, limit = 10 } = options;
+    const offset = (page - 1) * limit;
+
+    // Build where conditions
+    const whereConditions = [eq(bookings.userId, userId)];
+    if (status) {
+      whereConditions.push(eq(bookings.status, status));
+    }
+
+    // Get total count
+    const totalResult = await db.query.bookings.findMany({
+      where: and(...whereConditions)
+    });
+    const total = totalResult.length;
 
     const userBookings = await db.query.bookings.findMany({
-      where: eq(bookings.userId, userId),
+      where: and(...whereConditions),
       with: {
         hotel: true,
         room: true
       },
-      orderBy: (bookings, { desc }) => [desc(bookings.createdAt)]
+      orderBy: (bookings, { desc }) => [desc(bookings.createdAt)],
+      limit,
+      offset
     });
 
     // Format bookings
-    return userBookings.map(booking => ({
+    const formattedBookings = userBookings.map(booking => ({
       id: booking.id,
       checkInDate: booking.checkInDate,
       checkOutDate: booking.checkOutDate,
@@ -313,23 +329,46 @@ export class BookingService {
         roomType: booking.room.roomType
       }
     }));
+
+    return {
+      bookings: formattedBookings,
+      total,
+      page,
+      limit
+    };
   }
 
   // Get bookings by hotel ID
-  async getBookingsByHotelId(hotelId: string) {
+  async getBookingsByHotelId(hotelId: string, options: { status?: string; page?: number; limit?: number } = {}) {
     const db = this.fastify.db;
+    const { status, page = 1, limit = 10 } = options;
+    const offset = (page - 1) * limit;
+
+    // Build where conditions
+    const whereConditions = [eq(bookings.hotelId, hotelId)];
+    if (status) {
+      whereConditions.push(eq(bookings.status, status));
+    }
+
+    // Get total count
+    const totalResult = await db.query.bookings.findMany({
+      where: and(...whereConditions)
+    });
+    const total = totalResult.length;
 
     const hotelBookings = await db.query.bookings.findMany({
-      where: eq(bookings.hotelId, hotelId),
+      where: and(...whereConditions),
       with: {
         user: true,
         room: true
       },
-      orderBy: (bookings, { desc }) => [desc(bookings.createdAt)]
+      orderBy: (bookings, { desc }) => [desc(bookings.createdAt)],
+      limit,
+      offset
     });
 
     // Format bookings
-    return hotelBookings.map(booking => ({
+    const formattedBookings = hotelBookings.map(booking => ({
       id: booking.id,
       checkInDate: booking.checkInDate,
       checkOutDate: booking.checkOutDate,
@@ -351,6 +390,80 @@ export class BookingService {
         roomType: booking.room.roomType
       }
     }));
+
+    return {
+      bookings: formattedBookings,
+      total,
+      page,
+      limit
+    };
+  }
+
+  // Get all bookings (admin only)
+  async getAllBookings(options: { status?: string; page?: number; limit?: number } = {}) {
+    const db = this.fastify.db;
+    const { status, page = 1, limit = 10 } = options;
+    const offset = (page - 1) * limit;
+
+    // Build where conditions
+    let whereConditions = [];
+    if (status) {
+      whereConditions.push(eq(bookings.status, status));
+    }
+
+    // Get total count
+    const totalResult = await db.query.bookings.findMany({
+      where: whereConditions.length > 0 ? and(...whereConditions) : undefined
+    });
+    const total = totalResult.length;
+
+    const allBookings = await db.query.bookings.findMany({
+      where: whereConditions.length > 0 ? and(...whereConditions) : undefined,
+      with: {
+        user: true,
+        hotel: true,
+        room: true
+      },
+      orderBy: (bookings, { desc }) => [desc(bookings.createdAt)],
+      limit,
+      offset
+    });
+
+    // Format bookings
+    const formattedBookings = allBookings.map(booking => ({
+      id: booking.id,
+      checkInDate: booking.checkInDate,
+      checkOutDate: booking.checkOutDate,
+      bookingType: booking.bookingType,
+      guestCount: booking.guestCount,
+      totalAmount: booking.totalAmount,
+      paymentMode: booking.paymentMode,
+      status: booking.status,
+      paymentStatus: booking.paymentStatus,
+      bookingDate: booking.bookingDate,
+      user: {
+        id: booking.user.id,
+        name: booking.user.name,
+        phone: booking.user.phone
+      },
+      hotel: {
+        id: booking.hotel.id,
+        name: booking.hotel.name,
+        city: booking.hotel.city
+      },
+      room: {
+        id: booking.room.id,
+        name: booking.room.name,
+        roomType: booking.room.roomType
+      }
+    }));
+
+    return {
+      bookings: formattedBookings,
+      total,
+      page,
+      limit
+    };
   }
 
   // Cancel a booking
