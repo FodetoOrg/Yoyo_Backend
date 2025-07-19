@@ -35,6 +35,21 @@ const sendSMSSchema = z.object({
   message: z.string().min(1),
 });
 
+const registerTokenSchema = z.object({
+  token: z.string().min(1),
+  platform: z.enum(['ios', 'android', 'web']),
+  deviceInfo: z.object({
+    brand: z.string().optional(),
+    modelName: z.string().optional(),
+    osName: z.string().optional(),
+    osVersion: z.string().optional(),
+  }).optional(),
+});
+
+const testNotificationSchema = z.object({
+  message: z.string().min(1),
+});
+
 export class NotificationController {
   private notificationService: NotificationService;
 
@@ -243,6 +258,77 @@ export class NotificationController {
       return reply.code(500).send({
         success: false,
         message: error.message || 'Failed to send SMS',
+      });
+    }
+  }
+
+  // Register push token
+  async registerToken(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const userId = (request as any).user.id;
+      const { token, platform, deviceInfo } = registerTokenSchema.parse(request.body);
+      
+      // Generate device ID from user and platform info
+      const deviceId = `${userId}-${platform}-${Date.now()}`;
+      
+      const result = await this.notificationService.registerPushToken(
+        userId, 
+        token, 
+        deviceId, 
+        platform, 
+        deviceInfo
+      );
+      
+      return reply.code(201).send({
+        success: true,
+        message: 'Push token registered successfully',
+        data: result,
+      });
+    } catch (error) {
+      request.log.error(error);
+      
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({
+          success: false,
+          message: 'Validation error',
+          errors: error.errors,
+        });
+      }
+      
+      return reply.code(500).send({
+        success: false,
+        message: error.message || 'Failed to register push token',
+      });
+    }
+  }
+
+  // Send test notification
+  async testNotification(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const userId = (request as any).user.id;
+      const { message } = testNotificationSchema.parse(request.body);
+      
+      const result = await this.notificationService.sendTestNotification(userId, message);
+      
+      return reply.code(201).send({
+        success: true,
+        message: 'Test notification sent successfully',
+        data: result,
+      });
+    } catch (error) {
+      request.log.error(error);
+      
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({
+          success: false,
+          message: 'Validation error',
+          errors: error.errors,
+        });
+      }
+      
+      return reply.code(500).send({
+        success: false,
+        message: error.message || 'Failed to send test notification',
       });
     }
   }

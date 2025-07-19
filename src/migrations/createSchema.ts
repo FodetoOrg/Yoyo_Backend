@@ -456,6 +456,24 @@ async function main() {
     `);
     console.log('User notification preferences table created');
 
+    // Create push tokens table
+    await db.run(sql`
+      CREATE TABLE IF NOT EXISTS push_tokens (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        push_token TEXT NOT NULL UNIQUE,
+        device_id TEXT NOT NULL UNIQUE,
+        platform TEXT NOT NULL,
+        device_info TEXT,
+        is_active INTEGER NOT NULL DEFAULT 1,
+        last_used INTEGER NOT NULL DEFAULT (unixepoch()),
+        created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch()),
+        FOREIGN KEY (user_id) REFERENCES users(id)
+      )
+    `);
+    console.log('Push tokens table created');
+
     // Create payment orders table
     await db.run(sql`
       CREATE TABLE IF NOT EXISTS payment_orders (

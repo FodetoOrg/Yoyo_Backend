@@ -8,6 +8,8 @@ import {
   sendNotificationSchema,
   sendEmailSchema,
   sendSMSSchema,
+  registerTokenSchema,
+  testNotificationSchema,
 } from '../schemas/notification.schema';
 import { rbacGuard } from '../plugins/rbacGuard';
 import { permissions } from '../utils/rbac';
@@ -93,4 +95,24 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
     },
     preHandler: rbacGuard(permissions.viewAnalytics) // Using analytics permission as admin check
   }, (request, reply) => notificationController.sendSMS(request, reply));
+
+  // Register push token
+  fastify.post('/register-token', {
+    schema: {
+      ...registerTokenSchema,
+      tags: ['notifications'],
+      summary: 'Register push token',
+      security: [{ bearerAuth: [] }]
+    }
+  }, (request, reply) => notificationController.registerToken(request, reply));
+
+  // Send test notification
+  fastify.post('/test', {
+    schema: {
+      ...testNotificationSchema,
+      tags: ['notifications'],
+      summary: 'Send test notification',
+      security: [{ bearerAuth: [] }]
+    }
+  }, (request, reply) => notificationController.testNotification(request, reply));
 }
