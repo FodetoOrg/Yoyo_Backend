@@ -21,3 +21,5 @@ export * from './PaymentOrder';
 export * from './CustomerProfile';
 export * from './Wishlist';
 export * from './HotelReview';
+export { bookings, bookingsRelations, type Booking } from "./Booking";
+export { bookingCoupons, bookingCouponsRelations, type BookingCoupon } from "./BookingCoupon";

@@ -11,21 +11,21 @@ export const customerProfiles = sqliteTable('customer_profiles', {
   gender: text('gender'), // male, female, other, prefer_not_to_say
   dateOfBirth: integer('date_of_birth', { mode: 'timestamp' }),
   profileImage: text('profile_image'),
-  
+
   // Notification preferences
   bookingUpdatesEnabled: integer('booking_updates_enabled', { mode: 'boolean' }).notNull().default(true),
   checkinRemindersEnabled: integer('checkin_reminders_enabled', { mode: 'boolean' }).notNull().default(true),
   securityAlertsEnabled: integer('security_alerts_enabled', { mode: 'boolean' }).notNull().default(true),
   promotionalOffersEnabled: integer('promotional_offers_enabled', { mode: 'boolean' }).notNull().default(false),
-  
+
   // Preferences
   preferredLanguage: text('preferred_language').default('en'),
   currency: text('currency').default('INR'),
-  
+
  // Onboarding
  skippedOnboarding: integer('skipped_onboarding', { mode: 'boolean' }).notNull().default(false),
- 
-  
+
+
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(new Date()),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(new Date()),
 });

@@ -190,7 +190,8 @@ export class NotificationService {
 
       // Process immediately if not scheduled
       if (!data.scheduledAt) {
-        setImmediate(() => this.processNotification(notificationId));
+        // Process synchronously for instant delivery
+        await this.processNotification(notificationId);
       }
 
       return notificationId;
@@ -586,13 +587,13 @@ export class NotificationService {
     });
 
     if (!preferences) {
-      // Create default preferences
+      // Create default preferences for instant notifications
       const defaultPrefs = {
         id: uuidv4(),
         userId,
         pushEnabled: true,
         emailEnabled: true,
-        smsEnabled: false,
+        smsEnabled: true,
         bookingNotifications: true,
         paymentNotifications: true,
         promotionalNotifications: false,

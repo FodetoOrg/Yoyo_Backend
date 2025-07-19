@@ -13,6 +13,9 @@ export const bookings = sqliteTable('bookings', {
   userId: text('user_id').references(() => users.id).notNull(),
   hotelId: text('hotel_id').references(() => hotels.id).notNull(),
   roomId: text('room_id').references(() => rooms.id).notNull(),
+  guestName: text('guest_name').notNull(),
+  guestEmail: text('guest_email').notNull(),
+  guestPhone: text('guest_phone').notNull(),
   checkInDate: integer('check_in_date', { mode: 'timestamp' }).notNull(),
   checkOutDate: integer('check_out_date', { mode: 'timestamp' }).notNull(),
   bookingType: text('booking_type').notNull().default('daily'), // 'daily' or 'hourly'

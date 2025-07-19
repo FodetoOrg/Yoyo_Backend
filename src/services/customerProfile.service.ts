@@ -10,17 +10,17 @@ interface CustomerProfileData {
   gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say';
   dateOfBirth?: Date;
   profileImage?: string;
-  
+
   // Notification preferences
   bookingUpdatesEnabled?: boolean;
   checkinRemindersEnabled?: boolean;
   securityAlertsEnabled?: boolean;
   promotionalOffersEnabled?: boolean;
-  
+
   // Other preferences
   preferredLanguage?: string;
   currency?: string;
-  
+
   // Onboarding
   skippedOnboarding?: boolean;
 }
@@ -42,7 +42,7 @@ export class CustomerProfileService {
   // Get customer profile
   async getProfile(userId: string) {
     const db = this.fastify.db;
-    
+
     const profile = await db.query.customerProfiles.findFirst({
       where: eq(customerProfiles.userId, userId),
       with: {
@@ -71,7 +71,7 @@ export class CustomerProfileService {
       dateOfBirth: profile.dateOfBirth,
       profileImage: profile.profileImage,
       phone: profile.user.phone,
-      
+
       // Notification preferences
       notifications: {
         bookingUpdates: profile.bookingUpdatesEnabled,
@@ -79,24 +79,24 @@ export class CustomerProfileService {
         securityAlerts: profile.securityAlertsEnabled,
         promotionalOffers: profile.promotionalOffersEnabled,
       },
-      
+
       // Preferences
       preferences: {
         language: profile.preferredLanguage,
         currency: profile.currency,
       },
-      
+
       // Onboarding status
       onboarding: {
         skipped: profile.skippedOnboarding,
       },
-      
+
       // Account info
       accountInfo: {
         memberSince: profile.user.createdAt,
         verified: !!profile.email,
       },
-      
+
       createdAt: profile.createdAt,
       updatedAt: profile.updatedAt,
     };
