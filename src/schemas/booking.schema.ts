@@ -233,7 +233,7 @@ export const GetBookingDetailsResponseSchema = z.object({
 export const createBookingSchema = {
   body: zodToJsonSchema(CreateBookingBodySchema),
   response: {
-    201: zodToJsonSchema(CreateBookingResponseSchema)
+    // 201: zodToJsonSchema(CreateBookingResponseSchema)
   }
 };
 

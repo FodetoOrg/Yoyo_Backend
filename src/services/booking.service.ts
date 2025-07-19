@@ -81,8 +81,7 @@ export class BookingService {
 
     return { available: true, reason: null };
   }
-
-  // Create a new booking
+  // Optimized createBooking method
   async createBooking(bookingData: {
     hotelId: string;
     roomId: string;
@@ -103,112 +102,31 @@ export class BookingService {
     const db = this.fastify.db;
     const bookingId = uuidv4();
 
-    return await db.transaction(async (tx) => {
-      // Get hotel and room details
-      const hotel = await tx.query.hotels.findFirst({
-        where: eq(hotels.id, bookingData.hotelId)
-      });
+    // 1. PRE-TRANSACTION: Validate and prepare data (can fail without side effects)
+    const validationResult = await this.validateBookingData(bookingData);
+    const { hotel, room, couponValidation, finalAmount, finalPaymentMode } = validationResult;
 
-      if (!hotel) {
-        throw new Error('Hotel not found');
-      }
+    // 2. TRANSACTION: Only database operations (keep this minimal and fast)
+    const booking = await db.transaction(async (tx) => {
+      const nights = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60 * 24));
 
-      const room = await tx.query.rooms.findFirst({
-        where: eq(rooms.id, bookingData.roomId)
-      });
-
-      if (!room) {
-        throw new Error('Room not found');
-      }
-
-      // Calculate expected price
-      console.log('booking data ', bookingData)
-
-      // Determine payment mode based on hotel configuration and user preference
-      let finalPaymentMode = bookingData.paymentMode || 'offline';
-      let requiresOnlinePayment = false;
+      // Payment calculations
+      let requiresOnlinePayment = finalPaymentMode === 'online';
       let paymentDueDate = null;
-      let remainingAmount = bookingData.totalAmount;
+      let remainingAmount = finalAmount;
       let advanceAmount = 0;
 
-      // Validate payment mode against hotel configuration
-      if (finalPaymentMode === 'online' && !hotel.onlinePaymentEnabled) {
-        throw new Error('Online payment is not enabled for this hotel');
-      }
-
-      if (finalPaymentMode === 'offline' && !hotel.offlinePaymentEnabled) {
-        throw new Error('Offline payment is not enabled for this hotel');
-      }
-
-
-      const nights = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60 * 24));
-      const expectedPrice = room.pricePerNight * nights;
-      // Coupon validation
-      let couponValidation = null;
-      let finalAmount = bookingData.totalAmount;
-      let discountAmount = 0;
-      let couponId = null;
-
-      if (bookingData.couponCode) {
-        try {
-          couponValidation = await this.couponService.validateCoupon(
-            bookingData.couponCode,
-            bookingData.hotelId,
-            room.roomType, // Assuming room.roomType is the roomTypeId
-            bookingData.totalAmount
-          );
-
-          console.log('couponValidation ', couponValidation)
-          console.log('coupn id ', bookingData.couponCode)
-
-
-
-
-
-          // if (couponValidation) {
-          //   discountAmount = couponValidation.discountAmount;
-          //   finalAmount = couponValidation.finalAmount;
-          //   couponId = couponValidation.coupon.id;
-          // }
-        } catch (error) {
-          throw new NotFoundError('Coupon Not Found')
-
-        }
-      } else {
-
-        if (Math.abs(bookingData.frontendPrice - expectedPrice) > 0.01) {
-          throw new ConflictError(`Price mismatch: Expected ${expectedPrice}, received ${bookingData.frontendPrice}`);
-        }
-
-      }
-
-      if (couponValidation) {
-        // Validate price from frontend matches calculated price
-        if (Math.abs(bookingData.frontendPrice - couponValidation?.finalAmount) > 0.01) {
-          throw new ConflictError(`Price mismatch: Expected ${expectedPrice}, received ${bookingData.frontendPrice}`);
-        }
-        bookingData.totalAmount = couponValidation.finalAmount
-
-      }
-
-
-
-      // Set payment requirements based on mode
-      if (finalPaymentMode === 'online') {
-        requiresOnlinePayment = true;
-      } else {
-        // For offline payments, set due date (e.g., 24 hours before check-in)
+      if (finalPaymentMode === 'offline') {
         paymentDueDate = new Date(bookingData.checkIn);
         paymentDueDate.setHours(paymentDueDate.getHours() - 24);
 
-        // Handle advance payment if specified
         if (bookingData.advanceAmount && bookingData.advanceAmount > 0) {
-          advanceAmount = Math.min(bookingData.advanceAmount, bookingData.totalAmount);
-          remainingAmount = bookingData.totalAmount - advanceAmount;
+          advanceAmount = Math.min(bookingData.advanceAmount, finalAmount);
+          remainingAmount = finalAmount - advanceAmount;
         }
       }
 
-      // Create booking
+      // Create booking record
       await tx.insert(bookings).values({
         id: bookingId,
         userId: bookingData.userId,
@@ -216,10 +134,10 @@ export class BookingService {
         roomId: bookingData.roomId,
         checkInDate: bookingData.checkIn,
         checkOutDate: bookingData.checkOut,
-        bookingType: 'daily', // Assuming default booking type is daily
-        totalHours: 24, // Assuming default total hours is 24
+        bookingType: 'daily',
+        totalHours: 24,
         guestCount: bookingData.guests,
-        totalAmount: bookingData.totalAmount,
+        totalAmount: finalAmount,
         paymentMode: finalPaymentMode,
         requiresOnlinePayment,
         paymentDueDate,
@@ -227,32 +145,37 @@ export class BookingService {
         remainingAmount,
         specialRequests: bookingData.specialRequests,
         status: finalPaymentMode === 'offline' ? 'confirmed' : 'pending',
-        paymentStatus: finalPaymentMode === 'offline' ? 'pending' : 'pending',
+        paymentStatus: 'pending',
         guestEmail: bookingData.guestEmail,
         guestName: bookingData.guestName,
         guestPhone: bookingData.guestPhone
       });
 
+      // Insert coupon usage if applicable
       if (couponValidation) {
-
         await tx.insert(bookingCoupons).values({
           id: uuidv4(),
           bookingId: bookingId,
           couponId: couponValidation.coupon.id,
           discountAmount: couponValidation.discountAmount,
+        });
 
-
-        })
-
+        // Update coupon usage count
+        await tx.update(coupons)
+          .set({
+            usedCount: sql`${coupons.usedCount} + 1`,
+            updatedAt: new Date()
+          })
+          .where(eq(coupons.id, couponValidation.coupon.id));
       }
 
-      // Create payment record
+      // Create payment records
       const paymentId = uuidv4();
       await tx.insert(payments).values({
         id: paymentId,
         bookingId,
         userId: bookingData.userId,
-        amount: finalPaymentMode === 'offline' && advanceAmount > 0 ? advanceAmount : finalAmount, // Use finalAmount after coupon
+        amount: finalPaymentMode === 'offline' && advanceAmount > 0 ? advanceAmount : finalAmount,
         currency: 'INR',
         paymentType: finalPaymentMode === 'offline' && advanceAmount > 0 ? 'advance' : 'full',
         paymentMethod: finalPaymentMode === 'offline' ? (hotel.defaultPaymentMethod || 'cash') : 'razorpay',
@@ -261,7 +184,7 @@ export class BookingService {
         transactionDate: new Date(),
       });
 
-      // If there's remaining amount for offline payment, create another payment record
+      // Create remaining payment record if needed
       if (finalPaymentMode === 'offline' && remainingAmount > 0) {
         const remainingPaymentId = uuidv4();
         await tx.insert(payments).values({
@@ -278,69 +201,138 @@ export class BookingService {
         });
       }
 
-      // Update coupon usage if applied
-      if (couponValidation) {
-        await tx.update(coupons)
-          .set({
-            usedCount: sql`${coupons.usedCount} + 1`,
-            updatedAt: new Date()
-          })
-          .where(eq(coupons.id, couponId));
-      }
-
-      // Send push notification for successful booking
-      try {
-        const response = await this.notificationService.sendInstantBookingSuccessNotification(bookingData.userId, {
-          title: 'Booking Confirmed! 🎉',
-          message: `Your booking at ${hotel.name} has been confirmed. Booking ID: ${bookingId}`,
-          type: 'booking_confirmed',
-          data: {
-            bookingId,
-            hotelName: hotel.name,
-            checkInDate: bookingData.checkIn.toISOString(),
-            checkOutDate: bookingData.checkOut.toISOString(),
-          }
-        });
-        console.log('response in sending notification ', response)
-
-        await this.notificationService.sendImmediateNotification(
-          {
-            userId: bookingData.userId,
-            type: 'email',
-            title: "Booking Confirmation",
-            message: generateBookingConfirmationEmail({
-              bookingId,
-              hotel,
-              room,
-              guestName:bookingData.guestName,
-              guestEmail:bookingData.guestEmail,
-              guestPhone:bookingData.guestPhone,
-              checkIn:bookingData.checkIn,
-              checkOut:bookingData.checkOut,
-              guests:bookingData.guests,
-              totalAmount:bookingData?.totalAmount,
-              paymentMode:bookingData.paymentMode,
-              status:"confirmed",
-        
-              couponValidation,
-              nights
-            }),
-            email: bookingData.guestEmail
-
-          }
-        )
-      } catch (notificationError) {
-        console.log('error in sending ', notificationError)
-        // Log notification error but don't fail the booking
-        this.fastify.log.error('Failed to send booking notification:', notificationError);
-      }
-
-      // Get the created booking
-      const booking = await this.getBookingById(bookingId);
-      return booking;
+      return bookingId;
     });
+
+    // 3. POST-TRANSACTION: Send notifications (async, don't block response)
+    this.sendBookingNotifications(bookingId, bookingData, hotel, room, couponValidation)
+      .catch(error => {
+        this.fastify.log.error('Failed to send booking notifications:', error);
+      });
+
+    // 4. Return the booking details
+    return await this.getBookingById(bookingId);
   }
 
+  // Separate method for validation (runs before transaction)
+  private async validateBookingData(bookingData: any) {
+    const db = this.fastify.db;
+
+    // Parallel validation queries
+    const [hotel, room] = await Promise.all([
+      db.query.hotels.findFirst({
+        where: eq(hotels.id, bookingData.hotelId)
+      }),
+      db.query.rooms.findFirst({
+        where: eq(rooms.id, bookingData.roomId)
+      })
+    ]);
+
+    if (!hotel) throw new Error('Hotel not found');
+    if (!room) throw new Error('Room not found');
+
+    // Validate payment mode
+    let finalPaymentMode = bookingData.paymentMode || 'offline';
+
+    if (finalPaymentMode === 'online' && !hotel.onlinePaymentEnabled) {
+      throw new Error('Online payment is not enabled for this hotel');
+    }
+    if (finalPaymentMode === 'offline' && !hotel.offlinePaymentEnabled) {
+      throw new Error('Offline payment is not enabled for this hotel');
+    }
+
+    // Price validation
+    const nights = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60 * 24));
+    const expectedPrice = room.pricePerNight * nights;
+
+    // Coupon validation
+    let couponValidation = null;
+    let finalAmount = bookingData.totalAmount;
+
+    if (bookingData.couponCode) {
+      try {
+        couponValidation = await this.couponService.validateCoupon(
+          bookingData.couponCode,
+          bookingData.hotelId,
+          room.roomType,
+          bookingData.totalAmount
+        );
+
+        if (couponValidation) {
+          finalAmount = couponValidation.finalAmount;
+
+          // Validate price with coupon
+          if (Math.abs(bookingData.frontendPrice - couponValidation.finalAmount) > 0.01) {
+            throw new ConflictError(`Price mismatch: Expected ${couponValidation.finalAmount}, received ${bookingData.frontendPrice}`);
+          }
+        }
+      } catch (error) {
+        throw new NotFoundError('Coupon Not Found');
+      }
+    } else {
+      // Validate price without coupon
+      if (Math.abs(bookingData.frontendPrice - expectedPrice) > 0.01) {
+        throw new ConflictError(`Price mismatch: Expected ${expectedPrice}, received ${bookingData.frontendPrice}`);
+      }
+    }
+
+    return { hotel, room, couponValidation, finalAmount, finalPaymentMode };
+  }
+
+  // Separate async method for notifications (runs after transaction)
+  private async sendBookingNotifications(
+    bookingId: string,
+    bookingData: any,
+    hotel: any,
+    room: any,
+    couponValidation: any
+  ) {
+    const nights = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60 * 24));
+
+    try {
+      // Send push notification
+      await this.notificationService.sendInstantBookingSuccessNotification(bookingData.userId, {
+        title: 'Booking Confirmed! 🎉',
+        message: `Your booking at ${hotel.name} has been confirmed. Booking ID: ${bookingId}`,
+        type: 'booking_confirmed',
+        data: {
+          bookingId,
+          hotelName: hotel.name,
+          checkInDate: bookingData.checkIn.toISOString(),
+          checkOutDate: bookingData.checkOut.toISOString(),
+        }
+      });
+
+      // Send email notification
+      await this.notificationService.sendImmediateNotification({
+        userId: bookingData.userId,
+        type: 'email',
+        title: "Booking Confirmation",
+        message: generateBookingConfirmationEmail({
+          bookingId,
+          hotel,
+          room,
+          guestName: bookingData.guestName,
+          guestEmail: bookingData.guestEmail,
+          guestPhone: bookingData.guestPhone,
+          checkIn: bookingData.checkIn,
+          checkOut: bookingData.checkOut,
+          guests: bookingData.guests,
+          totalAmount: bookingData.totalAmount,
+          paymentMode: bookingData.paymentMode,
+          status: "confirmed",
+          couponValidation,
+          nights
+        }),
+        email: bookingData.guestEmail
+      });
+
+      console.log(`Notifications sent successfully for booking ${bookingId}`);
+    } catch (error) {
+      console.error(`Failed to send notifications for booking ${bookingId}:`, error);
+      // Could implement retry logic here or add to a dead letter queue
+    }
+  }
   // Get booking by ID
   async getBookingById(bookingId: string) {
     const db = this.fastify.db;

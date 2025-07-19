@@ -91,11 +91,19 @@ export class BookingController {
         couponCode:bookingData.couponCode
       });
 
+      console.log('booking final  is ',booking)
       return reply.code(201).send({
         success: true,
         message: 'Booking created successfully',
         data: {
-          booking,
+          booking:{
+            ...booking,
+            checkIn:booking?.checkInDate,
+            checkOut:booking?.checkOutDate,
+            guests: booking?.guestCount,
+            
+
+          },
           paymentInfo: {
             totalAmount,
             currency: 'INR',
