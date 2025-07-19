@@ -173,11 +173,123 @@ export const sendEmailSchema = {
 };
 
 export const sendSMSSchema = {
-  body: zodToJsonSchema(SendSMSRequestSchema),
-  response: {
-    201: zodToJsonSchema(SMSResponseSchema),
-  },
   tags: ['notifications'],
   summary: 'Send SMS notification',
-  description: 'Send an SMS notification (Admin only)',
+  body: {
+    type: 'object',
+    required: ['to', 'message'],
+    properties: {
+      to: { type: 'string', minLength: 1 },
+      message: { type: 'string', minLength: 1 },
+    },
+  },
+  response: {
+    201: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+        data: { type: 'object' },
+      },
+    },
+    400: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+        errors: { type: 'array' },
+      },
+    },
+    500: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+      },
+    },
+  },
+};
+
+export const registerTokenSchema = {
+  tags: ['notifications'],
+  summary: 'Register push token',
+  body: {
+    type: 'object',
+    required: ['token', 'platform'],
+    properties: {
+      token: { type: 'string', minLength: 1 },
+      platform: { type: 'string', enum: ['ios', 'android', 'web'] },
+      deviceInfo: {
+        type: 'object',
+        properties: {
+          brand: { type: 'string' },
+          modelName: { type: 'string' },
+          osName: { type: 'string' },
+          osVersion: { type: 'string' },
+        },
+      },
+    },
+  },
+  response: {
+    201: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+        data: { type: 'object' },
+      },
+    },
+    400: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+        errors: { type: 'array' },
+      },
+    },
+    500: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+      },
+    },
+  },
+};
+
+export const testNotificationSchema = {
+  tags: ['notifications'],
+  summary: 'Send test notification',
+  body: {
+    type: 'object',
+    required: ['message'],
+    properties: {
+      message: { type: 'string', minLength: 1 },
+    },
+  },
+  response: {
+    201: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+        data: { type: 'object' },
+      },
+    },
+    400: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+        errors: { type: 'array' },
+      },
+    },
+    500: {
+      type: 'object',
+      properties: {
+        success: { type: 'boolean' },
+        message: { type: 'string' },
+      },
+    },
+  },
 };

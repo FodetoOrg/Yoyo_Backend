@@ -3,11 +3,14 @@ import {
   notificationQueue, 
   notificationTemplates, 
   userNotificationPreferences,
-  notifications 
+  notifications,
+  pushTokens,
+  users
 } from "../models/schema";
 import { eq, and, desc, lt, inArray } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import admin from "../config/firebase/firebase";
+import { Expo, ExpoPushMessage, ExpoPushTicket } from 'expo-server-sdk';
 
 interface NotificationData {
   userId: string;
@@ -31,9 +34,107 @@ interface SMSNotificationData {
 
 export class NotificationService {
   private fastify!: FastifyInstance;
+  private expo: Expo;
+
+  constructor() {
+    this.expo = new Expo();
+  }
 
   setFastify(fastify: FastifyInstance) {
     this.fastify = fastify;
+  }
+
+  // Register push token for a device
+  async registerPushToken(userId: string, token: string, deviceId: string, platform: string, deviceInfo?: any) {
+    const db = this.fastify.db;
+
+    try {
+      // Check if token already exists for this device
+      const existingToken = await db.query.pushTokens.findFirst({
+        where: eq(pushTokens.deviceId, deviceId)
+      });
+
+      const tokenData = {
+        userId,
+        pushToken: token,
+        deviceId,
+        platform,
+        deviceInfo: deviceInfo ? JSON.stringify(deviceInfo) : null,
+        isActive: true,
+        lastUsed: new Date(),
+        updatedAt: new Date(),
+      };
+
+      if (existingToken) {
+        // Update existing token
+        const result = await db.update(pushTokens)
+          .set(tokenData)
+          .where(eq(pushTokens.deviceId, deviceId))
+          .returning();
+        
+        return result[0];
+      } else {
+        // Create new token record
+        const newToken = await db.insert(pushTokens).values({
+          id: uuidv4(),
+          ...tokenData,
+        }).returning();
+        
+        return newToken[0];
+      }
+    } catch (error) {
+      console.error('Failed to register push token:', error);
+      throw new Error('Failed to register push token');
+    }
+  }
+
+  // Get active push tokens for a user
+  async getUserPushTokens(userId: string) {
+    const db = this.fastify.db;
+    
+    return await db.query.pushTokens.findMany({
+      where: and(
+        eq(pushTokens.userId, userId),
+        eq(pushTokens.isActive, true)
+      ),
+    });
+  }
+
+  // Deactivate push token
+  async deactivatePushToken(deviceId: string) {
+    const db = this.fastify.db;
+    
+    await db.update(pushTokens)
+      .set({ 
+        isActive: false, 
+        updatedAt: new Date() 
+      })
+      .where(eq(pushTokens.deviceId, deviceId));
+  }
+
+  // Clean up invalid tokens
+  async cleanupInvalidTokens(invalidTokens: string[]) {
+    const db = this.fastify.db;
+    
+    if (invalidTokens.length > 0) {
+      await db.update(pushTokens)
+        .set({ 
+          isActive: false, 
+          updatedAt: new Date() 
+        })
+        .where(inArray(pushTokens.pushToken, invalidTokens));
+    }
+  }
+
+  // Send test notification
+  async sendTestNotification(userId: string, message: string) {
+    return await this.queueNotification({
+      userId,
+      type: 'push',
+      title: 'Test Notification',
+      message,
+      source: 'test'
+    });
   }
 
   // Queue notification with priority and fail-safe delivery
@@ -380,32 +481,81 @@ export class NotificationService {
     }
   }
 
-  // Send push notification
+  // Send push notification using Expo SDK
   async sendPushNotification(notification: any) {
     try {
-      if (!notification.pushToken) {
-        throw new Error('Push token not available');
+      const db = this.fastify.db;
+      
+      // Get user's push tokens if not provided
+      let pushTokens: string[] = [];
+      
+      if (notification.pushToken) {
+        pushTokens = [notification.pushToken];
+      } else {
+        const userTokens = await this.getUserPushTokens(notification.userId);
+        pushTokens = userTokens.map(token => token.pushToken);
       }
 
-      const message = {
-        token: notification.pushToken,
-        notification: {
-          title: notification.title,
-          body: notification.message,
-        },
-        data: notification.data ? JSON.parse(notification.data) : {},
-        android: {
-          priority: 'high' as const,
-        },
-        apns: {
-          headers: {
-            'apns-priority': '10',
-          },
-        },
-      };
+      if (pushTokens.length === 0) {
+        throw new Error('No valid push tokens found');
+      }
 
-      const result = await admin.messaging().send(message);
-      return { messageId: result, provider: 'fcm' };
+      // Filter valid Expo push tokens
+      const validTokens = pushTokens.filter(token => 
+        Expo.isExpoPushToken(token)
+      );
+
+      if (validTokens.length === 0) {
+        throw new Error('No valid Expo push tokens found');
+      }
+
+      // Prepare push messages
+      const messages: ExpoPushMessage[] = validTokens.map(token => ({
+        to: token,
+        title: notification.title,
+        body: notification.message,
+        data: notification.data ? JSON.parse(notification.data) : {},
+        sound: 'default',
+        priority: 'high',
+      }));
+
+      // Send notifications in chunks
+      const chunks = this.expo.chunkPushNotifications(messages);
+      const tickets: ExpoPushTicket[] = [];
+
+      for (const chunk of chunks) {
+        try {
+          const ticketChunk = await this.expo.sendPushNotificationsAsync(chunk);
+          tickets.push(...ticketChunk);
+        } catch (error) {
+          console.error('Error sending push notification chunk:', error);
+        }
+      }
+
+      // Process tickets and handle errors
+      const invalidTokens: string[] = [];
+      
+      tickets.forEach((ticket, index) => {
+        if (ticket.status === 'error') {
+          console.error('Push notification error:', ticket);
+          
+          if (ticket.details?.error === 'DeviceNotRegistered') {
+            invalidTokens.push(validTokens[index]);
+          }
+        }
+      });
+
+      // Clean up invalid tokens
+      if (invalidTokens.length > 0) {
+        await this.cleanupInvalidTokens(invalidTokens);
+      }
+
+      return { 
+        messageIds: tickets.map(t => t.status === 'ok' ? t.id : null).filter(Boolean),
+        provider: 'expo',
+        sentCount: tickets.filter(t => t.status === 'ok').length,
+        totalCount: tickets.length
+      };
 
     } catch (error) {
       console.error('Push notification failed:', error);
