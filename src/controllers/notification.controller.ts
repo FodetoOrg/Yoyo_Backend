@@ -267,6 +267,10 @@ export class NotificationController {
     try {
       const userId = (request as any).user.id;
       const { token, platform, deviceInfo } = registerTokenSchema.parse(request.body);
+
+      console.log('token, platform, deviceInfo ',token)
+      console.log(platform)
+      console.log('deviceInfo ',deviceInfo)
       
       // Generate device ID from user and platform info
       const deviceId = `${userId}-${platform}-${Date.now()}`;

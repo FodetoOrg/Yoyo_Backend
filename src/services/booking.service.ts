@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
-import { bookings, hotels, rooms, users, customerProfiles, coupons, payments } from '../models/schema';
-import { eq, and, desc, asc, count, not, lt, gt } from 'drizzle-orm';
+import { bookings, hotels, rooms, users, customerProfiles, coupons, payments, bookingCoupons } from '../models/schema';
+import { eq, and, desc, asc, count, not, lt, gt, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { NotFoundError, ConflictError } from '../types/errors';
 import { CouponService } from './coupon.service';
@@ -95,6 +95,9 @@ export class BookingService {
     paymentMode?: string;
     advanceAmount?: number;
     couponCode?: string;
+    guestName: string;
+    guestEmail: string;
+    guestPhone: string;
   }) {
     const db = this.fastify.db;
     const bookingId = uuidv4();
@@ -118,13 +121,7 @@ export class BookingService {
       }
 
       // Calculate expected price
-      const nights = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60 * 24));
-      const expectedPrice = room.pricePerNight * nights;
-
-      // Validate price from frontend matches calculated price
-      if (Math.abs(bookingData.frontendPrice - expectedPrice) > 0.01) {
-        throw new Error(`Price mismatch: Expected ${expectedPrice}, received ${bookingData.frontendPrice}`);
-      }
+      console.log('booking data ', bookingData)
 
       // Determine payment mode based on hotel configuration and user preference
       let finalPaymentMode = bookingData.paymentMode || 'offline';
@@ -142,21 +139,9 @@ export class BookingService {
         throw new Error('Offline payment is not enabled for this hotel');
       }
 
-      // Set payment requirements based on mode
-      if (finalPaymentMode === 'online') {
-        requiresOnlinePayment = true;
-      } else {
-        // For offline payments, set due date (e.g., 24 hours before check-in)
-        paymentDueDate = new Date(bookingData.checkIn);
-        paymentDueDate.setHours(paymentDueDate.getHours() - 24);
 
-        // Handle advance payment if specified
-        if (bookingData.advanceAmount && bookingData.advanceAmount > 0) {
-          advanceAmount = Math.min(bookingData.advanceAmount, bookingData.totalAmount);
-          remainingAmount = bookingData.totalAmount - advanceAmount;
-        }
-      }
-
+      const nights = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60 * 24));
+      const expectedPrice = room.pricePerNight * nights;
       // Coupon validation
       let couponValidation = null;
       let finalAmount = bookingData.totalAmount;
@@ -172,13 +157,53 @@ export class BookingService {
             bookingData.totalAmount
           );
 
-          if (couponValidation) {
-            discountAmount = couponValidation.discountAmount;
-            finalAmount = couponValidation.finalAmount;
-            couponId = couponValidation.coupon.id;
-          }
+          console.log('couponValidation ', couponValidation)
+          console.log('coupn id ', bookingData.couponCode)
+
+
+
+
+
+          // if (couponValidation) {
+          //   discountAmount = couponValidation.discountAmount;
+          //   finalAmount = couponValidation.finalAmount;
+          //   couponId = couponValidation.coupon.id;
+          // }
         } catch (error) {
-          throw new Error(`Coupon validation failed: ${error.message}`);
+          throw new NotFoundError('Coupon Not Found')
+
+        }
+      } else {
+
+        if (Math.abs(bookingData.frontendPrice - expectedPrice) > 0.01) {
+          throw new ConflictError(`Price mismatch: Expected ${expectedPrice}, received ${bookingData.frontendPrice}`);
+        }
+
+      }
+
+      if (couponValidation) {
+        // Validate price from frontend matches calculated price
+        if (Math.abs(bookingData.frontendPrice - couponValidation?.finalAmount) > 0.01) {
+          throw new ConflictError(`Price mismatch: Expected ${expectedPrice}, received ${bookingData.frontendPrice}`);
+        }
+        bookingData.totalAmount = couponValidation.finalAmount
+
+      }
+
+
+
+      // Set payment requirements based on mode
+      if (finalPaymentMode === 'online') {
+        requiresOnlinePayment = true;
+      } else {
+        // For offline payments, set due date (e.g., 24 hours before check-in)
+        paymentDueDate = new Date(bookingData.checkIn);
+        paymentDueDate.setHours(paymentDueDate.getHours() - 24);
+
+        // Handle advance payment if specified
+        if (bookingData.advanceAmount && bookingData.advanceAmount > 0) {
+          advanceAmount = Math.min(bookingData.advanceAmount, bookingData.totalAmount);
+          remainingAmount = bookingData.totalAmount - advanceAmount;
         }
       }
 
@@ -193,7 +218,7 @@ export class BookingService {
         bookingType: 'daily', // Assuming default booking type is daily
         totalHours: 24, // Assuming default total hours is 24
         guestCount: bookingData.guests,
-        totalAmount: finalAmount,
+        totalAmount: bookingData.totalAmount,
         paymentMode: finalPaymentMode,
         requiresOnlinePayment,
         paymentDueDate,
@@ -202,9 +227,23 @@ export class BookingService {
         specialRequests: bookingData.specialRequests,
         status: finalPaymentMode === 'offline' ? 'confirmed' : 'pending',
         paymentStatus: finalPaymentMode === 'offline' ? 'pending' : 'pending',
-        couponId: couponId,
-        discountAmount: discountAmount
+        guestEmail: bookingData.guestEmail,
+        guestName: bookingData.guestName,
+        guestPhone: bookingData.guestPhone
       });
+
+      if (couponValidation) {
+
+        await tx.insert(bookingCoupons).values({
+          id: uuidv4(),
+          bookingId: bookingId,
+          couponId: couponValidation.coupon.id,
+          discountAmount: couponValidation.discountAmount,
+
+
+        })
+
+      }
 
       // Create payment record
       const paymentId = uuidv4();
@@ -239,10 +278,10 @@ export class BookingService {
       }
 
       // Update coupon usage if applied
-      if (couponId) {
+      if (couponValidation) {
         await tx.update(coupons)
           .set({
-            usedCount: couponValidation.coupon.usedCount + 1,
+            usedCount: sql`${coupons.usedCount} + 1`,
             updatedAt: new Date()
           })
           .where(eq(coupons.id, couponId));
@@ -250,7 +289,7 @@ export class BookingService {
 
       // Send push notification for successful booking
       try {
-        await this.notificationService.sendNotification(bookingData.userId, {
+       const response  = await this.notificationService.sendInstantBookingSuccessNotification(bookingData.userId, {
           title: 'Booking Confirmed! 🎉',
           message: `Your booking at ${hotel.name} has been confirmed. Booking ID: ${bookingId}`,
           type: 'booking_confirmed',
@@ -261,7 +300,9 @@ export class BookingService {
             checkOutDate: bookingData.checkOut.toISOString(),
           }
         });
+        console.log('response in sending notification ',response)
       } catch (notificationError) {
+        console.log('error in sending ',notificationError)
         // Log notification error but don't fail the booking
         this.fastify.log.error('Failed to send booking notification:', notificationError);
       }
@@ -737,10 +778,10 @@ export class BookingService {
       }
     }
 
-    console.log('booking.hotel.amenities ',booking.hotel.amenities)
+    console.log('booking.hotel.amenities ', booking.hotel.amenities)
 
     // Get amenities (assuming these are stored in room type or hotel)
-    const amenities = JSON.parse(booking.hotel.amenities) || []  
+    const amenities = JSON.parse(booking.hotel.amenities) || []
 
 
     return {

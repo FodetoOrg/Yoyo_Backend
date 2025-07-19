@@ -31,7 +31,11 @@ export const CreateBookingBodySchema = z.object({
   specialRequests: z.string().optional(),
   paymentMode: z.enum(['online', 'offline']).optional(),
   advanceAmount: z.number().positive().optional(),
-  couponCode: z.string().optional()
+  couponCode: z.string().optional(),
+  guestName: z.string().min(1),
+  guestEmail: z.string().email(),
+  guestPhone: z.string().min(10),
+  totalAmount:z.number()
 });
 
 export const CreateBookingResponseSchema = z.object({

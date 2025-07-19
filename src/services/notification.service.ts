@@ -1,7 +1,7 @@
 import { FastifyInstance } from "fastify";
-import { 
-  notificationQueue, 
-  notificationTemplates, 
+import {
+  notificationQueue,
+  notificationTemplates,
   userNotificationPreferences,
   notifications,
   pushTokens,
@@ -51,7 +51,7 @@ export class NotificationService {
     try {
       // Check if token already exists for this device
       const existingToken = await db.query.pushTokens.findFirst({
-        where: eq(pushTokens.deviceId, deviceId)
+        where: eq(pushTokens.pushToken, token)
       });
 
       const tokenData = {
@@ -65,23 +65,22 @@ export class NotificationService {
         updatedAt: new Date(),
       };
 
-      if (existingToken) {
-        // Update existing token
-        const result = await db.update(pushTokens)
-          .set(tokenData)
-          .where(eq(pushTokens.deviceId, deviceId))
-          .returning();
-        
-        return result[0];
-      } else {
-        // Create new token record
-        const newToken = await db.insert(pushTokens).values({
+      return await db.transaction(async (tx) => {
+        if (existingToken) {
+          // Update existing token
+          await tx.delete(pushTokens)
+            .where(eq(pushTokens.id, existingToken.id))
+
+
+
+
+        }
+        const newToken = await tx.insert(pushTokens).values({
           id: uuidv4(),
           ...tokenData,
         }).returning();
-        
         return newToken[0];
-      }
+      })
     } catch (error) {
       console.error('Failed to register push token:', error);
       throw new Error('Failed to register push token');
@@ -91,7 +90,7 @@ export class NotificationService {
   // Get active push tokens for a user
   async getUserPushTokens(userId: string) {
     const db = this.fastify.db;
-    
+
     return await db.query.pushTokens.findMany({
       where: and(
         eq(pushTokens.userId, userId),
@@ -103,11 +102,11 @@ export class NotificationService {
   // Deactivate push token
   async deactivatePushToken(deviceId: string) {
     const db = this.fastify.db;
-    
+
     await db.update(pushTokens)
-      .set({ 
-        isActive: false, 
-        updatedAt: new Date() 
+      .set({
+        isActive: false,
+        updatedAt: new Date()
       })
       .where(eq(pushTokens.deviceId, deviceId));
   }
@@ -115,12 +114,12 @@ export class NotificationService {
   // Clean up invalid tokens
   async cleanupInvalidTokens(invalidTokens: string[]) {
     const db = this.fastify.db;
-    
+
     if (invalidTokens.length > 0) {
       await db.update(pushTokens)
-        .set({ 
-          isActive: false, 
-          updatedAt: new Date() 
+        .set({
+          isActive: false,
+          updatedAt: new Date()
         })
         .where(inArray(pushTokens.pushToken, invalidTokens));
     }
@@ -136,7 +135,161 @@ export class NotificationService {
       source: 'test'
     });
   }
+  async sendInstantBookingSuccessNotification(userId: string, options: {
+    title: string;
+    message: string;
+    type: string;
+    data: {
+      bookingId: string;
+      hotelName: string;
+      checkInDate: string;
+      checkOutDate: string;
+      [key: string]: any;
+    };
+  }) {
+    try {
+      const db = this.fastify.db;
 
+      // Get user's active push tokens
+      const userTokens = await this.getUserPushTokens(userId);
+
+      if (userTokens.length === 0) {
+        console.log(`No push tokens found for user ${userId}`);
+        return { success: false, reason: 'No push tokens found' };
+      }
+
+      console.log('userTokens ', userTokens);
+
+      // Check user preferences quickly
+      const preferences = await this.getUserPreferences(userId);
+      if (!preferences.pushEnabled || !preferences.bookingNotifications) {
+        console.log(`Push notifications disabled for user ${userId}`);
+        return { success: false, reason: 'Push notifications disabled' };
+      }
+
+      // Get the first (and only) push token
+      const pushToken = userTokens[0].pushToken; // Fixed: use pushToken property
+
+      // Check if it's a valid Expo push token
+      const isValidToken = Expo.isExpoPushToken(pushToken);
+      console.log('checking validToken:', isValidToken);
+
+      if (!isValidToken) { // Fixed: inverted logic
+        console.log(`Invalid Expo token for user ${userId}`);
+        return { success: false, reason: 'Invalid Expo token' };
+      }
+
+      // Prepare push message data
+      const notificationData = {
+        ...options.data,
+        type: options.type,
+        action: 'booking_success'
+      };
+
+      console.log('notificationData ', notificationData);
+
+      // Create push message (single message, not array)
+      const message: ExpoPushMessage = { // Fixed: single object, not array
+        to: pushToken,
+        title: options.title,
+        body: options.message,
+        data: notificationData,
+        sound: 'default',
+        priority: 'high',
+        badge: 1,
+        categoryId: 'booking_success',
+        channelId: 'booking_notifications',
+      };
+
+      console.log('Sending push notification:', message);
+
+      // Send immediately using Expo SDK
+      const chunks = this.expo.chunkPushNotifications([message]); // Fixed: wrap in array
+      const tickets: ExpoPushTicket[] = [];
+
+      for (const chunk of chunks) {
+        try {
+          const ticketChunk = await this.expo.sendPushNotificationsAsync(chunk);
+          tickets.push(...ticketChunk);
+          console.log('Push notification sent, tickets:', ticketChunk);
+        } catch (error) {
+          console.error('Error sending instant push notification chunk:', error);
+          throw error; // Re-throw to be caught by outer try-catch
+        }
+      }
+
+      // Process tickets and handle errors
+      const invalidTokens: string[] = [];
+      let successfulDeliveries: any = [];
+
+      tickets.forEach((ticket, index) => {
+        if (ticket.status === 'ok') {
+          successfulDeliveries.push({
+            token: pushToken, // Fixed: use pushToken variable
+            ticketId: ticket.id
+          });
+          console.log('Push notification delivered successfully:', ticket.id);
+        } else if (ticket.status === 'error') {
+          console.error('Push notification error:', ticket);
+
+          if (ticket.details?.error === 'DeviceNotRegistered') {
+            invalidTokens.push(pushToken); // Fixed: use pushToken variable
+          }
+        }
+      });
+
+      // Clean up invalid tokens asynchronously
+      if (invalidTokens.length > 0) {
+        console.log('Cleaning up invalid tokens:', invalidTokens);
+        setImmediate(() => this.cleanupInvalidTokens(invalidTokens));
+      }
+
+      // Also create in-app notification record for backup
+      setImmediate(() => {
+        this.createInAppNotification({
+          userId: userId,
+          title: options.title,
+          message: options.message,
+          data: JSON.stringify(notificationData)
+        });
+      });
+
+      const response = {
+        success: successfulDeliveries.length > 0,
+        sentCount: successfulDeliveries.length,
+        totalTokens: 1, // Fixed: always 1 since we're sending to one user
+        invalidTokensRemoved: invalidTokens.length,
+        deliveries: successfulDeliveries,
+        timestamp: new Date(),
+      };
+
+      console.log(`Instant booking notification result:`, response);
+
+      return response;
+
+    } catch (error) {
+      console.error('Failed to send instant booking notification:', error);
+
+      // Fallback: Queue the notification for retry
+      setImmediate(() => {
+        this.queueNotification({
+          userId: userId,
+          type: 'push',
+          priority: 1, // High priority
+          title: options.title,
+          message: options.message,
+          data: options.data,
+          source: 'booking_success_fallback'
+        });
+      });
+
+      return {
+        success: false,
+        error: error.message,
+        fallbackQueued: true
+      };
+    }
+  }
   // Queue notification with priority and fail-safe delivery
   async queueNotification(data: {
     userId: string;
@@ -158,7 +311,7 @@ export class NotificationService {
     try {
       // Get user preferences
       const preferences = await this.getUserPreferences(data.userId);
-      
+
       // Check if user has enabled this type of notification
       if (!this.isNotificationAllowed(data.type, preferences)) {
         console.log(`Notification blocked by user preferences: ${data.type} for user ${data.userId}`);
@@ -228,7 +381,7 @@ export class NotificationService {
       // Process each channel
       const promises = channels.map(async (channel: string) => {
         const content = this.processTemplate(template, channel, variables);
-        
+
         return this.queueNotification({
           userId,
           type: channel as any,
@@ -272,7 +425,7 @@ export class NotificationService {
       const concurrency = 10;
       for (let i = 0; i < pendingNotifications.length; i += concurrency) {
         const batch = pendingNotifications.slice(i, i + concurrency);
-        await Promise.all(batch.map(notification => 
+        await Promise.all(batch.map(notification =>
           this.processNotification(notification.id)
         ));
       }
@@ -485,10 +638,10 @@ export class NotificationService {
   async sendPushNotification(notification: any) {
     try {
       const db = this.fastify.db;
-      
+
       // Get user's push tokens if not provided
       let pushTokens: string[] = [];
-      
+
       if (notification.pushToken) {
         pushTokens = [notification.pushToken];
       } else {
@@ -501,7 +654,7 @@ export class NotificationService {
       }
 
       // Filter valid Expo push tokens
-      const validTokens = pushTokens.filter(token => 
+      const validTokens = pushTokens.filter(token =>
         Expo.isExpoPushToken(token)
       );
 
@@ -534,11 +687,11 @@ export class NotificationService {
 
       // Process tickets and handle errors
       const invalidTokens: string[] = [];
-      
+
       tickets.forEach((ticket, index) => {
         if (ticket.status === 'error') {
           console.error('Push notification error:', ticket);
-          
+
           if (ticket.details?.error === 'DeviceNotRegistered') {
             invalidTokens.push(validTokens[index]);
           }
@@ -550,7 +703,7 @@ export class NotificationService {
         await this.cleanupInvalidTokens(invalidTokens);
       }
 
-      return { 
+      return {
         messageIds: tickets.map(t => t.status === 'ok' ? t.id : null).filter(Boolean),
         provider: 'expo',
         sentCount: tickets.filter(t => t.status === 'ok').length,
@@ -580,7 +733,7 @@ export class NotificationService {
   // Helper methods
   private async getUserPreferences(userId: string) {
     const db = this.fastify.db;
-    
+
     let preferences = await db.query.userNotificationPreferences.findFirst({
       where: eq(userNotificationPreferences.userId, userId)
     });
@@ -626,9 +779,9 @@ export class NotificationService {
 
   private isQuietHours(preferences: any): boolean {
     const now = new Date();
-    const currentTime = now.toLocaleTimeString('en-US', { 
-      hour12: false, 
-      timeZone: preferences.timezone 
+    const currentTime = now.toLocaleTimeString('en-US', {
+      hour12: false,
+      timeZone: preferences.timezone
     }).substring(0, 5);
 
     const start = preferences.quietHoursStart;
@@ -645,20 +798,20 @@ export class NotificationService {
     const now = new Date();
     const tomorrow = new Date(now);
     tomorrow.setDate(tomorrow.getDate() + 1);
-    
+
     const [hours, minutes] = preferences.quietHoursEnd.split(':');
     tomorrow.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-    
+
     return tomorrow;
   }
 
   private getRetryTime(attempt: number): Date {
     const delays = [1, 5, 15, 30]; // minutes
     const delay = delays[Math.min(attempt - 1, delays.length - 1)];
-    
+
     const retryTime = new Date();
     retryTime.setMinutes(retryTime.getMinutes() + delay);
-    
+
     return retryTime;
   }
 
@@ -690,7 +843,7 @@ export class NotificationService {
 
   private replaceVariables(template: string, variables: any): string {
     if (!template) return '';
-    
+
     return template.replace(/\{\{(\w+)\}\}/g, (match, key) => {
       return variables[key] || match;
     });
@@ -791,7 +944,7 @@ export class NotificationService {
         type: 'success',
         data: { bookingId: booking.id },
       }),
-      
+
       // Email notification
       this.sendEmailNotification({
         to: booking.user.email,
@@ -826,7 +979,7 @@ export class NotificationService {
         type: 'warning',
         data: { invoiceId: invoice.id },
       }),
-      
+
       // Email notification
       this.sendEmailNotification({
         to: invoice.user.email,

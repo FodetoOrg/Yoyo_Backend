@@ -85,6 +85,10 @@ export class BookingController {
         specialRequests: bookingData.specialRequests,
         paymentMode: bookingData.paymentMode,
         advanceAmount: bookingData.advanceAmount,
+        guestEmail:bookingData.guestEmail,
+        guestName:bookingData.guestName,
+        guestPhone:bookingData.guestPhone,
+        couponCode:bookingData.couponCode
       });
 
       return reply.code(201).send({
