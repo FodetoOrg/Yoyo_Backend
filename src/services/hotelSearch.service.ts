@@ -7,20 +7,20 @@ interface SearchFilters {
   coordinates?: { lat: number; lng: number };
   city?: string;
   radius?: number; // in km
-  
+
   // Dates and guests
   checkIn?: Date;
   checkOut?: Date;
   adults: number;
   children: number;
   infants: number;
-  
+
   // Filters
   priceRange?: { min?: number; max?: number };
   starRating?: number; // minimum star rating
   amenities?: string[];
   sortBy?: 'recommended' | 'price_low' | 'price_high' | 'rating' | 'distance';
-  
+
   // Pagination
   page?: number;
   limit?: number;
@@ -40,190 +40,192 @@ export class HotelSearchService {
   }
 
   // Main hotel search with distance-based filtering
-async searchHotels(filters: SearchFilters) {
-  const db = this.fastify.db;
-  const {
-    coordinates,
-    city, // Keep for context but don't filter by it
-    radius = 50,
-    checkIn,
-    checkOut,
-    adults,
-    children,
-    infants,
-    priceRange,
-    starRating,
-    amenities,
-    sortBy = 'distance', // Default to distance-based sorting
-    page = 1,
-    limit = 10
-  } = filters;
-
-  const totalGuests = adults + children; // infants don't count for capacity
-  
-  let whereConditions: any[] = [
-    eq(hotels.status, 'active')
-  ];
-
-  // Remove city-based filtering - we'll use coordinates instead
-  // if (city) {
-  //   whereConditions.push(like(hotels.city, `%${city}%`));
-  // }
-
-  // Star rating filter
-  if (starRating) {
-    whereConditions.push(sql`CAST(${hotels.starRating} as INTEGER) >= ${starRating}`);
-  }
-
-  // Get base hotels with reviews and images
-  const baseQuery = db
-    .select({
-      hotel: hotels,
-      avgRating: avg(hotelReviews.overallRating),
-      reviewCount: count(hotelReviews.id),
-      primaryImage: hotelImages.url,
-    })
-    .from(hotels)
-    .leftJoin(hotelReviews, and(
-      eq(hotels.id, hotelReviews.hotelId),
-      eq(hotelReviews.isApproved, true)
-    ))
-    .leftJoin(hotelImages, and(
-      eq(hotels.id, hotelImages.hotelId),
-      eq(hotelImages.isPrimary, true)
-    ))
-    .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
-    .groupBy(hotels.id, hotelImages.url);
-
-  let hotelsData = await baseQuery;
-
-  console.log('hotel data ',hotelsData)
-
-  // STEP 1: Distance calculation - Calculate distance for ALL hotels if coordinates provided
-  if (coordinates) {
-    hotelsData = hotelsData.map(hotel => ({
-      ...hotel,
-      distance: this.calculateDistance(
-        coordinates.lat,
-        coordinates.lng,
-        this.parseCoordinates(hotel.hotel.mapCoordinates)
-      )
-    }));
-    
-    // Sort by distance first to get nearest hotels
-    hotelsData = hotelsData.sort((a, b) => (a.distance || 0) - (b.distance || 0));
-    console.log('calculated distance ',hotelsData)
-    
-    // Filter by radius after calculating distance
-    hotelsData = hotelsData.filter(hotel => hotel.distance <= radius);
-  }
-
-  // STEP 2: Filter by available rooms for dates and guest capacity
-  if (checkIn && checkOut) {
-    const availableHotelIds = await this.getHotelsWithAvailableRooms(
+  async searchHotels(filters: SearchFilters) {
+    const db = this.fastify.db;
+    const {
+      coordinates,
+      city, // Keep for context but don't filter by it
+      radius = 50,
       checkIn,
       checkOut,
-      totalGuests,
-      priceRange
-    );
-    
-    if (availableHotelIds.length === 0) {
-      return {
-        hotels: [],
-        total: 0,
-        page,
-        limit,
-        totalPages: 0,
-      };
+      adults,
+      children,
+      infants,
+      priceRange,
+      starRating,
+      amenities,
+      sortBy = 'distance', // Default to distance-based sorting
+      page = 1,
+      limit = 10
+    } = filters;
+
+    const totalGuests = adults + children; // infants don't count for capacity
+
+    let whereConditions: any[] = [
+      eq(hotels.status, 'active')
+    ];
+
+    // Remove city-based filtering - we'll use coordinates instead
+    // if (city) {
+    //   whereConditions.push(like(hotels.city, `%${city}%`));
+    // }
+
+    // Star rating filter
+    if (starRating) {
+      whereConditions.push(sql`CAST(${hotels.starRating} as INTEGER) >= ${starRating}`);
     }
-    
-    // Filter hotels to only include those with available rooms
-    hotelsData = hotelsData.filter(h => availableHotelIds.includes(h.hotel.id));
-    console.log('after all filtering ',hotelsData)
-  }
 
-  // STEP 3: Amenities filtering
-  if (amenities && amenities.length > 0) {
-    hotelsData = hotelsData.filter(hotel => {
-      const hotelAmenities = hotel.hotel.amenities ? JSON.parse(hotel.hotel.amenities) : [];
-      return amenities.every(amenity => hotelAmenities.includes(amenity));
-    });
-  }
+    // Get base hotels with reviews and images
+    const baseQuery = db
+      .select({
+        hotel: hotels,
+        avgRating: avg(hotelReviews.overallRating),
+        reviewCount: count(hotelReviews.id),
+        primaryImage: hotelImages.url,
+      })
+      .from(hotels)
+      .leftJoin(hotelReviews, and(
+        eq(hotels.id, hotelReviews.hotelId),
+        eq(hotelReviews.isApproved, true)
+      ))
+      .leftJoin(hotelImages, and(
+        eq(hotels.id, hotelImages.hotelId),
+        eq(hotelImages.isPrimary, true)
+      ))
+      .where(whereConditions.length > 0 ? and(...whereConditions) : undefined)
+      .groupBy(hotels.id, hotelImages.url);
 
-  // STEP 4: Final sorting (distance is already applied if coordinates provided)
-  if (!coordinates || sortBy !== 'distance') {
-    hotelsData = this.sortHotels(hotelsData, sortBy);
-  }
+    let hotelsData = await baseQuery;
 
-  // Get pricing for each hotel and filter out hotels with no available rooms
-  const hotelsWithPricing = [];
-  
-  for (const hotelData of hotelsData) {
-    const pricing = await this.getHotelPricing(hotelData.hotel.id, checkIn, checkOut, totalGuests);
-    
-    // Skip hotels with no available rooms (pricing will be null)
-    if (!pricing) {
-      continue;
+    console.log('hotel data ', hotelsData)
+
+    // STEP 1: Distance calculation - Calculate distance for ALL hotels if coordinates provided
+    if (coordinates) {
+      hotelsData = hotelsData.map(hotel => ({
+        ...hotel,
+        distance: this.calculateDistance(
+          coordinates.lat,
+          coordinates.lng,
+          this.parseCoordinates(hotel.hotel.mapCoordinates)
+        )
+      }));
+
+      // Sort by distance first to get nearest hotels
+      hotelsData = hotelsData.sort((a, b) => (a.distance || 0) - (b.distance || 0));
+      console.log('calculated distance ', hotelsData)
+
+      // Filter by radius after calculating distance
+      hotelsData = hotelsData.filter(hotel => hotel.distance <= radius);
     }
-    
-    const offers = await this.getHotelOffers(hotelData.hotel.id);
-    
-    hotelsWithPricing.push({
-      id: hotelData.hotel.id,
-      name: hotelData.hotel.name,
-      description: hotelData.hotel.description,
-      address: hotelData.hotel.address,
-      city: hotelData.hotel.city,
-      starRating: parseInt(hotelData.hotel.starRating || '0'),
-      amenities: hotelData.hotel.amenities ? JSON.parse(hotelData.hotel.amenities) : [],
-      coordinates: this.parseCoordinates(hotelData.hotel.mapCoordinates),
-      distance: hotelData.distance || null,
-      rating: {
-        average: Math.round((hotelData.avgRating || 0) * 10) / 10,
-        count: hotelData.reviewCount || 0,
-      },
-      pricing: pricing,
-      offers: offers,
-      images: {
-        primary: hotelData.primaryImage,
-        gallery: await this.getHotelImages(hotelData.hotel.id),
-      },
-      paymentOptions: {
-        onlineEnabled: hotelData.hotel.onlinePaymentEnabled,
-        offlineEnabled: hotelData.hotel.offlinePaymentEnabled,
+
+    // STEP 2: Filter by available rooms for dates and guest capacity
+    if (checkIn && checkOut) {
+      const availableHotelIds = await this.getHotelsWithAvailableRooms(
+        checkIn,
+        checkOut,
+        totalGuests,
+        priceRange
+      );
+
+      if (availableHotelIds.length === 0) {
+        return {
+          hotels: [],
+          total: 0,
+          page,
+          limit,
+          totalPages: 0,
+        };
       }
-    });
-  }
 
-  // Pagination
-  const total = hotelsWithPricing.length;
-  const totalPages = Math.ceil(total / limit);
-  const startIndex = (page - 1) * limit;
-  const paginatedHotels = hotelsWithPricing.slice(startIndex, startIndex + limit);
-
-  return {
-    hotels: paginatedHotels,
-    total,
-    page,
-    limit,
-    totalPages,
-    filters: {
-      appliedFilters: {
-        location: coordinates ? `${coordinates.lat}, ${coordinates.lng}` : (city || 'All locations'),
-        radius: coordinates ? radius : null,
-        dates: checkIn && checkOut ? { checkIn, checkOut } : null,
-        guests: { adults, children, infants },
-        priceRange,
-        starRating,
-        amenities,
-      }
+      // Filter hotels to only include those with available rooms
+      hotelsData = hotelsData.filter(h => availableHotelIds.includes(h.hotel.id));
+      console.log('after all filtering ', hotelsData)
     }
-  };
-}
+
+    // STEP 3: Amenities filtering
+    if (amenities && amenities.length > 0) {
+      hotelsData = hotelsData.filter(hotel => {
+        const hotelAmenities = hotel.hotel.amenities ? JSON.parse(hotel.hotel.amenities) : [];
+        return amenities.every(amenity => hotelAmenities.includes(amenity));
+      });
+    }
+
+    // STEP 4: Final sorting (distance is already applied if coordinates provided)
+    if (!coordinates || sortBy !== 'distance') {
+      hotelsData = this.sortHotels(hotelsData, sortBy);
+    }
+
+    // Get pricing for each hotel and filter out hotels with no available rooms
+    const hotelsWithPricing = [];
+
+    for (const hotelData of hotelsData) {
+      const pricing = await this.getHotelPricing(hotelData.hotel.id, checkIn, checkOut, totalGuests);
+
+      // Skip hotels with no available rooms (pricing will be null)
+      if (!pricing) {
+        continue;
+      }
+
+      const offers = await this.getHotelOffers(hotelData.hotel.id);
+
+      hotelsWithPricing.push({
+        id: hotelData.hotel.id,
+        name: hotelData.hotel.name,
+        description: hotelData.hotel.description,
+        address: hotelData.hotel.address,
+        city: hotelData.hotel.city,
+        starRating: parseInt(hotelData.hotel.starRating || '0'),
+        amenities: hotelData.hotel.amenities ? JSON.parse(hotelData.hotel.amenities) : [],
+        coordinates: this.parseCoordinates(hotelData.hotel.mapCoordinates),
+        distance: hotelData.distance || null,
+        rating: {
+          average: Math.round((hotelData.avgRating || 0) * 10) / 10,
+          count: hotelData.reviewCount || 0,
+        },
+        pricing: pricing,
+        offers: offers,
+        images: {
+          primary: hotelData.primaryImage,
+          gallery: await this.getHotelImages(hotelData.hotel.id),
+        },
+        paymentOptions: {
+          onlineEnabled: hotelData.hotel.onlinePaymentEnabled,
+          offlineEnabled: hotelData.hotel.offlinePaymentEnabled,
+        }
+      });
+    }
+
+    // Pagination
+    const total = hotelsWithPricing.length;
+    const totalPages = Math.ceil(total / limit);
+    const startIndex = (page - 1) * limit;
+    const paginatedHotels = hotelsWithPricing.slice(startIndex, startIndex + limit);
+
+    return {
+      hotels: paginatedHotels,
+      total,
+      page,
+      limit,
+      totalPages,
+      filters: {
+        appliedFilters: {
+          location: coordinates ? `${coordinates.lat}, ${coordinates.lng}` : (city || 'All locations'),
+          radius: coordinates ? radius : null,
+          dates: checkIn && checkOut ? { checkIn, checkOut } : null,
+          guests: { adults, children, infants },
+          priceRange,
+          starRating,
+          amenities,
+        }
+      }
+    };
+  }
   // Home page tabs
   async getNearbyHotels(filters: HomeTabFilters) {
     const { coordinates, limit = 10 } = filters;
-    
+
+    console.log('coordinates ', coordinates)
+
     if (!coordinates) {
       return [];
     }
@@ -250,7 +252,7 @@ async searchHotels(filters: SearchFilters) {
       where: eq(hotels.status, 'active'),
       with: {
         images: {
-        
+
           limit: 1,
         }
       },
@@ -267,13 +269,13 @@ async searchHotels(filters: SearchFilters) {
           ),
         });
 
-        const avgRating = reviews.length > 0 
-          ? reviews.reduce((sum, r) => sum + r.overallRating, 0) / reviews.length 
+        const avgRating = reviews.length > 0
+          ? reviews.reduce((sum, r) => sum + r.overallRating, 0) / reviews.length
           : 0;
 
         const pricing = await this.getHotelPricing(hotel.id);
 
-        console.log('hotel is ',hotel)
+        console.log('hotel is ', hotel)
 
         return {
           id: hotel.id,
@@ -300,9 +302,9 @@ async searchHotels(filters: SearchFilters) {
             gallery: []
           },
           isNew: true,
-          paymentOptions:{
-            onlineEnabled:hotel.onlinePaymentEnabled,
-            offlineEnabled:hotel.offlinePaymentEnabled
+          paymentOptions: {
+            onlineEnabled: hotel.onlinePaymentEnabled,
+            offlineEnabled: hotel.offlinePaymentEnabled
           }
         };
       })
@@ -325,8 +327,8 @@ async searchHotels(filters: SearchFilters) {
       .innerJoin(coupons, and(
         eq(couponMappings.couponId, coupons.id),
         eq(coupons.status, 'active'),
-        sql`${coupons.validFrom} <= datetime('now')`,
-        sql`${coupons.validTo} >= datetime('now')`
+        lt(coupons.validFrom,new Date()),
+        gt(coupons.validTo,new Date()),
       ))
       .leftJoin(hotelImages, and(
         eq(hotels.id, hotelImages.hotelId),
@@ -335,6 +337,7 @@ async searchHotels(filters: SearchFilters) {
       .where(eq(hotels.status, 'active'))
       .limit(limit);
 
+    
     return Promise.all(
       hotelsWithOffers.map(async (item) => {
         const reviews = await db.query.hotelReviews.findMany({
@@ -344,8 +347,8 @@ async searchHotels(filters: SearchFilters) {
           ),
         });
 
-        const avgRating = reviews.length > 0 
-          ? reviews.reduce((sum, r) => sum + r.overallRating, 0) / reviews.length 
+        const avgRating = reviews.length > 0
+          ? reviews.reduce((sum, r) => sum + r.overallRating, 0) / reviews.length
           : 0;
 
         const pricing = await this.getHotelPricing(item.hotel.id);
@@ -367,13 +370,13 @@ async searchHotels(filters: SearchFilters) {
           images: {
             primary: item.primaryImage,
           },
-          offer: {
+          offers: [{
             title: item.coupon.description || `${item.coupon.discountValue}% OFF`,
             discountType: item.coupon.discountType,
             discountValue: item.coupon.discountValue,
             code: item.coupon.code,
             validUntil: item.coupon.validTo,
-          },
+          }],
         };
       })
     );
@@ -388,7 +391,7 @@ async searchHotels(filters: SearchFilters) {
   ): Promise<string[]> {
     const db = this.fastify.db;
 
-    
+
     let roomConditions: any[] = [
       sql`${rooms.capacity} >= ${guestCount}`,
       // Remove the status check as we'll check availability based on bookings
@@ -403,9 +406,9 @@ async searchHotels(filters: SearchFilters) {
 
     // Get all rooms that match criteria
     const allRooms = await db
-      .select({ 
+      .select({
         roomId: rooms.id,
-        hotelId: rooms.hotelId 
+        hotelId: rooms.hotelId
       })
       .from(rooms)
       .where(and(...roomConditions));
@@ -437,10 +440,10 @@ async searchHotels(filters: SearchFilters) {
 
     // Check for overlapping bookings that are not cancelled
     // Two bookings overlap if: checkIn < existing.checkOut AND checkOut > existing.checkIn
-    console.log('checkin ',checkIn)
-    console.log('checkout ',checkOut)
+    console.log('checkin ', checkIn)
+    console.log('checkout ', checkOut)
 
-   const conflictingBookings = await db.query.bookings.findMany({
+    const conflictingBookings = await db.query.bookings.findMany({
       where: and(
         eq(bookings.roomId, roomId),
         not(eq(bookings.status, 'cancelled')),
@@ -450,7 +453,7 @@ async searchHotels(filters: SearchFilters) {
       limit: 1
     });
 
-    console.log('conflictingBookings ',conflictingBookings)
+    console.log('conflictingBookings ', conflictingBookings)
 
     return conflictingBookings.length > 0;
   }
@@ -462,7 +465,7 @@ async searchHotels(filters: SearchFilters) {
       eq(rooms.hotelId, hotelId),
       eq(rooms.status, 'available') // Only include available rooms
     ];
-    
+
     // Always filter by guest capacity if provided
     if (guestCount) {
       roomConditions.push(sql`${rooms.capacity} >= ${guestCount}`);
@@ -476,19 +479,19 @@ async searchHotels(filters: SearchFilters) {
     // If dates are provided, further filter by booking availability
     if (checkIn && checkOut && availableRooms.length > 0) {
       const actuallyAvailableRooms = [];
-      
+
       for (const room of availableRooms) {
         const hasConflict = await this.checkRoomBookingConflict(
           room.id,
           checkIn,
           checkOut
         );
-        
+
         if (!hasConflict) {
           actuallyAvailableRooms.push(room);
         }
       }
-      
+
       availableRooms = actuallyAvailableRooms;
     }
 
@@ -541,7 +544,7 @@ async searchHotels(filters: SearchFilters) {
 
   private async getHotelImages(hotelId: string) {
     const db = this.fastify.db;
-    
+
     const images = await db.query.hotelImages.findMany({
       where: eq(hotelImages.hotelId, hotelId),
       orderBy: [desc(hotelImages.isPrimary)],
@@ -575,16 +578,16 @@ async searchHotels(filters: SearchFilters) {
     const R = 6371; // Earth's radius in km
     const dLat = this.deg2rad(coords2.lat - lat1);
     const dLng = this.deg2rad(coords2.lng - lng1);
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(this.deg2rad(lat1)) * Math.cos(this.deg2rad(coords2.lat)) * 
-      Math.sin(dLng/2) * Math.sin(dLng/2);
-    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(this.deg2rad(lat1)) * Math.cos(this.deg2rad(coords2.lat)) *
+      Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
   }
 
   private deg2rad(deg: number): number {
-    return deg * (Math.PI/180);
+    return deg * (Math.PI / 180);
   }
 
   private parseCoordinates(coordString: string): { lat: number; lng: number } {

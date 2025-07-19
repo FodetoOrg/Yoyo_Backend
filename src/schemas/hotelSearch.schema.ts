@@ -39,7 +39,8 @@ export const SearchHotelsRequestSchema = z.object({
 });
 
 export const HomeTabQuerySchema = z.object({
-  coordinates: CoordinatesSchema.optional().nullable(),
+  lat: z.number(),
+  lng: z.number(),
   limit: z.number().int().min(1).max(20).default(10),
 });
 
@@ -63,7 +64,7 @@ export const HotelPricingSchema = z.object({
   currency: z.string(),
   totalPrice: z.number().nullable(),
   perNight: z.boolean(),
-  availableRooms:z.number().optional()
+  availableRooms: z.number().optional()
 });
 
 export const HotelOfferSchema = z.object({
@@ -84,6 +85,25 @@ export const HotelSearchResultSchema = z.object({
   amenities: z.array(z.string()),
   coordinates: CoordinatesSchema,
   distance: z.number().nullable(),
+  rating: HotelRatingSchema,
+  pricing: HotelPricingSchema.nullable(),
+  offers: z.array(HotelOfferSchema).optional(),
+  images: HotelImageSchema,
+  paymentOptions: z.object({
+    onlineEnabled: z.boolean(),
+    offlineEnabled: z.boolean(),
+  }),
+});
+
+export const HotelOffersResultSchema = z.object({
+  id: z.string().uuid(),
+  name: z.string(),
+  description: z.string().nullable(),
+  address: z.string(),
+  city: z.string(),
+  starRating: z.number().min(0).max(5),
+  amenities: z.array(z.string()),
+  coordinates: CoordinatesSchema,
   rating: HotelRatingSchema,
   pricing: HotelPricingSchema.nullable(),
   offers: z.array(HotelOfferSchema).optional(),
@@ -208,7 +228,7 @@ export const getOffersHotelsSchema = {
     limit: z.number().int().min(1).max(20).default(10),
   })),
   response: {
-    200: zodToJsonSchema(HomeTabResponseSchema),
+    // 200: zodToJsonSchema(HotelOffersResultSchema),
     500: zodToJsonSchema(z.object({
       success: z.boolean(),
       message: z.string(),
