@@ -1,5 +1,5 @@
 
-import { InferSelectModel, relations } from "drizzle-orm";
+import { InferSelectModel, relations, sql } from "drizzle-orm";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { users } from "./User";
 
@@ -12,9 +12,9 @@ export const pushTokens = sqliteTable('push_tokens', {
   platform: text('platform').notNull(), // 'ios', 'android', 'web'
   deviceInfo: text('device_info'), // JSON string with device details
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
-  lastUsed: integer('last_used', { mode: 'timestamp' }).notNull().default(new Date()),
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(new Date()),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(new Date()),
+  lastUsed: integer('last_used', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
+  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
 // Define relationships

@@ -318,6 +318,16 @@ export class CouponService {
     // Check if coupon exists
     await this.getCouponById(id);
 
+    return await db.transaction(async (tx) => {
+      // Delete mappings first
+      await tx.delete(couponMappings).where(eq(couponMappings.couponId, id));
+      
+      // Delete coupon
+      await tx.delete(coupons).where(eq(coupons.id, id));
+      
+      return true;
+    });
+  }
 
   // Get all coupons for users (no permission restrictions)
   async getUserCoupons(filters: CouponFilters = {}) {
@@ -383,18 +393,6 @@ export class CouponService {
       limit,
       totalPages: Math.ceil(totalCoupons.length / limit),
     };
-  }
-
-
-    return await db.transaction(async (tx) => {
-      // Delete mappings first
-      await tx.delete(couponMappings).where(eq(couponMappings.couponId, id));
-      
-      // Delete coupon
-      await tx.delete(coupons).where(eq(coupons.id, id));
-      
-      return true;
-    });
   }
 
   // Validate coupon for booking

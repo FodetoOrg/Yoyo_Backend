@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
-import { bookings, hotels, rooms, users, customerProfiles, coupons } from '../models/schema';
-import { eq, and, desc, asc, count } from 'drizzle-orm';
+import { bookings, hotels, rooms, users, customerProfiles, coupons, payments } from '../models/schema';
+import { eq, and, desc, asc, count, not, lt, gt } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { NotFoundError, ConflictError } from '../types/errors';
 import { CouponService } from './coupon.service';

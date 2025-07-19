@@ -42,6 +42,38 @@ export const CouponSchema = z.object({
   }),
 });
 
+// User coupon schema (simplified, without sensitive admin data)
+export const UserCouponSchema = z.object({
+  id: z.string().uuid(),
+  code: z.string(),
+  description: z.string().optional(),
+  discountType: z.enum(['percentage', 'fixed']),
+  discountValue: z.number().positive(),
+  maxDiscountAmount: z.number().positive().optional(),
+  minOrderAmount: z.number().min(0),
+  validFrom: z.string(),
+  validTo: z.string(),
+  usageLimit: z.number().int().positive().optional(),
+  usedCount: z.number().int().min(0),
+  status: z.enum(['active', 'inactive', 'expired']),
+  mappings: z.object({
+    cities: z.array(z.object({
+      id: z.string().uuid(),
+      name: z.string(),
+      state: z.string(),
+    })),
+    hotels: z.array(z.object({
+      id: z.string().uuid(),
+      name: z.string(),
+      city: z.string(),
+    })),
+    roomTypes: z.array(z.object({
+      id: z.string().uuid(),
+      name: z.string(),
+    })),
+  }),
+});
+
 // Request schemas
 export const CreateCouponRequestSchema = z.object({
   code: z.string().min(1).max(50),
@@ -86,6 +118,17 @@ export const CouponListResponseSchema = z.object({
   success: z.boolean(),
   data: z.object({
     coupons: z.array(CouponSchema),
+    total: z.number().int().min(0),
+    page: z.number().int().min(1),
+    limit: z.number().int().min(1),
+    totalPages: z.number().int().min(1),
+  }),
+});
+
+export const UserCouponListResponseSchema = z.object({
+  success: z.boolean(),
+  data: z.object({
+    coupons: z.array(UserCouponSchema),
     total: z.number().int().min(0),
     page: z.number().int().min(1),
     limit: z.number().int().min(1),
@@ -147,18 +190,6 @@ export const updateCouponSchema = {
   body: zodToJsonSchema(UpdateCouponRequestSchema),
   response: {
     200: zodToJsonSchema(CouponResponseSchema),
-
-
-export const getUserCouponsSchema = {
-  querystring: zodToJsonSchema(CouponFiltersSchema),
-  response: {
-    200: zodToJsonSchema(CouponListResponseSchema),
-  },
-  tags: ['coupons'],
-  summary: 'Get all coupons for users',
-  description: 'Retrieve all coupons available for users including expired and active ones',
-};
-
   },
   tags: ['coupons'],
   summary: 'Update coupon',
@@ -176,6 +207,16 @@ export const deleteCouponSchema = {
   tags: ['coupons'],
   summary: 'Delete coupon',
   description: 'Delete an existing coupon',
+};
+
+export const getUserCouponsSchema = {
+  querystring: zodToJsonSchema(CouponFiltersSchema),
+  response: {
+    200: zodToJsonSchema(UserCouponListResponseSchema),
+  },
+  tags: ['coupons'],
+  summary: 'Get all coupons for users',
+  description: 'Retrieve all coupons available for users including expired and active ones',
 };
 
 export const validateCouponSchema = {

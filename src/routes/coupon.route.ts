@@ -68,16 +68,6 @@ export default async function couponRoutes(fastify: FastifyInstance) {
   // Delete coupon (Super admin only)
   fastify.delete('/:id', {
     schema: {
-
-
-  // Get coupons for users (no authentication required or minimal auth)
-  fastify.get('/user/all', {
-    schema: {
-      ...getUserCouponsSchema,
-      security: [{ bearerAuth: [] }]
-    }
-  }, (request, reply) => couponController.getUserCoupons(request, reply));
-
       ...deleteCouponSchema,
       tags: ['coupons'],
       summary: 'Delete coupon',
@@ -85,6 +75,16 @@ export default async function couponRoutes(fastify: FastifyInstance) {
     },
     preHandler: rbacGuard(permissions.deleteCoupon)
   }, (request, reply) => couponController.deleteCoupon(request, reply));
+
+  // Get coupons for users (no authentication required or minimal auth)
+  fastify.get('/user/all', {
+    schema: {
+      ...getUserCouponsSchema,
+      tags: ['coupons'],
+      summary: 'Get coupons for users',
+      security: [{ bearerAuth: [] }]
+    }
+  }, (request, reply) => couponController.getUserCoupons(request, reply));
 
   // Validate coupon (Public for booking process)
   fastify.post('/validate', {
