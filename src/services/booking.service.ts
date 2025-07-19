@@ -6,6 +6,7 @@ import { NotFoundError, ConflictError } from '../types/errors';
 import { CouponService } from './coupon.service';
 import { NotificationService } from './notification.service';
 import Razorpay from 'razorpay';
+import { generateBookingConfirmationEmail } from '../utils/email';
 
 interface BookingCreateParams {
   userId: string;
@@ -289,7 +290,7 @@ export class BookingService {
 
       // Send push notification for successful booking
       try {
-       const response  = await this.notificationService.sendInstantBookingSuccessNotification(bookingData.userId, {
+        const response = await this.notificationService.sendInstantBookingSuccessNotification(bookingData.userId, {
           title: 'Booking Confirmed! 🎉',
           message: `Your booking at ${hotel.name} has been confirmed. Booking ID: ${bookingId}`,
           type: 'booking_confirmed',
@@ -300,9 +301,36 @@ export class BookingService {
             checkOutDate: bookingData.checkOut.toISOString(),
           }
         });
-        console.log('response in sending notification ',response)
+        console.log('response in sending notification ', response)
+
+        await this.notificationService.sendImmediateNotification(
+          {
+            userId: bookingData.userId,
+            type: 'email',
+            title: "Booking Confirmation",
+            message: generateBookingConfirmationEmail({
+              bookingId,
+              hotel,
+              room,
+              guestName:bookingData.guestName,
+              guestEmail:bookingData.guestEmail,
+              guestPhone:bookingData.guestPhone,
+              checkIn:bookingData.checkIn,
+              checkOut:bookingData.checkOut,
+              guests:bookingData.guests,
+              totalAmount:bookingData?.totalAmount,
+              paymentMode:bookingData.paymentMode,
+              status:"confirmed",
+        
+              couponValidation,
+              nights
+            }),
+            email: bookingData.guestEmail
+
+          }
+        )
       } catch (notificationError) {
-        console.log('error in sending ',notificationError)
+        console.log('error in sending ', notificationError)
         // Log notification error but don't fail the booking
         this.fastify.log.error('Failed to send booking notification:', notificationError);
       }

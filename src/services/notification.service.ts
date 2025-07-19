@@ -9,6 +9,7 @@ import {
 } from "../models/schema";
 import { eq, and, desc, lt, inArray } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
+const nodemailer = require('nodemailer');
 import admin from "../config/firebase/firebase";
 import { Expo, ExpoPushMessage, ExpoPushTicket } from 'expo-server-sdk';
 
@@ -151,7 +152,7 @@ export class NotificationService {
     try {
       // Check user preferences first
       const preferences = await this.getUserPreferences(data.userId);
-      
+
       if (!this.isNotificationAllowed(data.type, preferences)) {
         console.log(`Immediate notification blocked by user preferences: ${data.type} for user ${data.userId}`);
         return { success: false, reason: 'Blocked by user preferences' };
@@ -211,7 +212,7 @@ export class NotificationService {
 
     } catch (error) {
       console.error('Failed to send immediate notification:', error);
-      
+
       // Fallback to queue for retry
       const notificationId = await this.queueNotification({
         ...data,
@@ -219,9 +220,9 @@ export class NotificationService {
         priority: 1 // High priority for failed immediate notifications
       });
 
-      return { 
-        success: false, 
-        error: error.message, 
+      return {
+        success: false,
+        error: error.message,
         fallbackQueued: true,
         queuedNotificationId: notificationId
       };
@@ -259,7 +260,7 @@ export class NotificationService {
     }
 
     const successfulTickets = tickets.filter(ticket => ticket.status === 'ok');
-    
+
     return {
       success: successfulTickets.length > 0,
       tickets,
@@ -706,9 +707,8 @@ export class NotificationService {
   async sendEmailNotification(data: EmailNotificationData) {
     try {
       // ZeptoMail implementation
-      const nodemailer = require('nodemailer');
-      
-      const transport = nodemailer.createTransporter({
+
+      const transport = nodemailer.createTransport({
         host: "smtp.zeptomail.in",
         port: 587,
         auth: {
@@ -726,9 +726,9 @@ export class NotificationService {
       };
 
       const result = await transport.sendMail(mailOptions);
-      
-      return { 
-        messageId: result.messageId, 
+
+      return {
+        messageId: result.messageId,
         provider: 'zeptomail',
         status: 'sent',
         timestamp: new Date()
@@ -739,7 +739,6 @@ export class NotificationService {
       throw new Error(`Failed to send email notification: ${error.message}`);
     }
   }
-
   // Send SMS notification
   async sendSMSNotification(data: SMSNotificationData) {
     try {

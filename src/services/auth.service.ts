@@ -68,24 +68,37 @@ export class AuthService {
 
       // Determine hasOnboarded based on role
 
-      user = await db
-        .insert(users)
-        .values({
-          id: userId,
-          email: "",
-          name: userFromFirebase.displayName || null,
-          phone: userFromFirebase.phoneNumber || null,
-          role: role as any,
-          hasOnboarded: false,
-          firebaseUid: decodedToken.uid,
-          createdAt: now,
-          updatedAt: now,
+      await db.transaction(async (tx) => {
+        user = await tx
+          .insert(users)
+          .values({
+            id: userId,
+            email: "",
+            name: userFromFirebase.displayName || null,
+            phone: userFromFirebase.phoneNumber || null,
+            role: role as any,
+            hasOnboarded: true,
+            firebaseUid: decodedToken.uid,
+            createdAt: now,
+            updatedAt: now,
+          })
+          .returning();
+
+
+
+        if (!user) {
+          throw new NotFoundError("User not found ");
+        }
+        user = user[0]
+        await tx.insert(customerProfiles).values({
+          id: uuidv4(),
+          userId: user.id,
+          skippedOnboarding: true,
+
+
         })
-        .returning();
-      if (!user) {
-        throw new NotFoundError("User not found ");
-      }
-      user = user[0]
+      })
+
 
     }
     console.log('came here ')
