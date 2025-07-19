@@ -13,8 +13,12 @@ export const BookingResponseSchema = z.object({
   totalAmount: z.number(),
   status: z.enum(['pending', 'confirmed', 'cancelled', 'completed']),
   specialRequests: z.string().nullable(),
+  advanceAmount: z.number().min(0),
+  remainingAmount: z.number().min(0),
+  couponId: z.string().uuid().nullable(),
+  discountAmount: z.number().min(0),
   createdAt: z.string(),
-  updatedAt: z.string()
+  updatedAt: z.string(),
 });
 
 // Create booking schemas
@@ -26,7 +30,8 @@ export const CreateBookingBodySchema = z.object({
   guests: z.number().int().min(1),
   specialRequests: z.string().optional(),
   paymentMode: z.enum(['online', 'offline']).optional(),
-  advanceAmount: z.number().positive().optional()
+  advanceAmount: z.number().positive().optional(),
+  couponCode: z.string().optional()
 });
 
 export const CreateBookingResponseSchema = z.object({
@@ -271,4 +276,4 @@ export const getAllBookingsSchema = {
   response: {
     200: zodToJsonSchema(GetAllBookingsResponseSchema)
   }
-}; 
+};

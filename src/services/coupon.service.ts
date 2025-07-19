@@ -318,6 +318,74 @@ export class CouponService {
     // Check if coupon exists
     await this.getCouponById(id);
 
+
+  // Get all coupons for users (no permission restrictions)
+  async getUserCoupons(filters: CouponFilters = {}) {
+    const db = this.fastify.db;
+    const { status, page = 1, limit = 10 } = filters;
+
+    let whereCondition = status ? eq(coupons.status, status) : undefined;
+
+    const couponList = await db.query.coupons.findMany({
+      where: whereCondition,
+      with: {
+        mappings: {
+          with: {
+            city: true,
+            hotel: true,
+            roomType: true,
+          },
+        },
+      },
+      orderBy: [desc(coupons.createdAt)],
+      limit,
+      offset: (page - 1) * limit,
+    });
+
+    // Get total count
+    const totalCoupons = await db.query.coupons.findMany({
+      where: whereCondition,
+    });
+
+    return {
+      coupons: couponList.map(coupon => ({
+        id: coupon.id,
+        code: coupon.code,
+        description: coupon.description,
+        discountType: coupon.discountType,
+        discountValue: coupon.discountValue,
+        maxDiscountAmount: coupon.maxDiscountAmount,
+        minOrderAmount: coupon.minOrderAmount,
+        validFrom: coupon.validFrom,
+        validTo: coupon.validTo,
+        usageLimit: coupon.usageLimit,
+        usedCount: coupon.usedCount,
+        status: coupon.status,
+        mappings: {
+          cities: coupon.mappings.filter(m => m.cityId).map(m => ({
+            id: m.city?.id,
+            name: m.city?.name,
+            state: m.city?.state,
+          })),
+          hotels: coupon.mappings.filter(m => m.hotelId).map(m => ({
+            id: m.hotel?.id,
+            name: m.hotel?.name,
+            city: m.hotel?.city,
+          })),
+          roomTypes: coupon.mappings.filter(m => m.roomTypeId).map(m => ({
+            id: m.roomType?.id,
+            name: m.roomType?.name,
+          })),
+        },
+      })),
+      total: totalCoupons.length,
+      page,
+      limit,
+      totalPages: Math.ceil(totalCoupons.length / limit),
+    };
+  }
+
+
     return await db.transaction(async (tx) => {
       // Delete mappings first
       await tx.delete(couponMappings).where(eq(couponMappings.couponId, id));
