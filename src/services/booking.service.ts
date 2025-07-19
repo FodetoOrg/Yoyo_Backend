@@ -1,8 +1,10 @@
 import { FastifyInstance } from 'fastify';
-
-import { bookings, hotels, payments, rooms } from '../models/schema';
-import { eq, and, not, between, or, sql, lt, gt } from 'drizzle-orm';
+import { bookings, hotels, rooms, users, customerProfiles, coupons } from '../models/schema';
+import { eq, and, desc, asc, count } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
+import { NotFoundError, ConflictError } from '../types/errors';
+import { CouponService } from './coupon.service';
+import { NotificationService } from './notification.service';
 import Razorpay from 'razorpay';
 
 interface BookingCreateParams {
@@ -22,9 +24,13 @@ interface BookingCreateParams {
 
 export class BookingService {
   private fastify!: FastifyInstance;
+  private couponService: CouponService;
+  private notificationService: NotificationService;
   private razorpay: Razorpay;
 
   constructor() {
+    this.couponService = new CouponService();
+    this.notificationService = new NotificationService();
     // Initialize Razorpay
     this.razorpay = new Razorpay({
       key_id: process.env.RAZORPAY_KEY_ID || '',
@@ -35,6 +41,8 @@ export class BookingService {
   // Method to set Fastify instance
   setFastify(fastify: FastifyInstance) {
     this.fastify = fastify;
+    this.couponService.setFastify(fastify);
+    this.notificationService.setFastify(fastify);
   }
 
   // Check if a room is available for the given dates and guest count
@@ -86,6 +94,7 @@ export class BookingService {
     specialRequests?: string;
     paymentMode?: string;
     advanceAmount?: number;
+    couponCode?: string;
   }) {
     const db = this.fastify.db;
     const bookingId = uuidv4();
@@ -148,6 +157,31 @@ export class BookingService {
         }
       }
 
+      // Coupon validation
+      let couponValidation = null;
+      let finalAmount = bookingData.totalAmount;
+      let discountAmount = 0;
+      let couponId = null;
+
+      if (bookingData.couponCode) {
+        try {
+          couponValidation = await this.couponService.validateCoupon(
+            bookingData.couponCode,
+            bookingData.hotelId,
+            room.roomType, // Assuming room.roomType is the roomTypeId
+            bookingData.totalAmount
+          );
+
+          if (couponValidation) {
+            discountAmount = couponValidation.discountAmount;
+            finalAmount = couponValidation.finalAmount;
+            couponId = couponValidation.coupon.id;
+          }
+        } catch (error) {
+          throw new Error(`Coupon validation failed: ${error.message}`);
+        }
+      }
+
       // Create booking
       await tx.insert(bookings).values({
         id: bookingId,
@@ -159,7 +193,7 @@ export class BookingService {
         bookingType: 'daily', // Assuming default booking type is daily
         totalHours: 24, // Assuming default total hours is 24
         guestCount: bookingData.guests,
-        totalAmount: bookingData.totalAmount,
+        totalAmount: finalAmount,
         paymentMode: finalPaymentMode,
         requiresOnlinePayment,
         paymentDueDate,
@@ -168,6 +202,8 @@ export class BookingService {
         specialRequests: bookingData.specialRequests,
         status: finalPaymentMode === 'offline' ? 'confirmed' : 'pending',
         paymentStatus: finalPaymentMode === 'offline' ? 'pending' : 'pending',
+        couponId: couponId,
+        discountAmount: discountAmount
       });
 
       // Create payment record
@@ -176,7 +212,7 @@ export class BookingService {
         id: paymentId,
         bookingId,
         userId: bookingData.userId,
-        amount: finalPaymentMode === 'offline' && advanceAmount > 0 ? advanceAmount : bookingData.totalAmount,
+        amount: finalPaymentMode === 'offline' && advanceAmount > 0 ? advanceAmount : finalAmount, // Use finalAmount after coupon
         currency: 'INR',
         paymentType: finalPaymentMode === 'offline' && advanceAmount > 0 ? 'advance' : 'full',
         paymentMethod: finalPaymentMode === 'offline' ? (hotel.defaultPaymentMethod || 'cash') : 'razorpay',
@@ -200,6 +236,34 @@ export class BookingService {
           status: 'pending',
           transactionDate: paymentDueDate || new Date(),
         });
+      }
+
+      // Update coupon usage if applied
+      if (couponId) {
+        await tx.update(coupons)
+          .set({
+            usedCount: couponValidation.coupon.usedCount + 1,
+            updatedAt: new Date()
+          })
+          .where(eq(coupons.id, couponId));
+      }
+
+      // Send push notification for successful booking
+      try {
+        await this.notificationService.sendNotification(bookingData.userId, {
+          title: 'Booking Confirmed! 🎉',
+          message: `Your booking at ${hotel.name} has been confirmed. Booking ID: ${bookingId}`,
+          type: 'booking_confirmed',
+          data: {
+            bookingId,
+            hotelName: hotel.name,
+            checkInDate: bookingData.checkIn.toISOString(),
+            checkOutDate: bookingData.checkOut.toISOString(),
+          }
+        });
+      } catch (notificationError) {
+        // Log notification error but don't fail the booking
+        this.fastify.log.error('Failed to send booking notification:', notificationError);
       }
 
       // Get the created booking
@@ -556,7 +620,7 @@ export class BookingService {
     // Calculate pricing
     const nights = Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24));
     const basePrice = room.pricePerNight * nights;
-    
+
     // You can add additional charges, taxes, etc. here
     const taxes = basePrice * 0.12; // 12% GST
     const totalAmount = basePrice + taxes;
@@ -677,7 +741,7 @@ export class BookingService {
 
     // Get amenities (assuming these are stored in room type or hotel)
     const amenities = JSON.parse(booking.hotel.amenities) || []  
-    
+
 
     return {
       id: booking.id,

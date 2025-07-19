@@ -7,6 +7,7 @@ import {
   updateCouponSchema,
   deleteCouponSchema,
   validateCouponSchema,
+  getUserCouponsSchema,
 } from '../schemas/coupon.schema';
 import { rbacGuard } from '../plugins/rbacGuard';
 import { permissions } from '../utils/rbac';
@@ -67,6 +68,16 @@ export default async function couponRoutes(fastify: FastifyInstance) {
   // Delete coupon (Super admin only)
   fastify.delete('/:id', {
     schema: {
+
+
+  // Get coupons for users (no authentication required or minimal auth)
+  fastify.get('/user/all', {
+    schema: {
+      ...getUserCouponsSchema,
+      security: [{ bearerAuth: [] }]
+    }
+  }, (request, reply) => couponController.getUserCoupons(request, reply));
+
       ...deleteCouponSchema,
       tags: ['coupons'],
       summary: 'Delete coupon',

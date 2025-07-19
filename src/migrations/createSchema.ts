@@ -197,6 +197,20 @@ async function main() {
         total_hours INTEGER,
         guest_count INTEGER NOT NULL DEFAULT 1,
         total_amount REAL NOT NULL,
+
+
+    // Add coupon fields to bookings table
+    await db.run(sql`
+      ALTER TABLE bookings 
+      ADD COLUMN coupon_id TEXT REFERENCES coupons(id)
+    `);
+    
+    await db.run(sql`
+      ALTER TABLE bookings 
+      ADD COLUMN discount_amount REAL DEFAULT 0
+    `);
+    console.log('Added coupon fields to bookings table');
+
         payment_mode TEXT NOT NULL DEFAULT 'offline',
         requires_online_payment INTEGER NOT NULL DEFAULT 0,
         status TEXT NOT NULL DEFAULT 'pending',

@@ -217,6 +217,36 @@ export class CouponController {
 
   // Validate coupon
   async validateCoupon(request: FastifyRequest, reply: FastifyReply) {
+
+
+  // Get all coupons for users (including expired, active, etc.)
+  async getUserCoupons(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const filters = couponFiltersSchema.parse(request.query);
+      const result = await this.couponService.getUserCoupons(filters);
+      
+      return reply.code(200).send({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      request.log.error(error);
+      
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({
+          success: false,
+          message: 'Validation error',
+          errors: error.errors,
+        });
+      }
+      
+      return reply.code(500).send({
+        success: false,
+        message: error.message || 'Failed to fetch coupons',
+      });
+    }
+  }
+
     try {
       const { code, hotelId, roomTypeId, orderAmount } = validateCouponSchema.parse(request.body);
       const result = await this.couponService.validateCoupon(code, hotelId, roomTypeId, orderAmount);

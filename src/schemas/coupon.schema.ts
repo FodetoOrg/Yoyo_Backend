@@ -147,6 +147,18 @@ export const updateCouponSchema = {
   body: zodToJsonSchema(UpdateCouponRequestSchema),
   response: {
     200: zodToJsonSchema(CouponResponseSchema),
+
+
+export const getUserCouponsSchema = {
+  querystring: zodToJsonSchema(CouponFiltersSchema),
+  response: {
+    200: zodToJsonSchema(CouponListResponseSchema),
+  },
+  tags: ['coupons'],
+  summary: 'Get all coupons for users',
+  description: 'Retrieve all coupons available for users including expired and active ones',
+};
+
   },
   tags: ['coupons'],
   summary: 'Update coupon',
