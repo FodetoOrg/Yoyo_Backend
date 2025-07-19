@@ -5,7 +5,7 @@ import { hotels } from "./Hotel";
 import { rooms } from "./Room";
 import { payments } from "./Payment";
 import { reviews } from "./Review";
-import { coupons } from "./Coupon";
+import { bookingCoupons } from "./BookingCoupon";
 
 // Booking table
 export const bookings = sqliteTable('bookings', {
@@ -31,8 +31,6 @@ export const bookings = sqliteTable('bookings', {
   paymentDueDate: integer('payment_due_date', { mode: 'timestamp' }), // For offline payments
   advanceAmount: real('advance_amount').default(0), // For partial payments
   remainingAmount: real('remaining_amount').default(0), // For partial payments
-  couponId: text('coupon_id').references(() => coupons.id), // Applied coupon
-  discountAmount: real('discount_amount').default(0), // Discount applied
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(new Date()),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(new Date()),
 });
@@ -56,10 +54,8 @@ export const bookingsRelations = relations(bookings, ({ one, many }) => ({
     fields: [bookings.id],
     references: [reviews.bookingId],
   }),
-  coupon: one(coupons, {
-    fields: [bookings.couponId],
-    references: [coupons.id],
-  }),
+  bookingCoupons: many(bookingCoupons),
+  
 }));
 
 // Export type

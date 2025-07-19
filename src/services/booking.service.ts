@@ -81,8 +81,23 @@ export class BookingService {
     return { available: true, reason: null };
   }
 
-  // Create a new booking
-  async createBooking(data: any) {
+  async createBooking(bookingData: {
+    hotelId: string;
+    roomId: string;
+    userId: string;
+    guestName: string;
+    guestEmail: string;
+    guestPhone: string;
+    checkIn: Date;
+    checkOut: Date;
+    guests: number;
+    totalAmount: number;
+    frontendPrice: number;
+    specialRequests?: string;
+    paymentMode?: string;
+    advanceAmount?: number;
+    couponCode?: string;
+  }) {
     const db = this.fastify.db;
 
     try {
@@ -90,45 +105,73 @@ export class BookingService {
 
       // Apply coupon if provided
       let discountAmount = 0;
-      let finalAmount = data.totalAmount;
+      let finalAmount = bookingData.totalAmount;
 
-      if (data.couponId) {
+      if (bookingData.couponCode) {
         const coupon = await db.query.coupons.findFirst({
-          where: eq(coupons.id, data.couponId)
+          where: eq(coupons.code, bookingData.couponCode)
         });
 
         if (coupon && coupon.isActive) {
           if (coupon.discountType === 'percentage') {
-            discountAmount = (data.totalAmount * coupon.discountValue) / 100;
+            discountAmount = (bookingData.totalAmount * coupon.discountValue) / 100;
           } else {
             discountAmount = coupon.discountValue;
           }
-          finalAmount = data.totalAmount - discountAmount;
+          finalAmount = bookingData.totalAmount - discountAmount;
         }
       }
+        const paymentDueDate = new Date(bookingData.checkIn);
+        paymentDueDate.setDate(paymentDueDate.getDate() - 1);
 
-      const booking = await db.insert(bookings).values({
+        const finalPaymentMode = bookingData.paymentMode || 'offline';
+        const requiresOnlinePayment = finalPaymentMode === 'online';
+        const advanceAmount = bookingData.advanceAmount || 0;
+        const remainingAmount = finalAmount - advanceAmount;
+
+      // Create booking
+      await db.insert(bookings).values({
         id: bookingId,
-        userId: data.userId,
-        hotelId: data.hotelId,
-        roomId: data.roomId,
-        guestName: data.guestName,
-        guestEmail: data.guestEmail,
-        guestPhone: data.guestPhone,
-        checkInDate: data.checkInDate,
-        checkOutDate: data.checkOutDate,
+        userId: bookingData.userId,
+        hotelId: bookingData.hotelId,
+        roomId: bookingData.roomId,
+        guestName: bookingData.guestName,
+        guestEmail: bookingData.guestEmail,
+        guestPhone: bookingData.guestPhone,
+        checkInDate: bookingData.checkIn,
+        checkOutDate: bookingData.checkOut,
+        bookingType: 'daily', // Assuming default booking type is daily
+        totalHours: 24, // Assuming default total hours is 24
+        guestCount: bookingData.guests,
         totalAmount: finalAmount,
-      }).returning();
+        paymentMode: finalPaymentMode,
+        requiresOnlinePayment,
+        paymentDueDate,
+        advanceAmount,
+        remainingAmount,
+        specialRequests: bookingData.specialRequests,
+        status: finalPaymentMode === 'offline' ? 'confirmed' : 'pending',
+        paymentStatus: finalPaymentMode === 'offline' ? 'pending' : 'pending'
+      });
 
       // Create coupon mapping if coupon was applied
-      if (data.couponId && discountAmount > 0) {
-        await db.insert(bookingCoupons).values({
-          id: uuidv4(),
-          bookingId: bookingId,
-          couponId: data.couponId,
-          discountAmount: discountAmount,
-          discountPercentage: data.couponDiscountType === 'percentage' ? data.couponDiscountValue : null,
+      if (bookingData.couponCode && discountAmount > 0) {
+        const coupon = await db.query.coupons.findFirst({
+          where: eq(coupons.code, bookingData.couponCode)
         });
+
+        if(coupon){
+          const bookingCouponId = uuidv4();
+          await db.insert(payments).values({
+            id: bookingCouponId,
+            bookingId: bookingId,
+            userId: bookingData.userId,
+            amount: discountAmount,
+            currency: 'INR', // Assuming currency is INR
+            status: 'completed', // Assuming coupon discount is completed
+            paymentMethod: 'coupon', // Assuming payment method is coupon
+          });
+        }
       }
 
       // Get booking with relations for notifications
@@ -146,9 +189,9 @@ export class BookingService {
         // Send to guest
         await this.fastify.notificationService.sendNotificationFromTemplate(
           'booking_confirmed_offline',
-          data.userId,
+          bookingData.userId,
           {
-            guestName: data.guestName,
+            guestName: bookingData.guestName,
             hotelName: bookingWithRelations.hotel.name,
             checkIn: bookingWithRelations.checkInDate,
             checkOut: bookingWithRelations.checkOutDate,
@@ -163,7 +206,7 @@ export class BookingService {
           'new_booking_hotel',
           bookingWithRelations.hotel.ownerId,
           {
-            guestName: data.guestName,
+            guestName: bookingData.guestName,
             amount: finalAmount,
             checkIn: bookingWithRelations.checkInDate,
             bookingId: bookingId,
@@ -171,7 +214,7 @@ export class BookingService {
         );
       }
 
-      return booking[0];
+      return { bookingId };
     } catch (error) {
       throw new Error(`Failed to create booking: ${error.message}`);
     }
