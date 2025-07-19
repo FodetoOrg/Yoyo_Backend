@@ -135,6 +135,138 @@ export class NotificationService {
       source: 'test'
     });
   }
+  // Send immediate notification (bypasses queue for urgent notifications)
+  async sendImmediateNotification(data: {
+    userId: string;
+    type: 'push' | 'email' | 'sms' | 'in_app';
+    title: string;
+    message: string;
+    data?: any;
+    pushToken?: string;
+    email?: string;
+    phone?: string;
+    source?: string;
+    sourceId?: string;
+  }) {
+    try {
+      // Check user preferences first
+      const preferences = await this.getUserPreferences(data.userId);
+      
+      if (!this.isNotificationAllowed(data.type, preferences)) {
+        console.log(`Immediate notification blocked by user preferences: ${data.type} for user ${data.userId}`);
+        return { success: false, reason: 'Blocked by user preferences' };
+      }
+
+      // Send directly without queuing
+      let result;
+      switch (data.type) {
+        case 'push':
+          if (data.pushToken) {
+            result = await this.sendPushNotificationDirect(data);
+          } else {
+            const userTokens = await this.getUserPushTokens(data.userId);
+            if (userTokens.length > 0) {
+              data.pushToken = userTokens[0].pushToken;
+              result = await this.sendPushNotificationDirect(data);
+            } else {
+              throw new Error('No push tokens found');
+            }
+          }
+          break;
+        case 'email':
+          const db = this.fastify.db;
+          const user = await db.query.users.findFirst({
+            where: eq(users.id, data.userId)
+          });
+          result = await this.sendEmailNotification({
+            to: data.email || user?.email || '',
+            subject: data.title,
+            html: data.message,
+          });
+          break;
+        case 'sms':
+          const dbSms = this.fastify.db;
+          const userSms = await dbSms.query.users.findFirst({
+            where: eq(users.id, data.userId)
+          });
+          result = await this.sendSMSNotification({
+            to: data.phone || userSms?.phone || '',
+            message: `${data.title}: ${data.message}`,
+          });
+          break;
+        case 'in_app':
+          await this.createInAppNotification({
+            userId: data.userId,
+            title: data.title,
+            message: data.message,
+            data: data.data ? JSON.stringify(data.data) : null
+          });
+          result = { success: true, type: 'in_app' };
+          break;
+        default:
+          throw new Error(`Unsupported notification type: ${data.type}`);
+      }
+
+      return { success: true, result, immediate: true };
+
+    } catch (error) {
+      console.error('Failed to send immediate notification:', error);
+      
+      // Fallback to queue for retry
+      const notificationId = await this.queueNotification({
+        ...data,
+        immediate: false,
+        priority: 1 // High priority for failed immediate notifications
+      });
+
+      return { 
+        success: false, 
+        error: error.message, 
+        fallbackQueued: true,
+        queuedNotificationId: notificationId
+      };
+    }
+  }
+
+  // Direct push notification without queue
+  private async sendPushNotificationDirect(data: {
+    userId: string;
+    title: string;
+    message: string;
+    data?: any;
+    pushToken: string;
+  }) {
+    if (!Expo.isExpoPushToken(data.pushToken)) {
+      throw new Error('Invalid Expo push token');
+    }
+
+    const message: ExpoPushMessage = {
+      to: data.pushToken,
+      title: data.title,
+      body: data.message,
+      data: data.data || {},
+      sound: 'default',
+      priority: 'high',
+      badge: 1,
+    };
+
+    const chunks = this.expo.chunkPushNotifications([message]);
+    const tickets: ExpoPushTicket[] = [];
+
+    for (const chunk of chunks) {
+      const ticketChunk = await this.expo.sendPushNotificationsAsync(chunk);
+      tickets.push(...ticketChunk);
+    }
+
+    const successfulTickets = tickets.filter(ticket => ticket.status === 'ok');
+    
+    return {
+      success: successfulTickets.length > 0,
+      tickets,
+      sentCount: successfulTickets.length
+    };
+  }
+
   async sendInstantBookingSuccessNotification(userId: string, options: {
     title: string;
     message: string;
@@ -304,6 +436,7 @@ export class NotificationService {
     phone?: string;
     source?: string;
     sourceId?: string;
+    immediate?: boolean; // Add immediate flag
   }) {
     const db = this.fastify.db;
     const notificationId = uuidv4();
@@ -341,9 +474,14 @@ export class NotificationService {
         sourceId: data.sourceId,
       });
 
-      // Process immediately if not scheduled
-      if (!data.scheduledAt) {
-        setImmediate(() => this.processNotification(notificationId));
+      // Process immediately if not scheduled or if immediate flag is set
+      if (!data.scheduledAt || data.immediate) {
+        if (data.immediate) {
+          // Process immediately for urgent notifications
+          await this.processNotification(notificationId);
+        } else {
+          setImmediate(() => this.processNotification(notificationId));
+        }
       }
 
       return notificationId;
@@ -355,7 +493,7 @@ export class NotificationService {
   }
 
   // Send notification from template
-  async sendNotificationFromTemplate(templateKey: string, userId: string, variables: any = {}) {
+  async sendNotificationFromTemplate(templateKey: string, userId: string, variables: any = {}, immediate: boolean = false) {
     const db = this.fastify.db;
 
     try {
@@ -382,18 +520,33 @@ export class NotificationService {
       const promises = channels.map(async (channel: string) => {
         const content = this.processTemplate(template, channel, variables);
 
-        return this.queueNotification({
-          userId,
-          type: channel as any,
-          priority: template.priority,
-          title: content.title,
-          message: content.message,
-          data: variables,
-          email: user.email,
-          phone: user.phone,
-          source: variables.source || templateKey,
-          sourceId: variables.sourceId,
-        });
+        if (immediate) {
+          return this.sendImmediateNotification({
+            userId,
+            type: channel as any,
+            title: content.title,
+            message: content.message,
+            data: variables,
+            email: user.email,
+            phone: user.phone,
+            source: variables.source || templateKey,
+            sourceId: variables.sourceId,
+          });
+        } else {
+          return this.queueNotification({
+            userId,
+            type: channel as any,
+            priority: template.priority,
+            title: content.title,
+            message: content.message,
+            data: variables,
+            email: user.email,
+            phone: user.phone,
+            source: variables.source || templateKey,
+            sourceId: variables.sourceId,
+            immediate: false,
+          });
+        }
       });
 
       await Promise.all(promises);
@@ -552,42 +705,37 @@ export class NotificationService {
   // Send email notification
   async sendEmailNotification(data: EmailNotificationData) {
     try {
-      // AWS SES implementation
-      if (process.env.AWS_SES_REGION) {
-        const AWS = require('aws-sdk');
-        const ses = new AWS.SES({ region: process.env.AWS_SES_REGION });
-
-        const params = {
-          Source: process.env.FROM_EMAIL || 'noreply@hotelapp.com',
-          Destination: { ToAddresses: [data.to] },
-          Message: {
-            Subject: { Data: data.subject },
-            Body: {
-              Html: { Data: data.html },
-              Text: { Data: data.text || data.html.replace(/<[^>]*>/g, '') }
-            }
-          }
-        };
-
-        const result = await ses.sendEmail(params).promise();
-        return { messageId: result.MessageId, provider: 'ses' };
-      }
-
-      // Fallback: Log for development
-      console.log('Email notification (dev mode):', {
-        to: data.to,
-        subject: data.subject,
-        timestamp: new Date(),
+      // ZeptoMail implementation
+      const nodemailer = require('nodemailer');
+      
+      const transport = nodemailer.createTransporter({
+        host: "smtp.zeptomail.in",
+        port: 587,
+        auth: {
+          user: "emailapikey",
+          pass: "PHtE6r1YQ+rt3WUs9xNR5fe4R8DyZo8prus2elRDsosTAqIBGE0Er4p9wTO+qRorAPhDE/XKy91rubzOsrmAJWntZm8aCWqyqK3sx/VYSPOZsbq6x00bs1QZdUzZU4bqc9dr0ifXvN7aNA=="
+        }
       });
 
-      return {
-        id: uuidv4(),
+      const mailOptions = {
+        from: '"Hotel Booking" <noreply@yoyolite.com>',
         to: data.to,
         subject: data.subject,
-        status: 'sent',
-        timestamp: new Date(),
+        html: data.html,
+        text: data.text || data.html.replace(/<[^>]*>/g, '')
       };
+
+      const result = await transport.sendMail(mailOptions);
+      
+      return { 
+        messageId: result.messageId, 
+        provider: 'zeptomail',
+        status: 'sent',
+        timestamp: new Date()
+      };
+
     } catch (error) {
+      console.error('ZeptoMail error:', error);
       throw new Error(`Failed to send email notification: ${error.message}`);
     }
   }
