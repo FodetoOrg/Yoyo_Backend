@@ -4,20 +4,18 @@
   "description": "Hotel booking application with Fastify and Turso DB",
   "main": "dist/server.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
+    "build": "tsc ",
     "start": "node dist/server.js",
-    "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+    "dev": "tsnd --respawn --transpile-only --exit-child src/server.ts",
+    "lint": "eslint --ext .ts src/",
+    "lint:fix": "eslint --fix --ext .ts src/",
     "test": "jest",
-    "lint": "eslint . --ext .ts",
-    "format": "prettier --write \"src/**/*.ts\"",
-    "seed": "ts-node src/migrations/seed.ts",
+    "migrate": "tsx migrations/run.ts",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:pull": "drizzle-kit pull",
-    "migrate:users": "ts-node src/migrations/updateUsersTableOnboarding.ts",
-    "migrate:customer-profiles": "ts-node src/migrations/updateCustomerProfileTable.ts"
+    "db:pull": "drizzle-kit pull"
   },
   "keywords": [
     "hotel",
