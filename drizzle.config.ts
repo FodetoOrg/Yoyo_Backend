@@ -7,8 +7,8 @@ export default {
   out: "./drizzle",
   dialect: "turso",
   dbCredentials: {
-    // url: process.env.TURSO_DATABASE_URL!,
-    // authToken: process.env.TURSO_AUTH_TOKEN,
-    url: "http://localhost:8080",
+    url: process.env.TURSO_DB_URL!,
+    authToken: process.env.TURSO_AUTH_TOKEN,
+    // url: "http://localhost:8080",
   },
 } satisfies Config;
