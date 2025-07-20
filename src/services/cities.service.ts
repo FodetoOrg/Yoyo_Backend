@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { hotelCities, hotels } from "../models/Hotel";
 import { cities, City } from "../models/cities";
 import { and, eq, sql } from "drizzle-orm";

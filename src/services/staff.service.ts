@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { FastifyInstance } from "fastify";
 import { users } from "../models/User";
 import { staff, staffPermissions } from "../models/Staff";

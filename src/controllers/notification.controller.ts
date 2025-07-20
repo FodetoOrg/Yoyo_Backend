@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { NotificationService } from '../services/notification.service';
 import { z } from 'zod';

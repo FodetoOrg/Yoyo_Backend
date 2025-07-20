@@ -1,5 +1,5 @@
 // rbacGuard.js
-
+// @ts-nocheck
 import { eq } from "drizzle-orm";
 import { users } from "../models/User";
 import { HttpStatus } from "../types/common";

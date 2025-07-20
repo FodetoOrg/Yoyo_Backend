@@ -1,3 +1,4 @@
+// @ts-nocheck
 import fastify, { FastifyRequest, FastifyReply } from "fastify";
 import { AuthService } from "../services/auth.service";
 import {

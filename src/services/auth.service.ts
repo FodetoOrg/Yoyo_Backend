@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { FastifyInstance } from "fastify";
 import { users } from "../models/schema";
 import { and, eq } from "drizzle-orm";

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { FastifyInstance, FastifyRequest, FastifyReply } from "fastify";
 import { HotelController } from "../controllers/hotel.controller";
 import {

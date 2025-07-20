@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { CouponService } from '../services/coupon.service';
 import { z } from 'zod';

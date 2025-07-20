@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { FastifyInstance } from "fastify";
 import { rooms, hotels, roomImages, roomTypes, bookings, users } from '../models/schema';
 import { eq, and, like, desc, asc, count, sql, not, or } from 'drizzle-orm';

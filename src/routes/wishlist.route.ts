@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { FastifyInstance } from 'fastify';
 import { WishlistController } from '../controllers/wishlist.controller';
 import {

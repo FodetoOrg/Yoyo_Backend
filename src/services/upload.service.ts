@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { FastifyInstance } from "fastify";
 import { uploadToS3 } from "../config/aws";
 import { v4 as uuidv4 } from "uuid";

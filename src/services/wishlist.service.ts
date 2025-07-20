@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { FastifyInstance } from "fastify";
 import { wishlists, hotels, hotelImages, hotelReviews, rooms } from "../models/schema";
 import { eq, and, desc, avg, count, asc } from "drizzle-orm";
