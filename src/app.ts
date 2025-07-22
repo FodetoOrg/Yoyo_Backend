@@ -32,6 +32,7 @@ import hotelSearchRoutes from './routes/hotelSearch.route';
 import customerProfileRoutes from './routes/customerProfile.route';
 import wishlistRoutes from './routes/wishlist.route';
 import { getNotificationProcessor } from './jobs/notification-processor';
+import addonRoutes from "./routes/addon.route";
 
 // Create Fastify instance
 export const app: FastifyInstance = fastify({
@@ -88,6 +89,7 @@ app.register(roomRoutes, { prefix: '/api/v1/rooms' });
 app.register(hotelSearchRoutes, { prefix: '/api/v1/search' });
 app.register(customerProfileRoutes, { prefix: '/api/v1/profile' });
 app.register(wishlistRoutes, { prefix: '/api/v1/wishlist' });
+app.register(addonRoutes, { prefix: '/api/v1/addons' });
 
 // Default route
 app.get('/', async () => {
@@ -111,10 +113,10 @@ app.setNotFoundHandler((request, reply) => {
 // Error handler
 app.setErrorHandler((error, request, reply) => {
   app.log.error(error);
-  
+
   const statusCode = error.statusCode || 500;
   const message = error.message || 'Internal Server Error';
-  
+
   reply.code(statusCode).send({ 
     error: statusCode >= 500 ? 'Internal Server Error' : error.name || 'Error',
     message,
@@ -126,7 +128,7 @@ app.setErrorHandler((error, request, reply) => {
 app.addHook('onReady', async () => {
   const processor = getNotificationProcessor(app);
   processor.start(30000); // Process every 30 seconds
-  
+
   app.log.info('Notification processor started');
 });
 
@@ -134,6 +136,6 @@ app.addHook('onReady', async () => {
 app.addHook('onClose', async () => {
   const processor = getNotificationProcessor(app);
   processor.stop();
-  
+
   app.log.info('Notification processor stopped');
 });
