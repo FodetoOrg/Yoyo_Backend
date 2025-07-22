@@ -135,26 +135,39 @@ export class HotelController {
       // Sort available rooms by price (ascending order - cheapest first)
       const sortedRooms = rooms.sort((a, b) => a.pricePerNight - b.pricePerNight);
       
+      // Get room addons for each room
+      const roomsWithAddons = await Promise.all(
+        sortedRooms.map(async (room) => {
+          const roomAddons = await this.hotelService.getRoomAddons(room.id);
+          return {
+            ...room,
+            addons: roomAddons
+          };
+        })
+      );
+      
       // Create room upgrade data structure - only if there are available rooms
       const roomUpgradeData = {
-        currentRoom: sortedRooms.length > 0 ? {
-          id: sortedRooms[0].id,
-          name: sortedRooms[0].name,
-          image: sortedRooms[0].images.length > 0 ? sortedRooms[0].images[0].url : null,
-          features: sortedRooms[0].description || sortedRooms[0].amenities.join(', '),
-          pricePerNight: sortedRooms[0].pricePerNight,
-          capacity: sortedRooms[0].capacity,
+        currentRoom: roomsWithAddons.length > 0 ? {
+          id: roomsWithAddons[0].id,
+          name: roomsWithAddons[0].name,
+          image: roomsWithAddons[0].images.length > 0 ? roomsWithAddons[0].images[0].url : null,
+          features: roomsWithAddons[0].description || roomsWithAddons[0].amenities.join(', '),
+          pricePerNight: roomsWithAddons[0].pricePerNight,
+          capacity: roomsWithAddons[0].capacity,
+          addons: roomsWithAddons[0].addons,
           isCurrent: true
         } : null,
-        upgradeOptions: sortedRooms.slice(1).map(room => ({
+        upgradeOptions: roomsWithAddons.slice(1).map(room => ({
           id: room.id,
           name: room.name,
           image: room.images.length > 0 ? room.images[0].url : null,
           features: room.description || room.amenities.join(', '),
           pricePerNight: room.pricePerNight,
-          capacity: room.capacity
+          capacity: room.capacity,
+          addons: room.addons
         })),
-        totalAvailableRooms: sortedRooms.length
+        totalAvailableRooms: roomsWithAddons.length
       };
 
       return reply.code(200).send({
@@ -164,10 +177,11 @@ export class HotelController {
             ...hotel,
             rating: reviewsData.overallRating,
             reviewCount: reviewsData.totalReviews,
-            price: sortedRooms.length > 0 ? sortedRooms[0].pricePerNight : null,
-            availableRooms: sortedRooms.length,
+            price: roomsWithAddons.length > 0 ? roomsWithAddons[0].pricePerNight : null,
+            availableRooms: roomsWithAddons.length,
             reviewsData,
             roomUpgradeData,
+            availableRoomsWithAddons: roomsWithAddons,
             searchCriteria: {
               guests,
               checkIn,
