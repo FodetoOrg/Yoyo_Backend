@@ -12,6 +12,7 @@ import {
   Hotel,
   hotelReviews,
   bookings,
+  hotelImages,
 } from "../models/schema";
 import { v4 as uuidv4 } from "uuid";
 import { eq, and, like, inArray, exists, not, isNull, desc, or, sql, lt, gt } from "drizzle-orm";
@@ -240,13 +241,14 @@ export class HotelService {
 
     // Process amenities if provided
     let processedData: any = { ...hotelData };
+    
     if (hotelData.amenities) {
       processedData.amenities = JSON.stringify(hotelData.amenities);
     }
-
+    console.log('processedData ', processedData.id)
     return await db.transaction(async (tx) => {
-      const existingData: Hotel = await tx.query.hotel.findFirst({
-        where: eq(hotels.id, hotelData.id),
+      const existingData: Hotel = await tx.query.hotels.findFirst({
+        where: eq(hotels.id, processedData.id),
       });
 
       if (!existingData) {
@@ -254,16 +256,16 @@ export class HotelService {
       }
 
       const hotelOwner = await tx.query.hotelUsers.findFirst({
-        where: eq(hotelUsers.userId, hotelData.ownerId),
+        where: eq(hotelUsers.userId, processedData.ownerId),
       });
 
-      if (hotelOwner) {
+      if (hotelOwner && hotelOwner.userId !== existingData.ownerId) {
         throw new ForbiddenError("Hotel owner already assigned to other hotel");
       }
 
       // check if hotel city exists
       const hotelCity = await tx.query.cities.findFirst({
-        where: eq(cities.id, hotelData.cityId),
+        where: eq(cities.id, processedData.cityId),
       });
 
       if (!hotelCity) {
@@ -273,7 +275,7 @@ export class HotelService {
       if (existingData.ownerId !== hotelData.ownerId) {
         await tx
           .delete(hotelUsers)
-          .where(eq(hotelUsers.hotelId, existingData.ownerId));
+          .where(eq(hotelUsers.hotelId, existingData.id));
 
         await tx.insert(hotelUsers).values({
           hotelId: hotelData.id,
@@ -283,22 +285,66 @@ export class HotelService {
       }
 
       const existingCity = await tx.query.hotelCities.findFirst({
-        where: eq(hotelCities.hotelId, hotelData.id),
+        where: eq(hotelCities.hotelId, processedData.id),
       });
 
-      if (existingCity.cityId !== hotelData.cityId) {
+      if (existingCity.cityId !== processedData.cityId) {
         await tx
           .delete(hotelCities)
           .where(eq(hotelCities.cityId, existingCity.cityId));
 
         await tx.insert(hotelCities).values({
-          hotelId: hotelData.id,
-          cityId: hotelData.cityId,
+          hotelId: processedData.id,
+          cityId: processedData.cityId,
           id: uuidv4(),
         });
       }
+      // 1. Get existing image records from DB
+      const existingHotelImages = await db.query.hotelImages.findMany({
+        where: eq(hotelImages.hotelId, processedData.id)
+      });
 
-      await db
+      // 2. Extract existing image IDs
+      const existingImageIds = existingHotelImages.map(img => img.id);
+
+      // 3. Extract IDs from images that are NOT updated (i.e., kept)
+      const keptImageIds = processedData.images
+        .filter(image => typeof image !== 'string')
+        .map(img => img.id);
+
+      // 4. Determine which image IDs to delete
+      const imageIdsToDelete = existingImageIds.filter(id => !keptImageIds.includes(id));
+
+      // 5. Delete those images from DB
+      if (imageIdsToDelete.length > 0) {
+        await tx.delete(hotelImages).where(inArray(hotelImages.id, imageIdsToDelete));
+      }
+
+      // 6. Handle updated images (base64 or URL)
+      const imageUrls = await Promise.all(
+        processedData.images
+          .filter(image => typeof image === 'string')
+          .map(async (image) => {
+            if (image.startsWith('data:image/')) {
+              const buffer = Buffer.from(image.split(',')[1], 'base64');
+              return await uploadToS3(buffer, `hotel-${processedData.id}-${Date.now()}.jpg`, 'image/jpeg');
+            }
+            return image;
+          })
+      );
+
+      // 7. Insert new image records into DB
+      if(imageUrls.length>0){
+        await tx.insert(hotelImages).values(
+          imageUrls.map(url => ({
+            id: uuidv4(),
+            hotelId: processedData.id,
+            url: url
+          }))
+        );
+      }
+
+      await tx
         .update(hotels)
         .set({
           ...processedData,
@@ -491,7 +537,7 @@ export class HotelService {
   // Get hotel reviews with rating breakdown
   async getHotelReviews(hotelId: string) {
     const db = this.fastify.db;
-    
+
     // Get all reviews for this hotel
     const reviews = await db.query.hotelReviews.findMany({
       where: and(
@@ -509,13 +555,13 @@ export class HotelService {
       orderBy: [desc(hotelReviews.createdAt)],
       limit: 10, // Limit to most recent 10 reviews
     });
-    
+
     // Calculate overall rating
     const totalReviews = reviews.length;
-    const overallRating = totalReviews > 0 
-      ? reviews.reduce((sum, review) => sum + review.overallRating, 0) / totalReviews 
+    const overallRating = totalReviews > 0
+      ? reviews.reduce((sum, review) => sum + review.overallRating, 0) / totalReviews
       : 0;
-    
+
     // Calculate rating breakdown
     const ratingBreakdown = {
       '5': 0,
@@ -524,14 +570,14 @@ export class HotelService {
       '2': 0,
       '1': 0
     };
-    
+
     reviews.forEach(review => {
       const rating = Math.round(review.overallRating);
       if (rating >= 1 && rating <= 5) {
         ratingBreakdown[rating.toString()]++;
       }
     });
-    
+
     // Format reviews for response
     const formattedReviews = reviews.map(review => ({
       id: review.id,
@@ -540,7 +586,7 @@ export class HotelService {
       rating: review.overallRating,
       date: new Date(review.createdAt).toISOString().split('T')[0]
     }));
-    
+
     return {
       overallRating: Math.round(overallRating * 10) / 10,
       totalReviews,
@@ -559,7 +605,7 @@ export class HotelService {
       if (roomData.images && roomData.images.length > 0) {
         // Delete existing images
         await tx.delete(roomImages).where(eq(roomImages.roomId, roomId));
-        
+
         imageUrls = await Promise.all(
           roomData.images.map(async (base64Image) => {
             // Check if it's base64 data
@@ -574,12 +620,12 @@ export class HotelService {
 
       // Process data for update
       let processedData: any = { ...roomData };
-      
+
       // Handle amenities
       if (roomData.amenities) {
         processedData.amenities = JSON.stringify(roomData.amenities);
       }
-      
+
       // Handle boolean conversions
       if (roomData.isHourlyBooking !== undefined) {
         processedData.isHourlyBooking = roomData.isHourlyBooking === 'Active' || roomData.isHourlyBooking === true;
@@ -587,12 +633,12 @@ export class HotelService {
       if (roomData.isDailyBooking !== undefined) {
         processedData.isDailyBooking = roomData.isDailyBooking === 'Active' || roomData.isDailyBooking === true;
       }
-      
+
       // Map capacity to maxGuests if provided
       if (roomData.capacity) {
         processedData.maxGuests = roomData.capacity;
       }
-      
+
       // Remove images from processed data as we handle them separately
       delete processedData.images;
       processedData.updatedAt = new Date();
@@ -689,16 +735,16 @@ export class HotelService {
   // Check room availability for specific dates
   async checkRoomAvailability(roomId: string, checkInDate: Date, checkOutDate: Date): Promise<boolean> {
     const db = this.fastify.db;
-    
+
     // Get room from database
     const room = await db.query.rooms.findFirst({
       where: eq(rooms.id, roomId)
     });
-    
+
     // if (!room || room.status !== 'available') {
     //   return false;
     // }
-    
+
     // Check for overlapping bookings that are not cancelled
     // Two bookings overlap if: checkIn < existing.checkOut AND checkOut > existing.checkIn
     const overlappingBookings = await db.query.bookings.findMany({
@@ -710,7 +756,7 @@ export class HotelService {
       ),
       limit: 1
     });
-    
+
     return overlappingBookings.length === 0;
   }
 

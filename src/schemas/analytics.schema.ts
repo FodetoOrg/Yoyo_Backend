@@ -258,13 +258,7 @@ export const getDashboardAnalyticsSchema = {
 export const getCityAnalyticsSchema = {
   params: zodToJsonSchema(CityAnalyticsParamsSchema),
   response: {
-    200: {
-      type: 'object',
-      properties: {
-        success: { type: 'boolean' },
-        data: { type: 'object' }
-      }
-    },
+    
     404: {
       type: 'object',
       properties: {

@@ -233,14 +233,16 @@ export class HotelController {
     try {
       // throw new ForbiddenError("dont have accesss");
       const { id } = GetHotelParamsSchema.parse(request.params);
-      const hotelData = UpdateHotelBodySchema.parse(request.body);
-      const hotel = await this.hotelService.updateHotel(id, hotelData);
+      console.log('request.body ',request.body)
+      // const hotelData = UpdateHotelBodySchema.parse(request.body);
+      const hotel = await this.hotelService.updateHotel(id, request.body);
       return reply.code(200).send({
         success: true,
         message: "Hotel updated successfully",
         data: { hotel },
       });
     } catch (error) {
+      console.log('error ',error)
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
           success: false,

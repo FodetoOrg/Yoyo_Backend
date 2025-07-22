@@ -181,11 +181,11 @@ export const createHotelSchema = {
 
 export const updateHotelSchema = {
   params: zodToJsonSchema(GetHotelParamsSchema),
-  body: zodToJsonSchema(
-    CreateHotelBodySchema.extend({
-      id: z.string(),
-    })
-  ),
+  // body: zodToJsonSchema(
+  //   CreateHotelBodySchema.extend({
+  //     id: z.string(),
+  //   })
+  // ),
   response: {
     200: zodToJsonSchema(UpdateHotelResponseSchema),
   },

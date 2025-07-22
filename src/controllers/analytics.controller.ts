@@ -72,7 +72,7 @@ export class AnalyticsController {
     try {
       const { id } = cityAnalyticsParamsSchema.parse(request.params);
       const analytics = await this.analyticsService.getCityAnalytics(id);
-      
+      console.log('analytics ',analytics)
       return reply.code(200).send({
         success: true,
         data: analytics,

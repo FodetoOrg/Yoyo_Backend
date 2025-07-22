@@ -115,6 +115,7 @@ export class AuthService {
       const hotelUser = await db.query.hotelUsers.findFirst({
         where: eq(hotelUsers.userId, user.id),
       });
+      console.log('hotelUser ',hotelUser)
       hotelId = hotelUser?.hotelId || null;
     }
 
