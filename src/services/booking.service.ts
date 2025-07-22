@@ -93,6 +93,7 @@ export class BookingService {
     userId: string;
     checkIn: Date;
     checkOut: Date;
+    bookingType: 'daily' | 'hourly';
     guests: number;
     totalAmount: number;
     frontendPrice: number;
@@ -114,7 +115,16 @@ export class BookingService {
 
     // 2. TRANSACTION: Only database operations (keep this minimal and fast)
     const booking = await db.transaction(async (tx) => {
-      const nights = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60 * 24));
+      // Calculate duration based on booking type
+      let totalHours = 0;
+      let nights = 0;
+      
+      if (bookingData.bookingType === 'hourly') {
+        totalHours = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60));
+      } else {
+        nights = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60 * 24));
+        totalHours = nights * 24;
+      }
 
       // Payment calculations
       let requiresOnlinePayment = finalPaymentMode === 'online';
@@ -140,8 +150,8 @@ export class BookingService {
         roomId: bookingData.roomId,
         checkInDate: bookingData.checkIn,
         checkOutDate: bookingData.checkOut,
-        bookingType: 'daily',
-        totalHours: 24,
+        bookingType: bookingData.bookingType,
+        totalHours: totalHours,
         guestCount: bookingData.guests,
         totalAmount: finalAmount,
         paymentMode: finalPaymentMode,
@@ -252,9 +262,17 @@ export class BookingService {
       throw new Error('Offline payment is not enabled for this hotel');
     }
 
-    // Price validation
-    const nights = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60 * 24));
-    const expectedPrice = room.pricePerNight * nights;
+    // Price validation based on booking type
+    let expectedPrice = 0;
+    let duration = 0;
+    
+    if (bookingData.bookingType === 'hourly') {
+      duration = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60));
+      expectedPrice = room.pricePerHour * duration;
+    } else {
+      duration = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60 * 24));
+      expectedPrice = room.pricePerNight * duration;
+    }
 
     // Coupon validation
     let couponValidation = null;
@@ -266,7 +284,8 @@ export class BookingService {
           bookingData.couponCode,
           bookingData.hotelId,
           room.roomType,
-          bookingData.totalAmount
+          bookingData.totalAmount,
+          bookingData.bookingType
         );
 
         if (couponValidation) {
@@ -692,7 +711,7 @@ export class BookingService {
   }
 
   // Get checkout price details
-  async getCheckoutPriceDetails(roomId: string, checkInDate: Date, checkOutDate: Date, guestCount: number) {
+  async getCheckoutPriceDetails(roomId: string, checkInDate: Date, checkOutDate: Date, guestCount: number, bookingType: 'daily' | 'hourly' = 'daily') {
     const db = this.fastify.db;
 
     // Get room details
@@ -713,9 +732,26 @@ export class BookingService {
       throw new Error(availabilityCheck.reason || 'Room not available');
     }
 
-    // Calculate pricing
-    const nights = Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24));
-    const basePrice = room.pricePerNight * nights;
+    // Calculate pricing based on booking type
+    let duration = 0;
+    let basePrice = 0;
+    let priceDetails: any = {};
+    
+    if (bookingType === 'hourly') {
+      duration = Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60));
+      basePrice = room.pricePerHour * duration;
+      priceDetails = {
+        pricePerHour: room.pricePerHour,
+        hours: duration,
+      };
+    } else {
+      duration = Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24));
+      basePrice = room.pricePerNight * duration;
+      priceDetails = {
+        pricePerNight: room.pricePerNight,
+        nights: duration,
+      };
+    }
 
     // You can add additional charges, taxes, etc. here
     const taxes = basePrice * 0.12; // 12% GST
@@ -724,8 +760,8 @@ export class BookingService {
     return {
       roomId: room.id,
       roomName: room.name,
-      pricePerNight: room.pricePerNight,
-      nights,
+      bookingType,
+      ...priceDetails,
       basePrice,
       taxes,
       totalAmount,

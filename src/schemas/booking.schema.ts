@@ -27,6 +27,7 @@ export const CreateBookingBodySchema = z.object({
   roomId: z.string(),
   checkIn: z.string(),
   checkOut: z.string(),
+  bookingType: z.enum(['daily', 'hourly']).default('daily'),
   guests: z.number().int().min(1),
   guestName: z.string().min(1, 'Guest name is required'),
   guestEmail: z.string().email('Invalid email'),
@@ -39,10 +40,7 @@ export const CreateBookingBodySchema = z.object({
   paymentMode: z.enum(['online', 'offline']).optional(),
   advanceAmount: z.number().positive().optional(),
   couponCode: z.string().optional(),
-  guestName: z.string().min(1),
-  guestEmail: z.string().email(),
-  guestPhone: z.string().min(10),
-  totalAmount:z.number()
+  totalAmount: z.number()
 });
 
 export const CreateBookingResponseSchema = z.object({

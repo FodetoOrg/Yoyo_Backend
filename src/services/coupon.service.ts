@@ -397,7 +397,7 @@ export class CouponService {
   }
 
   // Validate coupon for booking
-  async validateCoupon(code: string, hotelId: string, roomTypeId: string, orderAmount: number) {
+  async validateCoupon(code: string, hotelId: string, roomTypeId: string, orderAmount: number, bookingType: 'daily' | 'hourly' = 'daily') {
     const db = this.fastify.db;
     
     const coupon = await db.query.coupons.findFirst({
@@ -430,6 +430,13 @@ export class CouponService {
     // Check minimum order amount
     if (orderAmount < coupon.minOrderAmount) {
       throw new Error(`Minimum order amount of ₹${coupon.minOrderAmount} required`);
+    }
+
+    // Check booking type applicability
+    if (coupon.applicableBookingTypes !== 'both') {
+      if (coupon.applicableBookingTypes !== bookingType) {
+        throw new Error(`Coupon is only applicable for ${coupon.applicableBookingTypes} bookings`);
+      }
     }
 
     // Check mappings

@@ -24,6 +24,8 @@ commissionRate: integer("commission_rate").notNull().default(10), // Percentage
   onlinePaymentEnabled: integer("online_payment_enabled", { mode: 'boolean' }).notNull().default(false),
   offlinePaymentEnabled: integer("offline_payment_enabled", { mode: 'boolean' }).notNull().default(true),
   status: text("status").notNull().default('active'), // active, inactive, suspended
+  checkInTime: text('check_in_time').notNull().default('12:00'), // Default 12:00 PM
+  checkOutTime: text('check_out_time').notNull().default('12:00'), // Default 12:00 PM next day
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(new Date()),
