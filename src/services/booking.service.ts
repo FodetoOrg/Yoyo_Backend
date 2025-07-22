@@ -8,6 +8,7 @@ import { CouponService } from './coupon.service';
 import { NotificationService } from './notification.service';
 import Razorpay from 'razorpay';
 import { generateBookingConfirmationEmail } from '../utils/email';
+import { AddonService } from './addon.service';
 
 interface BookingCreateParams {
   userId: string;
@@ -29,10 +30,12 @@ export class BookingService {
   private couponService: CouponService;
   private notificationService: NotificationService;
   private razorpay: Razorpay;
+  private addonService: AddonService;
 
   constructor() {
     this.couponService = new CouponService();
     this.notificationService = new NotificationService();
+    this.addonService = new AddonService();
     // Initialize Razorpay
     this.razorpay = new Razorpay({
       key_id: process.env.RAZORPAY_KEY_ID || '',
@@ -45,6 +48,7 @@ export class BookingService {
     this.fastify = fastify;
     this.couponService.setFastify(fastify);
     this.notificationService.setFastify(fastify);
+    this.addonService.setFastify(fastify);
   }
 
   // Check if a room is available for the given dates and guest count
@@ -99,6 +103,7 @@ export class BookingService {
     guestName: string;
     guestEmail: string;
     guestPhone: string;
+    addons?: string[];
   }) {
     const db = this.fastify.db;
     const bookingId = uuidv4();
@@ -200,6 +205,11 @@ export class BookingService {
           status: 'pending',
           transactionDate: paymentDueDate || new Date(),
         });
+      }
+
+      // Add addons to booking if provided
+      if (bookingData.addons && bookingData.addons.length > 0) {
+        await this.addonService.addBookingAddons(bookingId, bookingData.addons);
       }
 
       return bookingId;
@@ -453,7 +463,8 @@ export class BookingService {
         id: booking.room.id,
         name: booking.room.name,
         roomType: booking.room.roomType
-      }
+      },
+        addons: await this.addonService.getBookingAddons(booking.id)
     }));
 
     return {
@@ -499,7 +510,7 @@ export class BookingService {
     // Format bookings
     const formattedBookings = hotelBookings.map(booking => {
       const commissionAmount = Number(booking.totalAmount || 0) * commissionRate;
-      
+
       return {
         id: booking.id,
         checkInDate: booking.checkInDate,
@@ -521,7 +532,8 @@ export class BookingService {
           id: booking.room.id,
           name: booking.room.name,
           roomType: booking.room.roomType
-        }
+        },
+        addons: await this.addonService.getBookingAddons(booking.id)
       };
     });
 
@@ -569,7 +581,7 @@ export class BookingService {
     // Format bookings
     const formattedBookings = allBookings.map(booking => {
       const commissionAmount = Number(booking.totalAmount || 0) * commissionRate;
-      
+
       return {
         id: booking.id,
         checkInDate: booking.checkInDate,
@@ -596,7 +608,8 @@ export class BookingService {
           id: booking.room.id,
           name: booking.room.name,
           roomType: booking.room.roomType
-        }
+        },
+        addons: await this.addonService.getBookingAddons(booking.id)
       };
     });
 
