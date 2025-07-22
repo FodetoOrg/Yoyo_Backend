@@ -12,7 +12,7 @@ import {
   Hotel,
   hotelReviews,
   bookings,
-  hotelImages,
+  roomAddons,
 } from "../models/schema";
 import { v4 as uuidv4 } from "uuid";
 import { eq, and, like, inArray, exists, not, isNull, desc, or, sql, lt, gt } from "drizzle-orm";
@@ -758,6 +758,27 @@ export class HotelService {
     });
 
     return overlappingBookings.length === 0;
+  }
+
+  // Get room addons
+  async getRoomAddons(roomId: string) {
+    const db = this.fastify.db;
+    
+    const roomAddons = await db.query.roomAddons.findMany({
+      where: eq(roomAddons.roomId, roomId),
+      with: {
+        addon: true,
+      },
+    });
+
+    return roomAddons.map(roomAddon => ({
+      id: roomAddon.addon.id,
+      name: roomAddon.addon.name,
+      description: roomAddon.addon.description,
+      image: roomAddon.addon.image,
+      price: roomAddon.addon.price,
+      status: roomAddon.addon.status,
+    }));
   }
 
   async getHotelUsers(hotelId: string) {
