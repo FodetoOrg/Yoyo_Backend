@@ -493,29 +493,37 @@ export class BookingService {
       offset
     });
 
+    // Commission rate (10%)
+    const commissionRate = 0.10;
+
     // Format bookings
-    const formattedBookings = hotelBookings.map(booking => ({
-      id: booking.id,
-      checkInDate: booking.checkInDate,
-      checkOutDate: booking.checkOutDate,
-      bookingType: booking.bookingType,
-      guestCount: booking.guestCount,
-      totalAmount: booking.totalAmount,
-      paymentMode: booking.paymentMode,
-      status: booking.status,
-      paymentStatus: booking.paymentStatus,
-      bookingDate: booking.bookingDate,
-      user: {
-        id: booking.user.id,
-        name: booking.user.name,
-        phone: booking.user.phone
-      },
-      room: {
-        id: booking.room.id,
-        name: booking.room.name,
-        roomType: booking.room.roomType
-      }
-    }));
+    const formattedBookings = hotelBookings.map(booking => {
+      const commissionAmount = Number(booking.totalAmount || 0) * commissionRate;
+      
+      return {
+        id: booking.id,
+        checkInDate: booking.checkInDate,
+        checkOutDate: booking.checkOutDate,
+        bookingType: booking.bookingType,
+        guestCount: booking.guestCount,
+        totalAmount: booking.totalAmount,
+        commissionAmount: commissionAmount,
+        paymentMode: booking.paymentMode,
+        status: booking.status,
+        paymentStatus: booking.paymentStatus,
+        bookingDate: booking.bookingDate,
+        user: {
+          id: booking.user.id,
+          name: booking.user.name,
+          phone: booking.user.phone
+        },
+        room: {
+          id: booking.room.id,
+          name: booking.room.name,
+          roomType: booking.room.roomType
+        }
+      };
+    });
 
     return {
       bookings: formattedBookings,
@@ -555,34 +563,42 @@ export class BookingService {
       offset
     });
 
+    // Commission rate (10%)
+    const commissionRate = 0.10;
+
     // Format bookings
-    const formattedBookings = allBookings.map(booking => ({
-      id: booking.id,
-      checkInDate: booking.checkInDate,
-      checkOutDate: booking.checkOutDate,
-      bookingType: booking.bookingType,
-      guestCount: booking.guestCount,
-      totalAmount: booking.totalAmount,
-      paymentMode: booking.paymentMode,
-      status: booking.status,
-      paymentStatus: booking.paymentStatus,
-      bookingDate: booking.bookingDate,
-      user: {
-        id: booking.user.id,
-        name: booking.user.name,
-        phone: booking.user.phone
-      },
-      hotel: {
-        id: booking.hotel.id,
-        name: booking.hotel.name,
-        city: booking.hotel.city
-      },
-      room: {
-        id: booking.room.id,
-        name: booking.room.name,
-        roomType: booking.room.roomType
-      }
-    }));
+    const formattedBookings = allBookings.map(booking => {
+      const commissionAmount = Number(booking.totalAmount || 0) * commissionRate;
+      
+      return {
+        id: booking.id,
+        checkInDate: booking.checkInDate,
+        checkOutDate: booking.checkOutDate,
+        bookingType: booking.bookingType,
+        guestCount: booking.guestCount,
+        totalAmount: booking.totalAmount,
+        commissionAmount: commissionAmount,
+        paymentMode: booking.paymentMode,
+        status: booking.status,
+        paymentStatus: booking.paymentStatus,
+        bookingDate: booking.bookingDate,
+        user: {
+          id: booking.user.id,
+          name: booking.user.name,
+          phone: booking.user.phone
+        },
+        hotel: {
+          id: booking.hotel.id,
+          name: booking.hotel.name,
+          city: booking.hotel.city
+        },
+        room: {
+          id: booking.room.id,
+          name: booking.room.name,
+          roomType: booking.room.roomType
+        }
+      };
+    });
 
     return {
       bookings: formattedBookings,
