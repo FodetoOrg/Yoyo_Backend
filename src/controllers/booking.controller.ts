@@ -65,13 +65,20 @@ export class BookingController {
         });
       }
 
-      // Calculate total amount based on daily booking
+      // Calculate total amount based on booking type
       const checkInDate = new Date(bookingData.checkIn);
       const checkOutDate = new Date(bookingData.checkOut);
-      const diffTime = Math.abs(checkOutDate.getTime() - checkInDate.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-      const totalAmount = room.pricePerNight * diffDays;
+      let totalAmount = 0;
+      
+      if (bookingData.bookingType === 'hourly') {
+        const diffTime = Math.abs(checkOutDate.getTime() - checkInDate.getTime());
+        const diffHours = Math.ceil(diffTime / (1000 * 60 * 60));
+        totalAmount = room.pricePerHour * diffHours;
+      } else {
+        const diffTime = Math.abs(checkOutDate.getTime() - checkInDate.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        totalAmount = room.pricePerNight * diffDays;
+      }
 
       // Create booking
       const booking = await this.bookingService.createBooking({
@@ -80,16 +87,17 @@ export class BookingController {
         userId,
         checkIn: checkInDate,
         checkOut: checkOutDate,
+        bookingType: bookingData.bookingType || 'daily',
         guests: bookingData.guests,
         totalAmount,
         frontendPrice: bookingData.totalAmount, // Pass frontend price for validation
         specialRequests: bookingData.specialRequests,
         paymentMode: bookingData.paymentMode,
         advanceAmount: bookingData.advanceAmount,
-        guestEmail:bookingData.guestEmail,
-        guestName:bookingData.guestName,
-        guestPhone:bookingData.guestPhone,
-        couponCode:bookingData.couponCode
+        guestEmail: bookingData.guestEmail,
+        guestName: bookingData.guestName,
+        guestPhone: bookingData.guestPhone,
+        couponCode: bookingData.couponCode
       });
 
       console.log('booking final  is ',booking)
@@ -293,7 +301,7 @@ export class BookingController {
   // Get checkout price details
   async getCheckoutPriceDetails(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const { roomId, checkIn, checkOut, guests } = request.query as any;
+      const { roomId, checkIn, checkOut, guests, bookingType = 'daily' } = request.query as any;
 
       if (!roomId || !checkIn || !checkOut || !guests) {
         return reply.code(400).send({
@@ -306,7 +314,8 @@ export class BookingController {
         roomId,
         new Date(checkIn),
         new Date(checkOut),
-        parseInt(guests)
+        parseInt(guests),
+        bookingType
       );
 
       return reply.send({
