@@ -20,7 +20,18 @@ export * from './PushToken';
 export * from './PaymentOrder';
 export * from './CustomerProfile';
 export * from './Wishlist';
-export * from './Addon';
+export { roomsRelations, rooms, Room } from './Room';
+export { 
+  addons, 
+  roomAddons, 
+  bookingAddons, 
+  addonsRelations, 
+  roomAddonsRelations, 
+  bookingAddonsRelations,
+  Addon,
+  RoomAddon,
+  BookingAddon 
+} from './Addon';
 export * from './HotelReview';
 export { bookings, bookingsRelations, type Booking } from "./Booking";
 export { bookingCoupons, bookingCouponsRelations, type BookingCoupon } from "./BookingCoupons";

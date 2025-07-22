@@ -168,8 +168,12 @@ export class RoomService {
       }).length;
     }
 
+    const formattedRooms = await Promise.all(
+      filteredResults.map(room => this.formatRoomResponse(room))
+    );
+
     return {
-      rooms: filteredResults.map(room => this.formatRoomResponse(room)),
+      rooms: formattedRooms,
       total: totalCount,
       page,
       limit,
@@ -208,7 +212,7 @@ export class RoomService {
       throw new NotFoundError(`Room with id ${roomId} not found`);
     }
 
-    return this.formatRoomResponse(room);
+    return await this.formatRoomResponse(room);
   }
 
   // Create room
@@ -500,7 +504,31 @@ export class RoomService {
   }
 
   // Format room response
-  private formatRoomResponse(room: any) {
+  private async formatRoomResponse(room: any) {
+    const db = this.fastify.db;
+    
+    // Get room addons
+    let roomAddonsData = [];
+    try {
+      const roomAddonsResult = await db.query.roomAddons.findMany({
+        where: eq(roomAddons.roomId, room.id),
+        with: {
+          addon: true,
+        },
+      });
+      
+      roomAddonsData = roomAddonsResult.map((ra: any) => ({
+        id: ra.addon.id,
+        name: ra.addon.name,
+        description: ra.addon.description,
+        image: ra.addon.image,
+        price: ra.addon.price,
+      }));
+    } catch (error) {
+      // If addons query fails, continue without addons
+      roomAddonsData = [];
+    }
+
     return {
       id: room.id,
       hotelId: room.hotelId,
@@ -524,6 +552,7 @@ export class RoomService {
       isHourlyBooking: room.isHourlyBooking,
       isDailyBooking: room.isDailyBooking,
       amenities: room.amenities ? JSON.parse(room.amenities) : [],
+      addons: roomAddonsData,
       status: room.status,
       hotel: {
         id: room.hotel.id,

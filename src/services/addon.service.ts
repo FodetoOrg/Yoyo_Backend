@@ -95,11 +95,24 @@ export class AddonService {
     return { success: true };
   }
 
-  // Update room addons
-  async updateRoomAddons(hotelId: string, roomId: string, addonIds: string[]) {
+  // Add addons to room (append to existing)
+  async addRoomAddons(hotelId: string, roomId: string, addonIds: string[]) {
     const db = this.fastify.db;
     
-    // Verify all addons belong to the hotel
+    // Verify room belongs to hotel
+    const room = await db.query.rooms.findFirst({
+      where: eq(rooms.id, roomId),
+    });
+    
+    if (!room || room.hotelId !== hotelId) {
+      throw new Error('Room not found or does not belong to the specified hotel');
+    }
+    
+    // Verify all addons belong to the hotel and are active
+    if (addonIds.length === 0) {
+      throw new Error('No addon IDs provided');
+    }
+    
     const validAddons = await db.query.addons.findMany({
       where: and(
         eq(addons.hotelId, hotelId),
@@ -108,24 +121,186 @@ export class AddonService {
     });
     
     const validAddonIds = validAddons.map(a => a.id);
-    const filteredAddonIds = addonIds.filter(id => validAddonIds.includes(id));
+    const invalidAddonIds = addonIds.filter(id => !validAddonIds.includes(id));
     
-    // Remove existing mappings
-    await db.delete(roomAddons).where(eq(roomAddons.roomId, roomId));
-    
-    // Add new mappings
-    if (filteredAddonIds.length > 0) {
-      const mappings = filteredAddonIds.map(addonId => ({
-        id: uuidv4(),
-        roomId,
-        addonId,
-        createdAt: new Date(),
-      }));
-      
-      await db.insert(roomAddons).values(mappings);
+    if (invalidAddonIds.length > 0) {
+      throw new Error(`Invalid addon IDs: ${invalidAddonIds.join(', ')}. Addons must belong to the same hotel and be active.`);
     }
     
-    return { success: true, addedAddons: filteredAddonIds.length };
+    // Check which addons are already mapped to avoid duplicates
+    const existingMappings = await db.query.roomAddons.findMany({
+      where: eq(roomAddons.roomId, roomId),
+    });
+    
+    const existingAddonIds = existingMappings.map(m => m.addonId);
+    const newAddonIds = addonIds.filter(id => !existingAddonIds.includes(id));
+    
+    if (newAddonIds.length === 0) {
+      return { 
+        success: true, 
+        message: 'All specified addons are already mapped to this room',
+        addedAddons: 0,
+        skippedAddons: addonIds.length 
+      };
+    }
+    
+    // Add new mappings
+    const mappings = newAddonIds.map(addonId => ({
+      id: uuidv4(),
+      roomId,
+      addonId,
+      createdAt: new Date(),
+    }));
+    
+    await db.insert(roomAddons).values(mappings);
+    
+    return { 
+      success: true, 
+      addedAddons: newAddonIds.length,
+      skippedAddons: addonIds.length - newAddonIds.length,
+      addedAddonIds: newAddonIds 
+    };
+  }
+
+  // Update room addons (replace all existing)
+  async updateRoomAddons(hotelId: string, roomId: string, addonIds: string[]) {
+    const db = this.fastify.db;
+    
+    // Verify room belongs to hotel
+    const room = await db.query.rooms.findFirst({
+      where: eq(rooms.id, roomId),
+    });
+    
+    if (!room || room.hotelId !== hotelId) {
+      throw new Error('Room not found or does not belong to the specified hotel');
+    }
+    
+    // Verify all addons belong to the hotel and are active (if any provided)
+    if (addonIds.length > 0) {
+      const validAddons = await db.query.addons.findMany({
+        where: and(
+          eq(addons.hotelId, hotelId),
+          eq(addons.status, 'active')
+        ),
+      });
+      
+      const validAddonIds = validAddons.map(a => a.id);
+      const invalidAddonIds = addonIds.filter(id => !validAddonIds.includes(id));
+      
+      if (invalidAddonIds.length > 0) {
+        throw new Error(`Invalid addon IDs: ${invalidAddonIds.join(', ')}. Addons must belong to the same hotel and be active.`);
+      }
+    }
+    
+    return await db.transaction(async (tx) => {
+      // Remove existing mappings
+      await tx.delete(roomAddons).where(eq(roomAddons.roomId, roomId));
+      
+      // Add new mappings if any provided
+      if (addonIds.length > 0) {
+        const mappings = addonIds.map(addonId => ({
+          id: uuidv4(),
+          roomId,
+          addonId,
+          createdAt: new Date(),
+        }));
+        
+        await tx.insert(roomAddons).values(mappings);
+      }
+      
+      return { 
+        success: true, 
+        updatedAddons: addonIds.length,
+        message: `Room addons updated successfully. ${addonIds.length} addons now mapped to this room.`
+      };
+    });
+  }
+
+  // Remove specific addon from room
+  async removeRoomAddon(hotelId: string, roomId: string, addonId: string) {
+    const db = this.fastify.db;
+    
+    // Verify room belongs to hotel
+    const room = await db.query.rooms.findFirst({
+      where: eq(rooms.id, roomId),
+    });
+    
+    if (!room || room.hotelId !== hotelId) {
+      throw new Error('Room not found or does not belong to the specified hotel');
+    }
+    
+    // Verify addon belongs to the hotel
+    const addon = await db.query.addons.findFirst({
+      where: and(
+        eq(addons.id, addonId),
+        eq(addons.hotelId, hotelId)
+      ),
+    });
+    
+    if (!addon) {
+      throw new Error('Addon not found or does not belong to the specified hotel');
+    }
+    
+    // Check if mapping exists
+    const existingMapping = await db.query.roomAddons.findFirst({
+      where: and(
+        eq(roomAddons.roomId, roomId),
+        eq(roomAddons.addonId, addonId)
+      ),
+    });
+    
+    if (!existingMapping) {
+      throw new Error('Addon is not mapped to this room');
+    }
+    
+    // Remove the mapping
+    await db.delete(roomAddons).where(
+      and(
+        eq(roomAddons.roomId, roomId),
+        eq(roomAddons.addonId, addonId)
+      )
+    );
+    
+    return { 
+      success: true, 
+      message: 'Addon removed from room successfully',
+      removedAddonId: addonId 
+    };
+  }
+
+  // Get available addons for room (hotel addons not yet mapped to this room)
+  async getAvailableRoomAddons(hotelId: string, roomId: string) {
+    const db = this.fastify.db;
+    
+    // Verify room belongs to hotel
+    const room = await db.query.rooms.findFirst({
+      where: eq(rooms.id, roomId),
+    });
+    
+    if (!room || room.hotelId !== hotelId) {
+      throw new Error('Room not found or does not belong to the specified hotel');
+    }
+    
+    // Get all active hotel addons
+    const hotelAddons = await db.query.addons.findMany({
+      where: and(
+        eq(addons.hotelId, hotelId),
+        eq(addons.status, 'active')
+      ),
+      orderBy: (addons, { asc }) => [asc(addons.name)],
+    });
+    
+    // Get already mapped addons for this room
+    const mappedAddons = await db.query.roomAddons.findMany({
+      where: eq(roomAddons.roomId, roomId),
+    });
+    
+    const mappedAddonIds = mappedAddons.map(m => m.addonId);
+    
+    // Filter out already mapped addons
+    const availableAddons = hotelAddons.filter(addon => !mappedAddonIds.includes(addon.id));
+    
+    return availableAddons;
   }
 
   // Get room addons

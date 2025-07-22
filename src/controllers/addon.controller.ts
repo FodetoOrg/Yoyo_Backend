@@ -1,4 +1,3 @@
-
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { AddonService } from '../services/addon.service';
 import { CreateAddonInput, UpdateAddonInput, GetAddonInput, UpdateRoomAddonsInput } from '../schemas/addon.schema';
@@ -172,8 +171,45 @@ export class AddonController {
     }
   }
 
-  // Update room addons
-  async updateRoomAddons(request: FastifyRequest<UpdateRoomAddonsInput>, reply: FastifyReply) {
+  // Add addons to room (append to existing)
+  async addRoomAddons(
+    request: FastifyRequest<{ Params: { hotelId: string; roomId: string }; Body: { addonIds: string[] } }>,
+    reply: FastifyReply
+  ) {
+    try {
+      const { hotelId, roomId } = request.params;
+      const { addonIds } = request.body;
+      const user = (request as AuthenticatedRequest).user;
+
+      // Check if user has permission to manage this hotel
+      if (user.role === 'hotel' && user.hotelId !== hotelId) {
+        return reply.code(403).send({
+          success: false,
+          message: 'You can only manage rooms for your own hotel',
+        });
+      }
+
+
+      const result = await this.addonService.addRoomAddons(hotelId, roomId, addonIds);
+
+      return reply.code(200).send({
+        success: true,
+        message: 'Addons added to room successfully',
+        data: result,
+      });
+    } catch (error) {
+      return reply.code(400).send({
+        success: false,
+        message: error.message || 'Failed to add addons to room',
+      });
+    }
+  }
+
+  // Update room addons (replace all)
+  async updateRoomAddons(
+    request: FastifyRequest<{ Params: { hotelId: string; roomId: string }; Body: { addonIds: string[] } }>,
+    reply: FastifyReply
+  ) {
     try {
       const { hotelId, roomId } = request.params;
       const { addonIds } = request.body;
@@ -194,16 +230,51 @@ export class AddonController {
         message: 'Room addons updated successfully',
         data: result,
       });
-    } catch (error: any) {
-      return reply.code(500).send({
+    } catch (error) {
+      return reply.code(400).send({
         success: false,
         message: error.message || 'Failed to update room addons',
       });
     }
   }
 
+  // Remove specific addon from room
+  async removeRoomAddon(
+    request: FastifyRequest<{ Params: { hotelId: string; roomId: string; addonId: string } }>,
+    reply: FastifyReply
+  ) {
+    try {
+      const { hotelId, roomId, addonId } = request.params;
+      const user = (request as AuthenticatedRequest).user;
+
+      // Check if user has permission to manage this hotel
+      if (user.role === 'hotel' && user.hotelId !== hotelId) {
+        return reply.code(403).send({
+          success: false,
+          message: 'You can only manage rooms for your own hotel',
+        });
+      }
+
+      const result = await this.addonService.removeRoomAddon(hotelId, roomId, addonId);
+
+      return reply.code(200).send({
+        success: true,
+        message: 'Addon removed from room successfully',
+        data: result,
+      });
+    } catch (error) {
+      return reply.code(400).send({
+        success: false,
+        message: error.message || 'Failed to remove addon from room',
+      });
+    }
+  }
+
   // Get room addons
-  async getRoomAddons(request: FastifyRequest<{ Params: { roomId: string } }>, reply: FastifyReply) {
+  async getRoomAddons(
+    request: FastifyRequest<{ Params: { roomId: string } }>,
+    reply: FastifyReply
+  ) {
     try {
       const { roomId } = request.params;
 
@@ -211,12 +282,45 @@ export class AddonController {
 
       return reply.code(200).send({
         success: true,
-        data: { addons: roomAddons.map(ra => ra.addon) },
+        message: 'Room addons retrieved successfully',
+        data: roomAddons,
       });
-    } catch (error: any) {
-      return reply.code(500).send({
+    } catch (error) {
+      return reply.code(400).send({
         success: false,
-        message: error.message || 'Failed to fetch room addons',
+        message: error.message || 'Failed to retrieve room addons',
+      });
+    }
+  }
+
+  // Get available addons for room
+  async getAvailableRoomAddons(
+    request: FastifyRequest<{ Params: { hotelId: string; roomId: string } }>,
+    reply: FastifyReply
+  ) {
+    try {
+      const { hotelId, roomId } = request.params;
+      const user = (request as AuthenticatedRequest).user;
+
+      // Check if user has permission to manage this hotel
+      if (user.role === 'hotel' && user.hotelId !== hotelId) {
+        return reply.code(403).send({
+          success: false,
+          message: 'You can only manage rooms for your own hotel',
+        });
+      }
+
+      const availableAddons = await this.addonService.getAvailableRoomAddons(hotelId, roomId);
+
+      return reply.code(200).send({
+        success: true,
+        message: 'Available room addons retrieved successfully',
+        data: availableAddons,
+      });
+    } catch (error) {
+      return reply.code(400).send({
+        success: false,
+        message: error.message || 'Failed to retrieve available room addons',
       });
     }
   }

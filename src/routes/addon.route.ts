@@ -96,14 +96,31 @@ export default async function addonRoutes(fastify: FastifyInstance) {
     }
   );
 
-  // Update room addons
+  // Add addons to room (separate endpoint for mapping)
+  fastify.post(
+    '/hotels/:hotelId/rooms/:roomId/addons',
+    {
+      schema: {
+        ...updateRoomAddonsSchema,
+        tags: ['room-addons'],
+        summary: 'Add addons to a room',
+        security: [{ bearerAuth: [] }],
+      },
+      preHandler: [fastify.authenticate],
+    },
+    async (request: FastifyRequest, reply) => {
+      return addonController.addRoomAddons(request as any, reply);
+    }
+  );
+
+  // Update room addons (replace all mappings)
   fastify.put(
     '/hotels/:hotelId/rooms/:roomId/addons',
     {
       schema: {
         ...updateRoomAddonsSchema,
-        tags: ['addons'],
-        summary: 'Update addons for a room',
+        tags: ['room-addons'],
+        summary: 'Update all addons for a room',
         security: [{ bearerAuth: [] }],
       },
       preHandler: [fastify.authenticate],
@@ -113,19 +130,63 @@ export default async function addonRoutes(fastify: FastifyInstance) {
     }
   );
 
+  // Remove specific addon from room
+  fastify.delete(
+    '/hotels/:hotelId/rooms/:roomId/addons/:addonId',
+    {
+      schema: {
+        tags: ['room-addons'],
+        summary: 'Remove specific addon from room',
+        security: [{ bearerAuth: [] }],
+        params: z.object({
+          hotelId: z.string().uuid('Invalid hotel ID'),
+          roomId: z.string().uuid('Invalid room ID'),
+          addonId: z.string().uuid('Invalid addon ID'),
+        }),
+      },
+      preHandler: [fastify.authenticate],
+    },
+    async (request: FastifyRequest, reply) => {
+      return addonController.removeRoomAddon(request as any, reply);
+    }
+  );
+
   // Get room addons
   fastify.get(
     '/rooms/:roomId/addons',
     {
       schema: {
-        tags: ['addons'],
+        tags: ['room-addons'],
         summary: 'Get addons for a room',
         security: [{ bearerAuth: [] }],
+        params: z.object({
+          roomId: z.string().uuid('Invalid room ID'),
+        }),
       },
       preHandler: [fastify.authenticate],
     },
     async (request: FastifyRequest, reply) => {
       return addonController.getRoomAddons(request as any, reply);
+    }
+  );
+
+  // Get available addons for a room (hotel's addons not yet mapped to this room)
+  fastify.get(
+    '/hotels/:hotelId/rooms/:roomId/available-addons',
+    {
+      schema: {
+        tags: ['room-addons'],
+        summary: 'Get available addons for a room',
+        security: [{ bearerAuth: [] }],
+        params: z.object({
+          hotelId: z.string().uuid('Invalid hotel ID'),
+          roomId: z.string().uuid('Invalid room ID'),
+        }),
+      },
+      preHandler: [fastify.authenticate],
+    },
+    async (request: FastifyRequest, reply) => {
+      return addonController.getAvailableRoomAddons(request as any, reply);
     }
   );
 }
