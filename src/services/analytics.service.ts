@@ -1,7 +1,8 @@
+
 // @ts-nocheck
 import { FastifyInstance } from "fastify";
 import { bookings, hotels, users, payments, rooms, cities } from "../models/schema";
-import { eq, and, desc, between, sql, count, sum, inArray } from "drizzle-orm";
+import { eq, and, desc, between, sql, count, sum, inArray, gte, lte } from "drizzle-orm";
 
 interface AnalyticsFilters {
   hotelId?: string;
@@ -37,71 +38,17 @@ export class AnalyticsService {
     // Get current date ranges
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+    const sixMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 6, 1);
 
-    // Total counts
+    // Overview metrics
+    const totalCities = await db.select({ count: count() }).from(cities);
     const totalHotels = await db.select({ count: count() }).from(hotels);
     const totalUsers = await db.select({ count: count() }).from(users).where(eq(users.role, 'user'));
     const totalBookings = await db.select({ count: count() }).from(bookings);
 
-    // Monthly revenue (current month)
-    const monthlyRevenue = await db
-      .select({ 
-        total: sum(bookings.totalAmount) 
-      })
-      .from(bookings)
-      .where(
-        and(
-          eq(bookings.status, 'completed'),
-          eq(bookings.paymentStatus, 'completed'),
-          between(bookings.createdAt, startOfMonth, now)
-        )
-      );
-
-    // Get monthly data for the last 12 months
-    const monthlyData = [];
-    for (let i = 11; i >= 0; i--) {
-      const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
-      
-      const monthData = await db
-        .select({
-          sales: count(bookings.id),
-          revenue: sum(bookings.totalAmount),
-        })
-        .from(bookings)
-        .where(
-          and(
-            eq(bookings.status, 'completed'),
-            eq(bookings.paymentStatus, 'completed'),
-            between(bookings.createdAt, monthStart, monthEnd)
-          )
-        );
-
-      monthlyData.push({
-        date: monthStart.toISOString().substring(0, 7), // Format: "2024-01"
-        sales: Number(monthData[0]?.sales || 0),
-        revenue: Number(monthData[0]?.revenue || 0),
-        profit: Math.round(Number(monthData[0]?.revenue || 0) * 0.5), // Assuming 50% profit margin
-      });
-    }
-
-    // Booking status counts
-    const confirmedBookings = await db
-      .select({ count: count() })
-      .from(bookings)
-      .where(eq(bookings.status, 'confirmed'));
-
-    const pendingBookings = await db
-      .select({ count: count() })
-      .from(bookings)
-      .where(eq(bookings.status, 'pending'));
-
-    const cancelledBookings = await db
-      .select({ count: count() })
-      .from(bookings)
-      .where(eq(bookings.status, 'cancelled'));
-
-    // Revenue calculations
+    // Revenue metrics
     const totalRevenue = await db
       .select({ total: sum(bookings.totalAmount) })
       .from(bookings)
@@ -112,35 +59,237 @@ export class AnalyticsService {
         )
       );
 
-    const pendingRevenue = await db
+    const currentMonthRevenue = await db
       .select({ total: sum(bookings.totalAmount) })
       .from(bookings)
-      .where(eq(bookings.paymentStatus, 'pending'));
+      .where(
+        and(
+          eq(bookings.status, 'completed'),
+          eq(bookings.paymentStatus, 'completed'),
+          between(bookings.createdAt, startOfMonth, now)
+        )
+      );
 
-    const refundedAmount = await db
+    const lastMonthRevenue = await db
       .select({ total: sum(bookings.totalAmount) })
       .from(bookings)
-      .where(eq(bookings.paymentStatus, 'refunded'));
+      .where(
+        and(
+          eq(bookings.status, 'completed'),
+          eq(bookings.paymentStatus, 'completed'),
+          between(bookings.createdAt, startOfLastMonth, endOfLastMonth)
+        )
+      );
+
+    // Commission calculation (assuming 10% commission)
+    const commissionRate = 0.10;
+    const totalCommission = (Number(totalRevenue[0]?.total || 0)) * commissionRate;
+    const currentMonthCommission = (Number(currentMonthRevenue[0]?.total || 0)) * commissionRate;
+
+    // Booking distribution
+    const confirmedBookings = await db
+      .select({ count: count() })
+      .from(bookings)
+      .where(eq(bookings.status, 'confirmed'));
+
+    const cancelledBookings = await db
+      .select({ count: count() })
+      .from(bookings)
+      .where(eq(bookings.status, 'cancelled'));
+
+    const pendingBookings = await db
+      .select({ count: count() })
+      .from(bookings)
+      .where(eq(bookings.status, 'pending'));
+
+    const completedBookings = await db
+      .select({ count: count() })
+      .from(bookings)
+      .where(eq(bookings.status, 'completed'));
+
+    // User distribution
+    const totalCustomers = await db
+      .select({ count: count() })
+      .from(users)
+      .where(eq(users.role, 'user'));
+
+    const totalAdmins = await db
+      .select({ count: count() })
+      .from(users)
+      .where(eq(users.role, 'super_admin'));
+
+    const totalHotelOwners = await db
+      .select({ count: count() })
+      .from(users)
+      .where(eq(users.role, 'hotel_admin'));
+
+    // Last 6 months data
+    const last6MonthsData = [];
+    const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+    
+    for (let i = 5; i >= 0; i--) {
+      const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
+      
+      // New users this month
+      const newUsers = await db
+        .select({ count: count() })
+        .from(users)
+        .where(
+          and(
+            eq(users.role, 'user'),
+            between(users.createdAt, monthStart, monthEnd)
+          )
+        );
+
+      // New hotels this month
+      const newHotels = await db
+        .select({ count: count() })
+        .from(hotels)
+        .where(between(hotels.createdAt, monthStart, monthEnd));
+
+      // New rooms this month
+      const newRooms = await db
+        .select({ count: count() })
+        .from(rooms)
+        .where(between(rooms.createdAt, monthStart, monthEnd));
+
+      // Bookings this month
+      const monthBookings = await db
+        .select({ 
+          count: count(),
+          revenue: sum(bookings.totalAmount)
+        })
+        .from(bookings)
+        .where(between(bookings.createdAt, monthStart, monthEnd));
+
+      last6MonthsData.push({
+        month: months[monthStart.getMonth()],
+        year: monthStart.getFullYear(),
+        newUsers: Number(newUsers[0]?.count || 0),
+        newHotels: Number(newHotels[0]?.count || 0),
+        newRooms: Number(newRooms[0]?.count || 0),
+        bookings: Number(monthBookings[0]?.count || 0),
+        revenue: Number(monthBookings[0]?.revenue || 0),
+      });
+    }
+
+    // Top performing cities
+    const topCities = await db
+      .select({
+        cityName: hotels.city,
+        hotelCount: count(hotels.id),
+        totalRevenue: sum(bookings.totalAmount),
+        totalBookings: count(bookings.id),
+      })
+      .from(hotels)
+      .leftJoin(bookings, eq(hotels.id, bookings.hotelId))
+      .where(
+        and(
+          eq(bookings.status, 'completed'),
+          eq(bookings.paymentStatus, 'completed')
+        )
+      )
+      .groupBy(hotels.city)
+      .orderBy(desc(sum(bookings.totalAmount)))
+      .limit(5);
+
+    // Top performing hotels
+    const topHotels = await db
+      .select({
+        hotelId: hotels.id,
+        hotelName: hotels.name,
+        city: hotels.city,
+        totalRevenue: sum(bookings.totalAmount),
+        totalBookings: count(bookings.id),
+      })
+      .from(hotels)
+      .leftJoin(bookings, eq(hotels.id, bookings.hotelId))
+      .where(
+        and(
+          eq(bookings.status, 'completed'),
+          eq(bookings.paymentStatus, 'completed')
+        )
+      )
+      .groupBy(hotels.id, hotels.name, hotels.city)
+      .orderBy(desc(sum(bookings.totalAmount)))
+      .limit(10);
+
+    // Recent bookings
+    const recentBookings = await db
+      .select({
+        id: bookings.id,
+        checkInDate: bookings.checkInDate,
+        checkOutDate: bookings.checkOutDate,
+        totalAmount: bookings.totalAmount,
+        status: bookings.status,
+        paymentStatus: bookings.paymentStatus,
+        hotelName: hotels.name,
+        city: hotels.city,
+        userName: users.name,
+        userPhone: users.phone,
+      })
+      .from(bookings)
+      .leftJoin(hotels, eq(bookings.hotelId, hotels.id))
+      .leftJoin(users, eq(bookings.userId, users.id))
+      .orderBy(desc(bookings.createdAt))
+      .limit(10);
 
     return {
       overview: {
+        totalCities: Number(totalCities[0]?.count || 0),
         totalHotels: Number(totalHotels[0]?.count || 0),
         totalUsers: Number(totalUsers[0]?.count || 0),
         totalBookings: Number(totalBookings[0]?.count || 0),
-        monthlyRevenue: Number(monthlyRevenue[0]?.total || 0),
-        monthlyData: monthlyData,
-      },
-      bookings: {
-        confirmedBookings: Number(confirmedBookings[0]?.count || 0),
-        pendingBookings: Number(pendingBookings[0]?.count || 0),
-        cancelledBookings: Number(cancelledBookings[0]?.count || 0),
-        monthlyData: monthlyData,
-      },
-      revenue: {
         totalRevenue: Number(totalRevenue[0]?.total || 0),
-        pendingRevenue: Number(pendingRevenue[0]?.total || 0),
-        refundedAmount: Number(refundedAmount[0]?.total || 0),
+        currentMonthRevenue: Number(currentMonthRevenue[0]?.total || 0),
+        lastMonthRevenue: Number(lastMonthRevenue[0]?.total || 0),
+        totalCommission: totalCommission,
+        currentMonthCommission: currentMonthCommission,
+        revenueGrowth: lastMonthRevenue[0]?.total ? 
+          ((Number(currentMonthRevenue[0]?.total || 0) - Number(lastMonthRevenue[0]?.total)) / Number(lastMonthRevenue[0]?.total)) * 100 : 0,
       },
+      bookingDistribution: {
+        confirmed: Number(confirmedBookings[0]?.count || 0),
+        cancelled: Number(cancelledBookings[0]?.count || 0),
+        pending: Number(pendingBookings[0]?.count || 0),
+        completed: Number(completedBookings[0]?.count || 0),
+      },
+      userDistribution: {
+        customers: Number(totalCustomers[0]?.count || 0),
+        admins: Number(totalAdmins[0]?.count || 0),
+        hotelOwners: Number(totalHotelOwners[0]?.count || 0),
+      },
+      last6MonthsData: last6MonthsData,
+      topCities: topCities.map(city => ({
+        name: city.cityName,
+        hotelCount: Number(city.hotelCount || 0),
+        revenue: Number(city.totalRevenue || 0),
+        bookings: Number(city.totalBookings || 0),
+      })),
+      topHotels: topHotels.map(hotel => ({
+        id: hotel.hotelId,
+        name: hotel.hotelName,
+        city: hotel.city,
+        revenue: Number(hotel.totalRevenue || 0),
+        bookings: Number(hotel.totalBookings || 0),
+      })),
+      recentBookings: recentBookings.map(booking => ({
+        id: booking.id,
+        checkInDate: booking.checkInDate,
+        checkOutDate: booking.checkOutDate,
+        totalAmount: Number(booking.totalAmount || 0),
+        status: booking.status,
+        paymentStatus: booking.paymentStatus,
+        hotel: {
+          name: booking.hotelName,
+          city: booking.city,
+        },
+        user: {
+          name: booking.userName,
+          phone: booking.userPhone,
+        },
+      })),
     };
   }
 
@@ -151,6 +300,17 @@ export class AnalyticsService {
     // Get current date ranges
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+
+    // Get hotel info
+    const hotel = await db.query.hotels.findFirst({
+      where: eq(hotels.id, hotelId),
+    });
+
+    if (!hotel) {
+      throw new Error(`Hotel with id ${hotelId} not found`);
+    }
 
     // Total rooms
     const totalRooms = await db
@@ -158,7 +318,16 @@ export class AnalyticsService {
       .from(rooms)
       .where(eq(rooms.hotelId, hotelId));
 
-    // Occupancy rate
+    // Available rooms
+    const availableRooms = await db
+      .select({ count: count() })
+      .from(rooms)
+      .where(and(
+        eq(rooms.hotelId, hotelId),
+        eq(rooms.status, 'available')
+      ));
+
+    // Occupied rooms
     const occupiedRooms = await db
       .select({ count: count() })
       .from(rooms)
@@ -171,8 +340,17 @@ export class AnalyticsService {
       ? Math.round(((occupiedRooms[0]?.count || 0) / totalRooms[0].count) * 100)
       : 0;
 
-    // Monthly revenue
-    const monthlyRevenue = await db
+    // Revenue metrics
+    const totalRevenue = await db
+      .select({ total: sum(bookings.totalAmount) })
+      .from(bookings)
+      .where(and(
+        eq(bookings.hotelId, hotelId),
+        eq(bookings.status, 'completed'),
+        eq(bookings.paymentStatus, 'completed')
+      ));
+
+    const currentMonthRevenue = await db
       .select({ total: sum(bookings.totalAmount) })
       .from(bookings)
       .where(and(
@@ -182,11 +360,51 @@ export class AnalyticsService {
         between(bookings.createdAt, startOfMonth, now)
       ));
 
-    // Get monthly time series data for the last 12 months
+    const lastMonthRevenue = await db
+      .select({ total: sum(bookings.totalAmount) })
+      .from(bookings)
+      .where(and(
+        eq(bookings.hotelId, hotelId),
+        eq(bookings.status, 'completed'),
+        eq(bookings.paymentStatus, 'completed'),
+        between(bookings.createdAt, startOfLastMonth, endOfLastMonth)
+      ));
+
+    // Booking metrics
+    const totalBookings = await db
+      .select({ count: count() })
+      .from(bookings)
+      .where(eq(bookings.hotelId, hotelId));
+
+    const confirmedBookings = await db
+      .select({ count: count() })
+      .from(bookings)
+      .where(and(
+        eq(bookings.hotelId, hotelId),
+        eq(bookings.status, 'confirmed')
+      ));
+
+    const cancelledBookings = await db
+      .select({ count: count() })
+      .from(bookings)
+      .where(and(
+        eq(bookings.hotelId, hotelId),
+        eq(bookings.status, 'cancelled')
+      ));
+
+    const pendingBookings = await db
+      .select({ count: count() })
+      .from(bookings)
+      .where(and(
+        eq(bookings.hotelId, hotelId),
+        eq(bookings.status, 'pending')
+      ));
+
+    // Get monthly time series data for the last 6 months
     const timeSeriesData = [];
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     
-    for (let i = 11; i >= 0; i--) {
+    for (let i = 5; i >= 0; i--) {
       const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
       
@@ -199,17 +417,16 @@ export class AnalyticsService {
         .where(
           and(
             eq(bookings.hotelId, hotelId),
-            eq(bookings.status, 'completed'),
-            eq(bookings.paymentStatus, 'completed'),
             between(bookings.createdAt, monthStart, monthEnd)
           )
         );
 
-      // Calculate occupancy for this month
+      // Calculate occupancy for this month (simplified calculation)
       const monthOccupancy = Math.floor(Math.random() * 20) + 70; // Mock data between 70-90%
 
       timeSeriesData.push({
         month: months[monthStart.getMonth()],
+        year: monthStart.getFullYear(),
         bookings: Number(monthData[0]?.bookings || 0),
         revenue: Number(monthData[0]?.revenue || 0),
         occupancy: Number(monthOccupancy),
@@ -221,21 +438,102 @@ export class AnalyticsService {
       .select({
         roomType: rooms.name,
         count: count(rooms.id),
+        totalRevenue: sum(bookings.totalAmount),
       })
       .from(rooms)
+      .leftJoin(bookings, eq(rooms.id, bookings.roomId))
       .where(eq(rooms.hotelId, hotelId))
       .groupBy(rooms.name);
 
+    // Top performing rooms
+    const topRooms = await db
+      .select({
+        roomId: rooms.id,
+        roomName: rooms.name,
+        roomNumber: rooms.roomNumber,
+        bookings: count(bookings.id),
+        revenue: sum(bookings.totalAmount),
+      })
+      .from(rooms)
+      .leftJoin(bookings, eq(rooms.id, bookings.roomId))
+      .where(and(
+        eq(rooms.hotelId, hotelId),
+        eq(bookings.status, 'completed'),
+        eq(bookings.paymentStatus, 'completed')
+      ))
+      .groupBy(rooms.id, rooms.name, rooms.roomNumber)
+      .orderBy(desc(sum(bookings.totalAmount)))
+      .limit(5);
+
+    // Recent bookings for this hotel
+    const recentBookings = await db
+      .select({
+        id: bookings.id,
+        checkInDate: bookings.checkInDate,
+        checkOutDate: bookings.checkOutDate,
+        totalAmount: bookings.totalAmount,
+        status: bookings.status,
+        paymentStatus: bookings.paymentStatus,
+        roomName: rooms.name,
+        roomNumber: rooms.roomNumber,
+        userName: users.name,
+        userPhone: users.phone,
+      })
+      .from(bookings)
+      .leftJoin(rooms, eq(bookings.roomId, rooms.id))
+      .leftJoin(users, eq(bookings.userId, users.id))
+      .where(eq(bookings.hotelId, hotelId))
+      .orderBy(desc(bookings.createdAt))
+      .limit(10);
+
     return {
       overview: {
+        hotelName: hotel.name,
+        city: hotel.city,
         totalRooms: Number(totalRooms[0]?.count || 0),
+        availableRooms: Number(availableRooms[0]?.count || 0),
+        occupiedRooms: Number(occupiedRooms[0]?.count || 0),
         occupancyRate: Number(occupancyRate),
-        monthlyRevenue: Number(monthlyRevenue[0]?.total || 0),
+        totalRevenue: Number(totalRevenue[0]?.total || 0),
+        currentMonthRevenue: Number(currentMonthRevenue[0]?.total || 0),
+        lastMonthRevenue: Number(lastMonthRevenue[0]?.total || 0),
+        totalBookings: Number(totalBookings[0]?.count || 0),
+        revenueGrowth: lastMonthRevenue[0]?.total ? 
+          ((Number(currentMonthRevenue[0]?.total || 0) - Number(lastMonthRevenue[0]?.total)) / Number(lastMonthRevenue[0]?.total)) * 100 : 0,
+      },
+      bookingDistribution: {
+        confirmed: Number(confirmedBookings[0]?.count || 0),
+        cancelled: Number(cancelledBookings[0]?.count || 0),
+        pending: Number(pendingBookings[0]?.count || 0),
       },
       timeSeriesData: timeSeriesData,
       roomTypeDistribution: roomTypeDistribution.map(room => ({
         name: room.roomType,
-        value: Number(room.count || 0),
+        count: Number(room.count || 0),
+        revenue: Number(room.totalRevenue || 0),
+      })),
+      topRooms: topRooms.map(room => ({
+        id: room.roomId,
+        name: room.roomName,
+        roomNumber: room.roomNumber,
+        bookings: Number(room.bookings || 0),
+        revenue: Number(room.revenue || 0),
+      })),
+      recentBookings: recentBookings.map(booking => ({
+        id: booking.id,
+        checkInDate: booking.checkInDate,
+        checkOutDate: booking.checkOutDate,
+        totalAmount: Number(booking.totalAmount || 0),
+        status: booking.status,
+        paymentStatus: booking.paymentStatus,
+        room: {
+          name: booking.roomName,
+          number: booking.roomNumber,
+        },
+        user: {
+          name: booking.userName,
+          phone: booking.userPhone,
+        },
       })),
     };
   }
@@ -253,6 +551,11 @@ export class AnalyticsService {
       throw new Error(`City with id ${cityId} not found`);
     }
 
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0);
+
     // Get hotels in this city
     const cityHotels = await db.query.hotels.findMany({
       where: eq(hotels.city, city.name),
@@ -263,13 +566,25 @@ export class AnalyticsService {
     if (hotelIds.length === 0) {
       return {
         overview: {
+          cityName: city.name,
           totalHotels: 0,
           totalRooms: 0,
           totalBookings: 0,
           totalRevenue: 0,
+          currentMonthRevenue: 0,
+          lastMonthRevenue: 0,
+          revenueGrowth: 0,
+        },
+        bookingDistribution: {
+          confirmed: 0,
+          cancelled: 0,
+          pending: 0,
+          completed: 0,
         },
         timeSeriesData: [],
         hotelDistribution: [],
+        topHotels: [],
+        recentBookings: [],
       };
     }
 
@@ -293,12 +608,64 @@ export class AnalyticsService {
         eq(bookings.paymentStatus, 'completed')
       ));
 
+    const currentMonthRevenue = await db
+      .select({ total: sum(bookings.totalAmount) })
+      .from(bookings)
+      .where(and(
+        inArray(bookings.hotelId, hotelIds),
+        eq(bookings.status, 'completed'),
+        eq(bookings.paymentStatus, 'completed'),
+        between(bookings.createdAt, startOfMonth, now)
+      ));
+
+    const lastMonthRevenue = await db
+      .select({ total: sum(bookings.totalAmount) })
+      .from(bookings)
+      .where(and(
+        inArray(bookings.hotelId, hotelIds),
+        eq(bookings.status, 'completed'),
+        eq(bookings.paymentStatus, 'completed'),
+        between(bookings.createdAt, startOfLastMonth, endOfLastMonth)
+      ));
+
+    // Booking distribution
+    const confirmedBookings = await db
+      .select({ count: count() })
+      .from(bookings)
+      .where(and(
+        inArray(bookings.hotelId, hotelIds),
+        eq(bookings.status, 'confirmed')
+      ));
+
+    const cancelledBookings = await db
+      .select({ count: count() })
+      .from(bookings)
+      .where(and(
+        inArray(bookings.hotelId, hotelIds),
+        eq(bookings.status, 'cancelled')
+      ));
+
+    const pendingBookings = await db
+      .select({ count: count() })
+      .from(bookings)
+      .where(and(
+        inArray(bookings.hotelId, hotelIds),
+        eq(bookings.status, 'pending')
+      ));
+
+    const completedBookings = await db
+      .select({ count: count() })
+      .from(bookings)
+      .where(and(
+        inArray(bookings.hotelId, hotelIds),
+        eq(bookings.status, 'completed')
+      ));
+
     // Get monthly time series data
-    const now = new Date();
     const timeSeriesData = [];
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
     
-    for (let i = 11; i >= 0; i--) {
+    for (let i = 5; i >= 0; i--) {
       const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
       
@@ -311,16 +678,15 @@ export class AnalyticsService {
         .where(
           and(
             inArray(bookings.hotelId, hotelIds),
-            eq(bookings.status, 'completed'),
-            eq(bookings.paymentStatus, 'completed'),
             between(bookings.createdAt, monthStart, monthEnd)
           )
         );
 
       timeSeriesData.push({
         month: months[monthStart.getMonth()],
-        bookings: monthData[0]?.bookings || 0,
-        revenue: monthData[0]?.revenue || 0,
+        year: monthStart.getFullYear(),
+        bookings: Number(monthData[0]?.bookings || 0),
+        revenue: Number(monthData[0]?.revenue || 0),
       });
     }
 
@@ -334,17 +700,88 @@ export class AnalyticsService {
       .where(inArray(hotels.id, hotelIds))
       .groupBy(hotels.starRating);
 
+    // Top hotels in this city
+    const topHotels = await db
+      .select({
+        hotelId: hotels.id,
+        hotelName: hotels.name,
+        totalRevenue: sum(bookings.totalAmount),
+        totalBookings: count(bookings.id),
+      })
+      .from(hotels)
+      .leftJoin(bookings, eq(hotels.id, bookings.hotelId))
+      .where(and(
+        inArray(hotels.id, hotelIds),
+        eq(bookings.status, 'completed'),
+        eq(bookings.paymentStatus, 'completed')
+      ))
+      .groupBy(hotels.id, hotels.name)
+      .orderBy(desc(sum(bookings.totalAmount)))
+      .limit(5);
+
+    // Recent bookings in this city
+    const recentBookings = await db
+      .select({
+        id: bookings.id,
+        checkInDate: bookings.checkInDate,
+        checkOutDate: bookings.checkOutDate,
+        totalAmount: bookings.totalAmount,
+        status: bookings.status,
+        paymentStatus: bookings.paymentStatus,
+        hotelName: hotels.name,
+        userName: users.name,
+        userPhone: users.phone,
+      })
+      .from(bookings)
+      .leftJoin(hotels, eq(bookings.hotelId, hotels.id))
+      .leftJoin(users, eq(bookings.userId, users.id))
+      .where(inArray(bookings.hotelId, hotelIds))
+      .orderBy(desc(bookings.createdAt))
+      .limit(10);
+
     return {
       overview: {
+        cityName: city.name,
         totalHotels: cityHotels.length,
-        totalRooms: totalRooms[0]?.count || 0,
-        totalBookings: totalBookings[0]?.count || 0,
-        totalRevenue: totalRevenue[0]?.total || 0,
+        totalRooms: Number(totalRooms[0]?.count || 0),
+        totalBookings: Number(totalBookings[0]?.count || 0),
+        totalRevenue: Number(totalRevenue[0]?.total || 0),
+        currentMonthRevenue: Number(currentMonthRevenue[0]?.total || 0),
+        lastMonthRevenue: Number(lastMonthRevenue[0]?.total || 0),
+        revenueGrowth: lastMonthRevenue[0]?.total ? 
+          ((Number(currentMonthRevenue[0]?.total || 0) - Number(lastMonthRevenue[0]?.total)) / Number(lastMonthRevenue[0]?.total)) * 100 : 0,
+      },
+      bookingDistribution: {
+        confirmed: Number(confirmedBookings[0]?.count || 0),
+        cancelled: Number(cancelledBookings[0]?.count || 0),
+        pending: Number(pendingBookings[0]?.count || 0),
+        completed: Number(completedBookings[0]?.count || 0),
       },
       timeSeriesData: timeSeriesData,
       hotelDistribution: hotelDistribution.map(hotel => ({
         name: `${hotel.starRating}‑Star`,
-        value: hotel.count || 0,
+        value: Number(hotel.count || 0),
+      })),
+      topHotels: topHotels.map(hotel => ({
+        id: hotel.hotelId,
+        name: hotel.hotelName,
+        revenue: Number(hotel.totalRevenue || 0),
+        bookings: Number(hotel.totalBookings || 0),
+      })),
+      recentBookings: recentBookings.map(booking => ({
+        id: booking.id,
+        checkInDate: booking.checkInDate,
+        checkOutDate: booking.checkOutDate,
+        totalAmount: Number(booking.totalAmount || 0),
+        status: booking.status,
+        paymentStatus: booking.paymentStatus,
+        hotel: {
+          name: booking.hotelName,
+        },
+        user: {
+          name: booking.userName,
+          phone: booking.userPhone,
+        },
       })),
     };
   }
@@ -403,8 +840,8 @@ export class AnalyticsService {
       endDate: defaultEndDate,
       timeSeriesData: timeSeriesData.map(item => ({
         period: item.date || item.month,
-        revenue: item.revenue || 0,
-        bookings: item.bookings || 0,
+        revenue: Number(item.revenue || 0),
+        bookings: Number(item.bookings || 0),
       })),
     };
   }
