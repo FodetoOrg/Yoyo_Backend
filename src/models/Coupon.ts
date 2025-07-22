@@ -18,6 +18,7 @@ export const coupons = sqliteTable('coupons', {
   usageLimit: integer('usage_limit'),
   usedCount: integer('used_count').notNull().default(0),
   priceIncreasePercentage: real('price_increase_percentage').default(0),
+  applicableBookingTypes: text('applicable_booking_types').notNull().default('both'), // 'daily', 'hourly', 'both'
   status: text('status').notNull().default('active'), // active, inactive, expired
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(new Date()),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(new Date()),

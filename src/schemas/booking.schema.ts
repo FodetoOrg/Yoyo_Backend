@@ -27,6 +27,7 @@ export const CreateBookingBodySchema = z.object({
   roomId: z.string(),
   checkIn: z.string(),
   checkOut: z.string(),
+  bookingType: z.enum(['daily', 'hourly']).default('daily'),
   guests: z.number().int().min(1),
   guestName: z.string().min(1, 'Guest name is required'),
   guestEmail: z.string().email('Invalid email'),

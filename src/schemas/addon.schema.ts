@@ -1,4 +1,3 @@
-
 import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
@@ -49,4 +48,11 @@ export const updateRoomAddonsSchema = {
   })),
 };
 
-
+export const CreateAddonBodySchema = z.object({
+  name: z.string().min(1, 'Name is required'),
+  description: z.string().optional(),
+  image: z.string().url().optional(),
+  price: z.number().min(0, 'Price must be non-negative'),
+  hotelId: z.string().uuid('Invalid hotel ID'),
+  applicableBookingTypes: z.enum(['daily', 'hourly', 'both']).default('both'),
+});

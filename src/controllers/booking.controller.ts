@@ -65,13 +65,23 @@ export class BookingController {
         });
       }
 
-      // Calculate total amount based on daily booking
+      // Calculate total amount based on booking type
       const checkInDate = new Date(bookingData.checkIn);
       const checkOutDate = new Date(bookingData.checkOut);
-      const diffTime = Math.abs(checkOutDate.getTime() - checkInDate.getTime());
-      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-
-      const totalAmount = room.pricePerNight * diffDays;
+      const bookingType = bookingData.bookingType || 'daily';
+      
+      let totalAmount = 0;
+      
+      if (bookingType === 'daily') {
+        const diffTime = Math.abs(checkOutDate.getTime() - checkInDate.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        totalAmount = room.pricePerNight * diffDays;
+      } else {
+        const diffTime = Math.abs(checkOutDate.getTime() - checkInDate.getTime());
+        const diffHours = Math.ceil(diffTime / (1000 * 60 * 60));
+        const hourlyRate = room.pricePerHour || room.pricePerNight / 24;
+        totalAmount = hourlyRate * diffHours;
+      }
 
       // Create booking
       const booking = await this.bookingService.createBooking({

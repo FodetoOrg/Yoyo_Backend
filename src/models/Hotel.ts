@@ -20,6 +20,8 @@ export const hotels = sqliteTable("hotels", {
   ownerId: text("owner_id").references(() => users.id),
 commissionRate: integer("commission_rate").notNull().default(10), // Percentage
   mapCoordinates: text("map_coordinates").notNull().default('17.4065,78.4772'),
+  checkInTime: text("check_in_time").notNull().default('12:00'), // Format: "HH:MM"
+  checkOutTime: text("check_out_time").notNull().default('12:00'), // Format: "HH:MM"
   paymentMode: text("payment_mode").notNull().default('offline'), // 'online', 'offline', 'both'
   onlinePaymentEnabled: integer("online_payment_enabled", { mode: 'boolean' }).notNull().default(false),
   offlinePaymentEnabled: integer("offline_payment_enabled", { mode: 'boolean' }).notNull().default(true),
