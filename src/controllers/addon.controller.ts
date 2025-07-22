@@ -54,6 +54,8 @@ export class AddonController {
 
       const addons = await this.addonService.getHotelAddons(hotelId);
 
+      console.log('addons are ',addons)
+
       return reply.code(200).send({
         success: true,
         data: { addons },
@@ -191,6 +193,7 @@ export class AddonController {
 
 
       const result = await this.addonService.addRoomAddons(hotelId, roomId, addonIds);
+      
 
       return reply.code(200).send({
         success: true,
@@ -279,6 +282,8 @@ export class AddonController {
       const { roomId } = request.params;
 
       const roomAddons = await this.addonService.getRoomAddons(roomId);
+
+      console.log('roomAddons ',roomAddons)
 
       return reply.code(200).send({
         success: true,

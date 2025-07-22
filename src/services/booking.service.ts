@@ -444,28 +444,30 @@ export class BookingService {
       offset
     });
 
-    // Format bookings
-    const formattedBookings = userBookings.map(booking => ({
-      id: booking.id,
-      checkInDate: booking.checkInDate,
-      checkOutDate: booking.checkOutDate,
-      bookingType: booking.bookingType,
-      totalAmount: booking.totalAmount,
-      status: booking.status,
-      paymentStatus: booking.paymentStatus,
-      bookingDate: booking.bookingDate,
-      hotel: {
-        id: booking.hotel.id,
-        name: booking.hotel.name,
-        city: booking.hotel.city
-      },
-      room: {
-        id: booking.room.id,
-        name: booking.room.name,
-        roomType: booking.room.roomType
-      },
+    // Format bookings with Promise.all to handle async operations
+    const formattedBookings = await Promise.all(
+      userBookings.map(async (booking) => ({
+        id: booking.id,
+        checkInDate: booking.checkInDate,
+        checkOutDate: booking.checkOutDate,
+        bookingType: booking.bookingType,
+        totalAmount: booking.totalAmount,
+        status: booking.status,
+        paymentStatus: booking.paymentStatus,
+        bookingDate: booking.bookingDate,
+        hotel: {
+          id: booking.hotel.id,
+          name: booking.hotel.name,
+          city: booking.hotel.city
+        },
+        room: {
+          id: booking.room.id,
+          name: booking.room.name,
+          roomType: booking.room.roomType
+        },
         addons: await this.addonService.getBookingAddons(booking.id)
-    }));
+      }))
+    );
 
     return {
       bookings: formattedBookings,
@@ -475,7 +477,7 @@ export class BookingService {
     };
   }
 
-  // Get bookings by hotel ID
+  // Get bookings by hotel ID - FIXED
   async getBookingsByHotelId(hotelId: string, options: { status?: string; page?: number; limit?: number } = {}) {
     const db = this.fastify.db;
     const { status, page = 1, limit = 10 } = options;
@@ -507,35 +509,37 @@ export class BookingService {
     // Commission rate (10%)
     const commissionRate = 0.10;
 
-    // Format bookings
-    const formattedBookings = hotelBookings.map(booking => {
-      const commissionAmount = Number(booking.totalAmount || 0) * commissionRate;
+    // Format bookings with Promise.all to handle async operations
+    const formattedBookings = await Promise.all(
+      hotelBookings.map(async (booking) => {
+        const commissionAmount = Number(booking.totalAmount || 0) * commissionRate;
 
-      return {
-        id: booking.id,
-        checkInDate: booking.checkInDate,
-        checkOutDate: booking.checkOutDate,
-        bookingType: booking.bookingType,
-        guestCount: booking.guestCount,
-        totalAmount: booking.totalAmount,
-        commissionAmount: commissionAmount,
-        paymentMode: booking.paymentMode,
-        status: booking.status,
-        paymentStatus: booking.paymentStatus,
-        bookingDate: booking.bookingDate,
-        user: {
-          id: booking.user.id,
-          name: booking.user.name,
-          phone: booking.user.phone
-        },
-        room: {
-          id: booking.room.id,
-          name: booking.room.name,
-          roomType: booking.room.roomType
-        },
-        addons: await this.addonService.getBookingAddons(booking.id)
-      };
-    });
+        return {
+          id: booking.id,
+          checkInDate: booking.checkInDate,
+          checkOutDate: booking.checkOutDate,
+          bookingType: booking.bookingType,
+          guestCount: booking.guestCount,
+          totalAmount: booking.totalAmount,
+          commissionAmount: commissionAmount,
+          paymentMode: booking.paymentMode,
+          status: booking.status,
+          paymentStatus: booking.paymentStatus,
+          bookingDate: booking.bookingDate,
+          user: {
+            id: booking.user.id,
+            name: booking.user.name,
+            phone: booking.user.phone
+          },
+          room: {
+            id: booking.room.id,
+            name: booking.room.name,
+            roomType: booking.room.roomType
+          },
+          addons: await this.addonService.getBookingAddons(booking.id)
+        };
+      })
+    );
 
     return {
       bookings: formattedBookings,
@@ -544,8 +548,7 @@ export class BookingService {
       limit
     };
   }
-
-  // Get all bookings (admin only)
+  // Get all bookings (admin only) - FIXED
   async getAllBookings(options: { status?: string; page?: number; limit?: number } = {}) {
     const db = this.fastify.db;
     const { status, page = 1, limit = 10 } = options;
@@ -578,40 +581,42 @@ export class BookingService {
     // Commission rate (10%)
     const commissionRate = 0.10;
 
-    // Format bookings
-    const formattedBookings = allBookings.map(booking => {
-      const commissionAmount = Number(booking.totalAmount || 0) * commissionRate;
+    // Format bookings with Promise.all to handle async operations
+    const formattedBookings = await Promise.all(
+      allBookings.map(async (booking) => {
+        const commissionAmount = Number(booking.totalAmount || 0) * commissionRate;
 
-      return {
-        id: booking.id,
-        checkInDate: booking.checkInDate,
-        checkOutDate: booking.checkOutDate,
-        bookingType: booking.bookingType,
-        guestCount: booking.guestCount,
-        totalAmount: booking.totalAmount,
-        commissionAmount: commissionAmount,
-        paymentMode: booking.paymentMode,
-        status: booking.status,
-        paymentStatus: booking.paymentStatus,
-        bookingDate: booking.bookingDate,
-        user: {
-          id: booking.user.id,
-          name: booking.user.name,
-          phone: booking.user.phone
-        },
-        hotel: {
-          id: booking.hotel.id,
-          name: booking.hotel.name,
-          city: booking.hotel.city
-        },
-        room: {
-          id: booking.room.id,
-          name: booking.room.name,
-          roomType: booking.room.roomType
-        },
-        addons: await this.addonService.getBookingAddons(booking.id)
-      };
-    });
+        return {
+          id: booking.id,
+          checkInDate: booking.checkInDate,
+          checkOutDate: booking.checkOutDate,
+          bookingType: booking.bookingType,
+          guestCount: booking.guestCount,
+          totalAmount: booking.totalAmount,
+          commissionAmount: commissionAmount,
+          paymentMode: booking.paymentMode,
+          status: booking.status,
+          paymentStatus: booking.paymentStatus,
+          bookingDate: booking.bookingDate,
+          user: {
+            id: booking.user.id,
+            name: booking.user.name,
+            phone: booking.user.phone
+          },
+          hotel: {
+            id: booking.hotel.id,
+            name: booking.hotel.name,
+            city: booking.hotel.city
+          },
+          room: {
+            id: booking.room.id,
+            name: booking.room.name,
+            roomType: booking.room.roomType
+          },
+          addons: await this.addonService.getBookingAddons(booking.id)
+        };
+      })
+    );
 
     return {
       bookings: formattedBookings,

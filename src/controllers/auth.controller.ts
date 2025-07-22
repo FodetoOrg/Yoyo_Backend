@@ -36,6 +36,7 @@ export class AuthController {
       return reply.status(HttpStatus.OK).send(response);
     } catch (error) {
       logger.error({ error }, "Error during login");
+      console.log('error ',error)
       throw error;
     }
   }

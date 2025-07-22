@@ -1,4 +1,3 @@
-
 import { FastifyInstance, FastifyRequest } from 'fastify';
 import { AddonController } from '../controllers/addon.controller';
 import {
@@ -7,6 +6,8 @@ import {
   getAddonSchema,
   updateRoomAddonsSchema,
 } from '../schemas/addon.schema';
+import z from 'zod';
+import zodToJsonSchema from 'zod-to-json-schema';
 
 export default async function addonRoutes(fastify: FastifyInstance) {
   const addonController = new AddonController(fastify);
@@ -79,7 +80,7 @@ export default async function addonRoutes(fastify: FastifyInstance) {
     }
   );
 
-  // Delete addon
+  // Delete a
   fastify.delete(
     '/hotels/:hotelId/addons/:addonId',
     {
@@ -138,11 +139,11 @@ export default async function addonRoutes(fastify: FastifyInstance) {
         tags: ['room-addons'],
         summary: 'Remove specific addon from room',
         security: [{ bearerAuth: [] }],
-        params: z.object({
-          hotelId: z.string().uuid('Invalid hotel ID'),
-          roomId: z.string().uuid('Invalid room ID'),
-          addonId: z.string().uuid('Invalid addon ID'),
-        }),
+        params: zodToJsonSchema(z.object({
+          hotelId: z.string(),
+          roomId: z.string(),
+          addonId: z.string(),
+        })),
       },
       preHandler: [fastify.authenticate],
     },
@@ -159,9 +160,9 @@ export default async function addonRoutes(fastify: FastifyInstance) {
         tags: ['room-addons'],
         summary: 'Get addons for a room',
         security: [{ bearerAuth: [] }],
-        params: z.object({
-          roomId: z.string().uuid('Invalid room ID'),
-        }),
+        params: zodToJsonSchema(z.object({
+          roomId: z.string(),
+        })),
       },
       preHandler: [fastify.authenticate],
     },
@@ -178,10 +179,10 @@ export default async function addonRoutes(fastify: FastifyInstance) {
         tags: ['room-addons'],
         summary: 'Get available addons for a room',
         security: [{ bearerAuth: [] }],
-        params: z.object({
-          hotelId: z.string().uuid('Invalid hotel ID'),
-          roomId: z.string().uuid('Invalid room ID'),
-        }),
+        params: zodToJsonSchema(z.object({
+          hotelId: z.string(),
+          roomId: z.string(),
+        })),
       },
       preHandler: [fastify.authenticate],
     },
