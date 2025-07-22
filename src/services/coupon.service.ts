@@ -1,1 +1,468 @@
-\n// @ts-nocheck\nimport { FastifyInstance } from \"fastify\";\nimport { coupons, couponMappings, cities, hotels, roomTypes } from \"../models/schema\";\nimport { eq, and, desc, inArray } from \"drizzle-orm\";\nimport { v4 as uuidv4 } from \"uuid\";\nimport { NotFoundError, ConflictError } from \"../types/errors\";\n\ninterface CouponCreateParams {\n  code: string;\n  description?: string;\n  discountType: 'percentage' | 'fixed';\n  discountValue: number;\n  maxDiscountAmount?: number;\n  minOrderAmount?: number;\n  validFrom: Date;\n  validTo: Date;\n  usageLimit?: number;\n  priceIncreasePercentage?: number;\n  mappings: {\n    cityIds?: string[];\n    hotelIds?: string[];\n    roomTypeIds?: string[];\n  };\n}\n\ninterface CouponFilters {\n  status?: string;\n  page?: number;\n  limit?: number;\n}\n\nexport class CouponService {\n  private fastify!: FastifyInstance;\n\n  setFastify(fastify: FastifyInstance) {\n    this.fastify = fastify;\n  }\n\n  // Get all coupons\n  async getCoupons(filters: CouponFilters = {}) {\n    const db = this.fastify.db;\n    const { status, page = 1, limit = 10 } = filters;\n\n    let whereCondition = status ? eq(coupons.status, status) : undefined;\n\n    const couponList = await db.query.coupons.findMany({\n      where: whereCondition,\n      with: {\n        mappings: {\n          with: {\n            city: true,\n            hotel: true,\n            roomType: true,\n          },\n        },\n      },\n      orderBy: [desc(coupons.createdAt)],\n      limit,\n      offset: (page - 1) * limit,\n    });\n\n    // Get total count\n    const totalCoupons = await db.query.coupons.findMany({\n      where: whereCondition,\n    });\n\n    return {\n      coupons: couponList.map(coupon => ({\n        id: coupon.id,\n        code: coupon.code,\n        description: coupon.description,\n        discountType: coupon.discountType,\n        discountValue: coupon.discountValue,\n        maxDiscountAmount: coupon.maxDiscountAmount,\n        minOrderAmount: coupon.minOrderAmount,\n        validFrom: coupon.validFrom,\n        validTo: coupon.validTo,\n        usageLimit: coupon.usageLimit,\n        usedCount: coupon.usedCount,\n        priceIncreasePercentage: coupon.priceIncreasePercentage,\n        status: coupon.status,\n        createdAt: coupon.createdAt,\n        updatedAt: coupon.updatedAt,\n        mappings: {\n          cities: coupon.mappings.filter(m => m.cityId).map(m => ({\n            id: m.city?.id,\n            name: m.city?.name,\n            state: m.city?.state,\n          })),\n          hotels: coupon.mappings.filter(m => m.hotelId).map(m => ({\n            id: m.hotel?.id,\n            name: m.hotel?.name,\n            city: m.hotel?.city,\n          })),\n          roomTypes: coupon.mappings.filter(m => m.roomTypeId).map(m => ({\n            id: m.roomType?.id,\n            name: m.roomType?.name,\n          })),\n        },\n      })),\n      total: totalCoupons.length,\n      page,\n      limit,\n      totalPages: Math.ceil(totalCoupons.length / limit),\n    };\n  }\n\n  // Get coupon by ID\n  async getCouponById(id: string) {\n    const db = this.fastify.db;\n\n    const coupon = await db.query.coupons.findFirst({\n      where: eq(coupons.id, id),\n      with: {\n        mappings: {\n          with: {\n            city: true,\n            hotel: true,\n            roomType: true,\n          },\n        },\n      },\n    });\n\n    if (!coupon) {\n      throw new NotFoundError(`Coupon with id ${id} not found`);\n    }\n\n    return {\n      id: coupon.id,\n      code: coupon.code,\n      description: coupon.description,\n      discountType: coupon.discountType,\n      discountValue: coupon.discountValue,\n      maxDiscountAmount: coupon.maxDiscountAmount,\n      minOrderAmount: coupon.minOrderAmount,\n      validFrom: coupon.validFrom,\n      validTo: coupon.validTo,\n      usageLimit: coupon.usageLimit,\n      usedCount: coupon.usedCount,\n      priceIncreasePercentage: coupon.priceIncreasePercentage,\n      status: coupon.status,\n      createdAt: coupon.createdAt,\n      updatedAt: coupon.updatedAt,\n      mappings: {\n        cities: coupon.mappings.filter(m => m.cityId).map(m => ({\n          id: m.city?.id,\n          name: m.city?.name,\n          state: m.city?.state,\n        })),\n        hotels: coupon.mappings.filter(m => m.hotelId).map(m => ({\n          id: m.hotel?.id,\n          name: m.hotel?.name,\n          city: m.hotel?.city,\n        })),\n        roomTypes: coupon.mappings.filter(m => m.roomTypeId).map(m => ({\n          id: m.roomType?.id,\n          name: m.roomType?.name,\n        })),\n      },\n    };\n  }\n\n  // Create coupon\n  async createCoupon(data: CouponCreateParams) {\n    const db = this.fastify.db;\n\n    // Check if coupon code already exists\n    const existingCoupon = await db.query.coupons.findFirst({\n      where: eq(coupons.code, data.code),\n    });\n\n    if (existingCoupon) {\n      throw new ConflictError(`Coupon with code \"${data.code}\" already exists`);\n    }\n\n    return await db.transaction(async (tx) => {\n      const couponId = uuidv4();\n\n      // Create coupon\n      await tx.insert(coupons).values({\n        id: couponId,\n        code: data.code,\n        description: data.description,\n        discountType: data.discountType,\n        discountValue: data.discountValue,\n        maxDiscountAmount: data.maxDiscountAmount,\n        minOrderAmount: data.minOrderAmount || 0,\n        validFrom: data.validFrom,\n        validTo: data.validTo,\n        usageLimit: data.usageLimit,\n        priceIncreasePercentage: data.priceIncreasePercentage || 0,\n      });\n\n      // Create mappings\n      const mappingInserts: any[] = [];\n\n      // City mappings\n      if (data.mappings.cityIds?.length) {\n        for (const cityId of data.mappings.cityIds) {\n          mappingInserts.push({\n            id: uuidv4(),\n            couponId,\n            cityId,\n          });\n        }\n      }\n\n      // Hotel mappings\n      if (data.mappings.hotelIds?.length) {\n        for (const hotelId of data.mappings.hotelIds) {\n          mappingInserts.push({\n            id: uuidv4(),\n            couponId,\n            hotelId,\n          });\n        }\n      }\n\n      // Room type mappings\n      if (data.mappings.roomTypeIds?.length) {\n        for (const roomTypeId of data.mappings.roomTypeIds) {\n          mappingInserts.push({\n            id: uuidv4(),\n            couponId,\n            roomTypeId,\n          });\n        }\n      }\n\n      if (mappingInserts.length > 0) {\n        await tx.insert(couponMappings).values(mappingInserts);\n      }\n\n      return couponId;\n    });\n  }\n\n  // Update coupon\n  async updateCoupon(id: string, data: Partial<CouponCreateParams>) {\n    const db = this.fastify.db;\n\n    // Check if coupon exists\n    await this.getCouponById(id);\n\n    // Check if code is being changed and conflicts\n    if (data.code) {\n      const existingCoupon = await db.query.coupons.findFirst({\n        where: eq(coupons.code, data.code),\n      });\n\n      if (existingCoupon && existingCoupon.id !== id) {\n        throw new ConflictError(`Coupon with code \"${data.code}\" already exists`);\n      }\n    }\n\n    return await db.transaction(async (tx) => {\n      // Update coupon\n      const updateData: any = { ...data };\n      delete updateData.mappings; // Remove mappings from update data\n      updateData.updatedAt = new Date();\n\n      await tx\n        .update(coupons)\n        .set(updateData)\n        .where(eq(coupons.id, id));\n\n      // Update mappings if provided\n      if (data.mappings) {\n        // Delete existing mappings\n        await tx.delete(couponMappings).where(eq(couponMappings.couponId, id));\n\n        // Create new mappings\n        const mappingInserts: any[] = [];\n\n        if (data.mappings.cityIds?.length) {\n          for (const cityId of data.mappings.cityIds) {\n            mappingInserts.push({\n              id: uuidv4(),\n              couponId: id,\n              cityId,\n            });\n          }\n        }\n\n        if (data.mappings.hotelIds?.length) {\n          for (const hotelId of data.mappings.hotelIds) {\n            mappingInserts.push({\n              id: uuidv4(),\n              couponId: id,\n              hotelId,\n            });\n          }\n        }\n\n        if (data.mappings.roomTypeIds?.length) {\n          for (const roomTypeId of data.mappings.roomTypeIds) {\n            mappingInserts.push({\n              id: uuidv4(),\n              couponId: id,\n              roomTypeId,\n            });\n          }\n        }\n\n        if (mappingInserts.length > 0) {\n          await tx.insert(couponMappings).values(mappingInserts);\n        }\n      }\n\n      return id;\n    });\n  }\n\n  // Delete coupon\n  async deleteCoupon(id: string) {\n    const db = this.fastify.db;\n\n    // Check if coupon exists\n    await this.getCouponById(id);\n\n    return await db.transaction(async (tx) => {\n      // Delete mappings first\n      await tx.delete(couponMappings).where(eq(couponMappings.couponId, id));\n\n      // Delete coupon\n      await tx.delete(coupons).where(eq(coupons.id, id));\n\n      return true;\n    });\n  }\n\n  // Get all coupons for users (no permission restrictions)\n  async getUserCoupons(filters: CouponFilters = {}) {\n    const db = this.fastify.db;\n    const { status, page = 1, limit = 10 } = filters;\n\n    let whereCondition = status ? eq(coupons.status, status) : undefined;\n\n    const couponList = await db.query.coupons.findMany({\n      where: whereCondition,\n      with: {\n        mappings: {\n          with: {\n            city: true,\n            hotel: true,\n            roomType: true,\n          },\n        },\n      },\n      orderBy: [desc(coupons.createdAt)],\n      limit,\n      offset: (page - 1) * limit,\n    });\n\n    // Get total count\n    const totalCoupons = await db.query.coupons.findMany({\n      where: whereCondition,\n    });\n\n    return {\n      coupons: couponList.map(coupon => ({\n        id: coupon.id,\n        code: coupon.code,\n        description: coupon.description,\n        discountType: coupon.discountType,\n        discountValue: coupon.discountValue,\n        maxDiscountAmount: coupon.maxDiscountAmount,\n        minOrderAmount: coupon.minOrderAmount,\n        validFrom: coupon.validFrom,\n        validTo: coupon.validTo,\n        usageLimit: coupon.usageLimit,\n        usedCount: coupon.usedCount,\n        status: coupon.status,\n        mappings: {\n          cities: coupon.mappings.filter(m => m.cityId).map(m => ({\n            id: m.city?.id,\n            name: m.city?.name,\n            state: m.city?.state,\n          })),\n          hotels: coupon.mappings.filter(m => m.hotelId).map(m => ({\n            id: m.hotel?.id,\n            name: m.hotel?.name,\n            city: m.hotel?.city,\n          })),\n          roomTypes: coupon.mappings.filter(m => m.roomTypeId).map(m => ({\n            id: m.roomType?.id,\n            name: m.roomType?.name,\n          })),\n        },\n      })),\n      total: totalCoupons.length,\n      page,\n      limit,\n      totalPages: Math.ceil(totalCoupons.length / limit),\n    };\n  }\n\n  // Validate coupon for booking\n  async validateCoupon(\n    couponCode: string,\n    hotelId?: string,\n    roomType?: string,\n    totalAmount?: number,\n    bookingType?: 'daily' | 'hourly'\n  ) {\n    const db = this.fastify.db;\n\n    const coupon = await db.query.coupons.findFirst({\n      where: eq(coupons.code, couponCode),\n      with: {\n        mappings: true,\n      },\n    });\n\n    if (!coupon) {\n      throw new NotFoundError(`Coupon with code \"${couponCode}\" not found`);\n    }\n\n    // Check if coupon is active\n    if (coupon.status !== 'active') {\n      throw new Error('Coupon is not active');\n    }\n\n    // Check validity dates\n    const now = new Date();\n    if (now < coupon.validFrom || now > coupon.validTo) {\n      throw new Error('Coupon is not valid for current date');\n    }\n\n    // Check if coupon usage limit is exceeded\n    if (coupon.usageLimit && coupon.usedCount >= coupon.usageLimit) {\n      throw new Error('Coupon usage limit exceeded');\n    }\n\n    // Check booking type applicability\n    if (bookingType && coupon.applicableBookingTypes !== 'both') {\n      if (coupon.applicableBookingTypes !== bookingType) {\n        throw new Error(`Coupon is not applicable for ${bookingType} bookings`);\n      }\n    }\n\n    // Check minimum order amount\n    if (totalAmount < coupon.minOrderAmount) {\n      throw new Error(`Minimum order amount of ₹${coupon.minOrderAmount} required`);\n    }\n\n    // Check mappings\n    const isValidForHotel = coupon.mappings.some(mapping => \n      mapping.hotelId === hotelId || \n      mapping.roomTypeId === roomType ||\n      mapping.cityId // City mapping would need hotel's city check\n    );\n\n    if (!isValidForHotel) {\n      throw new Error('Coupon is not valid for this hotel or room type');\n    }\n\n    // Calculate discount\n    let discountAmount = 0;\n    if (coupon.discountType === 'percentage') {\n      discountAmount = (totalAmount * coupon.discountValue) / 100;\n      if (coupon.maxDiscountAmount && discountAmount > coupon.maxDiscountAmount) {\n        discountAmount = coupon.maxDiscountAmount;\n      }\n    } else {\n      discountAmount = coupon.discountValue;\n    }\n\n    return {\n      coupon: {\n        id: coupon.id,\n        code: coupon.code,\n        discountType: coupon.discountType,\n        discountValue: coupon.discountValue,\n      },\n      discountAmount,\n      finalAmount: totalAmount - discountAmount,\n    };\n  }\n}\n
+// @ts-nocheck
+import { FastifyInstance } from "fastify";
+import { coupons, couponMappings, cities, hotels, roomTypes } from "../models/schema";
+import { eq, and, desc, inArray } from "drizzle-orm";
+import { v4 as uuidv4 } from "uuid";
+import { NotFoundError, ConflictError } from "../types/errors";
+
+interface CouponCreateParams {
+  code: string;
+  description?: string;
+  discountType: 'percentage' | 'fixed';
+  discountValue: number;
+  maxDiscountAmount?: number;
+  minOrderAmount?: number;
+  validFrom: Date;
+  validTo: Date;
+  usageLimit?: number;
+  priceIncreasePercentage?: number;
+  mappings: {
+    cityIds?: string[];
+    hotelIds?: string[];
+    roomTypeIds?: string[];
+  };
+}
+
+interface CouponFilters {
+  status?: string;
+  page?: number;
+  limit?: number;
+}
+
+export class CouponService {
+  private fastify!: FastifyInstance;
+
+  setFastify(fastify: FastifyInstance) {
+    this.fastify = fastify;
+  }
+
+  // Get all coupons
+  async getCoupons(filters: CouponFilters = {}) {
+    const db = this.fastify.db;
+    const { status, page = 1, limit = 10 } = filters;
+
+    let whereCondition = status ? eq(coupons.status, status) : undefined;
+
+    const couponList = await db.query.coupons.findMany({
+      where: whereCondition,
+      with: {
+        mappings: {
+          with: {
+            city: true,
+            hotel: true,
+            roomType: true,
+          },
+        },
+      },
+      orderBy: [desc(coupons.createdAt)],
+      limit,
+      offset: (page - 1) * limit,
+    });
+
+    // Get total count
+    const totalCoupons = await db.query.coupons.findMany({
+      where: whereCondition,
+    });
+
+    return {
+      coupons: couponList.map(coupon => ({
+        id: coupon.id,
+        code: coupon.code,
+        description: coupon.description,
+        discountType: coupon.discountType,
+        discountValue: coupon.discountValue,
+        maxDiscountAmount: coupon.maxDiscountAmount,
+        minOrderAmount: coupon.minOrderAmount,
+        validFrom: coupon.validFrom,
+        validTo: coupon.validTo,
+        usageLimit: coupon.usageLimit,
+        usedCount: coupon.usedCount,
+        priceIncreasePercentage: coupon.priceIncreasePercentage,
+        status: coupon.status,
+        createdAt: coupon.createdAt,
+        updatedAt: coupon.updatedAt,
+        mappings: {
+          cities: coupon.mappings.filter(m => m.cityId).map(m => ({
+            id: m.city?.id,
+            name: m.city?.name,
+            state: m.city?.state,
+          })),
+          hotels: coupon.mappings.filter(m => m.hotelId).map(m => ({
+            id: m.hotel?.id,
+            name: m.hotel?.name,
+            city: m.hotel?.city,
+          })),
+          roomTypes: coupon.mappings.filter(m => m.roomTypeId).map(m => ({
+            id: m.roomType?.id,
+            name: m.roomType?.name,
+          })),
+        },
+      })),
+      total: totalCoupons.length,
+      page,
+      limit,
+      totalPages: Math.ceil(totalCoupons.length / limit),
+    };
+  }
+
+  // Get coupon by ID
+  async getCouponById(id: string) {
+    const db = this.fastify.db;
+    
+    const coupon = await db.query.coupons.findFirst({
+      where: eq(coupons.id, id),
+      with: {
+        mappings: {
+          with: {
+            city: true,
+            hotel: true,
+            roomType: true,
+          },
+        },
+      },
+    });
+
+    if (!coupon) {
+      throw new NotFoundError(`Coupon with id ${id} not found`);
+    }
+
+    return {
+      id: coupon.id,
+      code: coupon.code,
+      description: coupon.description,
+      discountType: coupon.discountType,
+      discountValue: coupon.discountValue,
+      maxDiscountAmount: coupon.maxDiscountAmount,
+      minOrderAmount: coupon.minOrderAmount,
+      validFrom: coupon.validFrom,
+      validTo: coupon.validTo,
+      usageLimit: coupon.usageLimit,
+      usedCount: coupon.usedCount,
+      priceIncreasePercentage: coupon.priceIncreasePercentage,
+      status: coupon.status,
+      createdAt: coupon.createdAt,
+      updatedAt: coupon.updatedAt,
+      mappings: {
+        cities: coupon.mappings.filter(m => m.cityId).map(m => ({
+          id: m.city?.id,
+          name: m.city?.name,
+          state: m.city?.state,
+        })),
+        hotels: coupon.mappings.filter(m => m.hotelId).map(m => ({
+          id: m.hotel?.id,
+          name: m.hotel?.name,
+          city: m.hotel?.city,
+        })),
+        roomTypes: coupon.mappings.filter(m => m.roomTypeId).map(m => ({
+          id: m.roomType?.id,
+          name: m.roomType?.name,
+        })),
+      },
+    };
+  }
+
+  // Create coupon
+  async createCoupon(data: CouponCreateParams) {
+    const db = this.fastify.db;
+    
+    // Check if coupon code already exists
+    const existingCoupon = await db.query.coupons.findFirst({
+      where: eq(coupons.code, data.code),
+    });
+
+    if (existingCoupon) {
+      throw new ConflictError(`Coupon with code "${data.code}" already exists`);
+    }
+
+    return await db.transaction(async (tx) => {
+      const couponId = uuidv4();
+      
+      // Create coupon
+      await tx.insert(coupons).values({
+        id: couponId,
+        code: data.code,
+        description: data.description,
+        discountType: data.discountType,
+        discountValue: data.discountValue,
+        maxDiscountAmount: data.maxDiscountAmount,
+        minOrderAmount: data.minOrderAmount || 0,
+        validFrom: data.validFrom,
+        validTo: data.validTo,
+        usageLimit: data.usageLimit,
+        priceIncreasePercentage: data.priceIncreasePercentage || 0,
+      });
+
+      // Create mappings
+      const mappingInserts: any[] = [];
+
+      // City mappings
+      if (data.mappings.cityIds?.length) {
+        for (const cityId of data.mappings.cityIds) {
+          mappingInserts.push({
+            id: uuidv4(),
+            couponId,
+            cityId,
+          });
+        }
+      }
+
+      // Hotel mappings
+      if (data.mappings.hotelIds?.length) {
+        for (const hotelId of data.mappings.hotelIds) {
+          mappingInserts.push({
+            id: uuidv4(),
+            couponId,
+            hotelId,
+          });
+        }
+      }
+
+      // Room type mappings
+      if (data.mappings.roomTypeIds?.length) {
+        for (const roomTypeId of data.mappings.roomTypeIds) {
+          mappingInserts.push({
+            id: uuidv4(),
+            couponId,
+            roomTypeId,
+          });
+        }
+      }
+
+      if (mappingInserts.length > 0) {
+        await tx.insert(couponMappings).values(mappingInserts);
+      }
+
+      return couponId;
+    });
+  }
+
+  // Update coupon
+  async updateCoupon(id: string, data: Partial<CouponCreateParams>) {
+    const db = this.fastify.db;
+    
+    // Check if coupon exists
+    await this.getCouponById(id);
+
+    // Check if code is being changed and conflicts
+    if (data.code) {
+      const existingCoupon = await db.query.coupons.findFirst({
+        where: eq(coupons.code, data.code),
+      });
+
+      if (existingCoupon && existingCoupon.id !== id) {
+        throw new ConflictError(`Coupon with code "${data.code}" already exists`);
+      }
+    }
+
+    return await db.transaction(async (tx) => {
+      // Update coupon
+      const updateData: any = { ...data };
+      delete updateData.mappings; // Remove mappings from update data
+      updateData.updatedAt = new Date();
+
+      await tx
+        .update(coupons)
+        .set(updateData)
+        .where(eq(coupons.id, id));
+
+      // Update mappings if provided
+      if (data.mappings) {
+        // Delete existing mappings
+        await tx.delete(couponMappings).where(eq(couponMappings.couponId, id));
+
+        // Create new mappings
+        const mappingInserts: any[] = [];
+
+        if (data.mappings.cityIds?.length) {
+          for (const cityId of data.mappings.cityIds) {
+            mappingInserts.push({
+              id: uuidv4(),
+              couponId: id,
+              cityId,
+            });
+          }
+        }
+
+        if (data.mappings.hotelIds?.length) {
+          for (const hotelId of data.mappings.hotelIds) {
+            mappingInserts.push({
+              id: uuidv4(),
+              couponId: id,
+              hotelId,
+            });
+          }
+        }
+
+        if (data.mappings.roomTypeIds?.length) {
+          for (const roomTypeId of data.mappings.roomTypeIds) {
+            mappingInserts.push({
+              id: uuidv4(),
+              couponId: id,
+              roomTypeId,
+            });
+          }
+        }
+
+        if (mappingInserts.length > 0) {
+          await tx.insert(couponMappings).values(mappingInserts);
+        }
+      }
+
+      return id;
+    });
+  }
+
+  // Delete coupon
+  async deleteCoupon(id: string) {
+    const db = this.fastify.db;
+    
+    // Check if coupon exists
+    await this.getCouponById(id);
+
+    return await db.transaction(async (tx) => {
+      // Delete mappings first
+      await tx.delete(couponMappings).where(eq(couponMappings.couponId, id));
+      
+      // Delete coupon
+      await tx.delete(coupons).where(eq(coupons.id, id));
+      
+      return true;
+    });
+  }
+
+  // Get all coupons for users (no permission restrictions)
+  async getUserCoupons(filters: CouponFilters = {}) {
+    const db = this.fastify.db;
+    const { status, page = 1, limit = 10 } = filters;
+
+    let whereCondition = status ? eq(coupons.status, status) : undefined;
+
+    const couponList = await db.query.coupons.findMany({
+      where: whereCondition,
+      with: {
+        mappings: {
+          with: {
+            city: true,
+            hotel: true,
+            roomType: true,
+          },
+        },
+      },
+      orderBy: [desc(coupons.createdAt)],
+      limit,
+      offset: (page - 1) * limit,
+    });
+
+    // Get total count
+    const totalCoupons = await db.query.coupons.findMany({
+      where: whereCondition,
+    });
+
+    return {
+      coupons: couponList.map(coupon => ({
+        id: coupon.id,
+        code: coupon.code,
+        description: coupon.description,
+        discountType: coupon.discountType,
+        discountValue: coupon.discountValue,
+        maxDiscountAmount: coupon.maxDiscountAmount,
+        minOrderAmount: coupon.minOrderAmount,
+        validFrom: coupon.validFrom,
+        validTo: coupon.validTo,
+        usageLimit: coupon.usageLimit,
+        usedCount: coupon.usedCount,
+        status: coupon.status,
+        mappings: {
+          cities: coupon.mappings.filter(m => m.cityId).map(m => ({
+            id: m.city?.id,
+            name: m.city?.name,
+            state: m.city?.state,
+          })),
+          hotels: coupon.mappings.filter(m => m.hotelId).map(m => ({
+            id: m.hotel?.id,
+            name: m.hotel?.name,
+            city: m.hotel?.city,
+          })),
+          roomTypes: coupon.mappings.filter(m => m.roomTypeId).map(m => ({
+            id: m.roomType?.id,
+            name: m.roomType?.name,
+          })),
+        },
+      })),
+      total: totalCoupons.length,
+      page,
+      limit,
+      totalPages: Math.ceil(totalCoupons.length / limit),
+    };
+  }
+
+  // Validate coupon for booking
+  async validateCoupon(code: string, hotelId: string, roomTypeId: string, orderAmount: number) {
+    const db = this.fastify.db;
+    
+    const coupon = await db.query.coupons.findFirst({
+      where: eq(coupons.code, code),
+      with: {
+        mappings: true,
+      },
+    });
+
+    if (!coupon) {
+      throw new NotFoundError(`Coupon with code "${code}" not found`);
+    }
+
+    // Check if coupon is active
+    if (coupon.status !== 'active') {
+      throw new Error('Coupon is not active');
+    }
+
+    // Check validity dates
+    const now = new Date();
+    if (now < coupon.validFrom || now > coupon.validTo) {
+      throw new Error('Coupon is not valid for current date');
+    }
+
+    // Check usage limit
+    if (coupon.usageLimit && coupon.usedCount >= coupon.usageLimit) {
+      throw new Error('Coupon usage limit exceeded');
+    }
+
+    // Check minimum order amount
+    if (orderAmount < coupon.minOrderAmount) {
+      throw new Error(`Minimum order amount of ₹${coupon.minOrderAmount} required`);
+    }
+
+    // Check mappings
+    const isValidForHotel = coupon.mappings.some(mapping => 
+      mapping.hotelId === hotelId || 
+      mapping.roomTypeId === roomTypeId ||
+      mapping.cityId // City mapping would need hotel's city check
+    );
+
+    if (!isValidForHotel) {
+      throw new Error('Coupon is not valid for this hotel or room type');
+    }
+
+    // Calculate discount
+    let discountAmount = 0;
+    if (coupon.discountType === 'percentage') {
+      discountAmount = (orderAmount * coupon.discountValue) / 100;
+      if (coupon.maxDiscountAmount && discountAmount > coupon.maxDiscountAmount) {
+        discountAmount = coupon.maxDiscountAmount;
+      }
+    } else {
+      discountAmount = coupon.discountValue;
+    }
+
+    return {
+      coupon: {
+        id: coupon.id,
+        code: coupon.code,
+        discountType: coupon.discountType,
+        discountValue: coupon.discountValue,
+      },
+      discountAmount,
+      finalAmount: orderAmount - discountAmount,
+    };
+  }
+}
