@@ -48,43 +48,57 @@ export class AnalyticsService {
     const totalUsers = await db.select({ count: count() }).from(users).where(eq(users.role, 'user'));
     const totalBookings = await db.select({ count: count() }).from(bookings);
 
-    // Revenue metrics
-    const totalRevenue = await db
+    // Total Paid Revenue (confirmed bookings with completed payments)
+    const totalPaidRevenue = await db
       .select({ total: sum(bookings.totalAmount) })
       .from(bookings)
       .where(
         and(
-          eq(bookings.status, 'completed'),
+          eq(bookings.status, 'confirmed'),
           eq(bookings.paymentStatus, 'completed')
         )
       );
 
-    const currentMonthRevenue = await db
+    // Need to Pay Revenue (confirmed bookings with pending payments)
+    const needToPayRevenue = await db
       .select({ total: sum(bookings.totalAmount) })
       .from(bookings)
       .where(
         and(
-          eq(bookings.status, 'completed'),
+          eq(bookings.status, 'confirmed'),
+          eq(bookings.paymentStatus, 'pending')
+        )
+      );
+
+    // Current month paid revenue
+    const currentMonthPaidRevenue = await db
+      .select({ total: sum(bookings.totalAmount) })
+      .from(bookings)
+      .where(
+        and(
+          eq(bookings.status, 'confirmed'),
           eq(bookings.paymentStatus, 'completed'),
           between(bookings.createdAt, startOfMonth, now)
         )
       );
 
-    const lastMonthRevenue = await db
+    // Last month paid revenue
+    const lastMonthPaidRevenue = await db
       .select({ total: sum(bookings.totalAmount) })
       .from(bookings)
       .where(
         and(
-          eq(bookings.status, 'completed'),
+          eq(bookings.status, 'confirmed'),
           eq(bookings.paymentStatus, 'completed'),
           between(bookings.createdAt, startOfLastMonth, endOfLastMonth)
         )
       );
 
-    // Commission calculation (assuming 10% commission)
+    // Commission calculation (10% commission)
     const commissionRate = 0.10;
-    const totalCommission = (Number(totalRevenue[0]?.total || 0)) * commissionRate;
-    const currentMonthCommission = (Number(currentMonthRevenue[0]?.total || 0)) * commissionRate;
+    const totalPaidCommission = (Number(totalPaidRevenue[0]?.total || 0)) * commissionRate;
+    const pendingCommission = (Number(needToPayRevenue[0]?.total || 0)) * commissionRate;
+    const currentMonthCommission = (Number(currentMonthPaidRevenue[0]?.total || 0)) * commissionRate;
 
     // Booking distribution
     const confirmedBookings = await db
@@ -174,45 +188,43 @@ export class AnalyticsService {
       });
     }
 
-    // Top performing cities
+    // Top performing cities with commission metrics
     const topCities = await db
       .select({
         cityName: hotels.city,
         hotelCount: count(hotels.id),
-        totalRevenue: sum(bookings.totalAmount),
+        paidRevenue: sum(sql`CASE WHEN ${bookings.status} = 'confirmed' AND ${bookings.paymentStatus} = 'completed' THEN ${bookings.totalAmount} ELSE 0 END`),
+        pendingRevenue: sum(sql`CASE WHEN ${bookings.status} = 'confirmed' AND ${bookings.paymentStatus} = 'pending' THEN ${bookings.totalAmount} ELSE 0 END`),
+        totalRevenue: sum(sql`CASE WHEN ${bookings.status} = 'confirmed' THEN ${bookings.totalAmount} ELSE 0 END`),
         totalBookings: count(bookings.id),
       })
       .from(hotels)
       .leftJoin(bookings, eq(hotels.id, bookings.hotelId))
       .where(
-        and(
-          eq(bookings.status, 'completed'),
-          eq(bookings.paymentStatus, 'completed')
-        )
+        eq(bookings.status, 'confirmed')
       )
       .groupBy(hotels.city)
-      .orderBy(desc(sum(bookings.totalAmount)))
+      .orderBy(desc(sum(sql`CASE WHEN ${bookings.status} = 'confirmed' THEN ${bookings.totalAmount} ELSE 0 END`)))
       .limit(5);
 
-    // Top performing hotels
+    // Top performing hotels with commission metrics
     const topHotels = await db
       .select({
         hotelId: hotels.id,
         hotelName: hotels.name,
         city: hotels.city,
-        totalRevenue: sum(bookings.totalAmount),
+        paidRevenue: sum(sql`CASE WHEN ${bookings.status} = 'confirmed' AND ${bookings.paymentStatus} = 'completed' THEN ${bookings.totalAmount} ELSE 0 END`),
+        pendingRevenue: sum(sql`CASE WHEN ${bookings.status} = 'confirmed' AND ${bookings.paymentStatus} = 'pending' THEN ${bookings.totalAmount} ELSE 0 END`),
+        totalRevenue: sum(sql`CASE WHEN ${bookings.status} = 'confirmed' THEN ${bookings.totalAmount} ELSE 0 END`),
         totalBookings: count(bookings.id),
       })
       .from(hotels)
       .leftJoin(bookings, eq(hotels.id, bookings.hotelId))
       .where(
-        and(
-          eq(bookings.status, 'completed'),
-          eq(bookings.paymentStatus, 'completed')
-        )
+        eq(bookings.status, 'confirmed')
       )
       .groupBy(hotels.id, hotels.name, hotels.city)
-      .orderBy(desc(sum(bookings.totalAmount)))
+      .orderBy(desc(sum(sql`CASE WHEN ${bookings.status} = 'confirmed' THEN ${bookings.totalAmount} ELSE 0 END`)))
       .limit(10);
 
     // Recent bookings
@@ -241,13 +253,17 @@ export class AnalyticsService {
         totalHotels: Number(totalHotels[0]?.count || 0),
         totalUsers: Number(totalUsers[0]?.count || 0),
         totalBookings: Number(totalBookings[0]?.count || 0),
-        totalRevenue: Number(totalRevenue[0]?.total || 0),
-        currentMonthRevenue: Number(currentMonthRevenue[0]?.total || 0),
-        lastMonthRevenue: Number(lastMonthRevenue[0]?.total || 0),
-        totalCommission: totalCommission,
+        totalPaidRevenue: Number(totalPaidRevenue[0]?.total || 0),
+        needToPayRevenue: Number(needToPayRevenue[0]?.total || 0),
+        totalRevenue: Number(totalPaidRevenue[0]?.total || 0) + Number(needToPayRevenue[0]?.total || 0),
+        currentMonthRevenue: Number(currentMonthPaidRevenue[0]?.total || 0),
+        lastMonthRevenue: Number(lastMonthPaidRevenue[0]?.total || 0),
+        totalPaidCommission: totalPaidCommission,
+        pendingCommission: pendingCommission,
+        totalCommission: totalPaidCommission + pendingCommission,
         currentMonthCommission: currentMonthCommission,
-        revenueGrowth: lastMonthRevenue[0]?.total ? 
-          ((Number(currentMonthRevenue[0]?.total || 0) - Number(lastMonthRevenue[0]?.total)) / Number(lastMonthRevenue[0]?.total)) * 100 : 0,
+        revenueGrowth: lastMonthPaidRevenue[0]?.total ? 
+          ((Number(currentMonthPaidRevenue[0]?.total || 0) - Number(lastMonthPaidRevenue[0]?.total)) / Number(lastMonthPaidRevenue[0]?.total)) * 100 : 0,
       },
       bookingDistribution: {
         confirmed: Number(confirmedBookings[0]?.count || 0),
@@ -264,14 +280,24 @@ export class AnalyticsService {
       topCities: topCities.map(city => ({
         name: city.cityName,
         hotelCount: Number(city.hotelCount || 0),
-        revenue: Number(city.totalRevenue || 0),
+        paidRevenue: Number(city.paidRevenue || 0),
+        pendingRevenue: Number(city.pendingRevenue || 0),
+        totalRevenue: Number(city.totalRevenue || 0),
+        paidCommission: Number(city.paidRevenue || 0) * commissionRate,
+        pendingCommission: Number(city.pendingRevenue || 0) * commissionRate,
+        totalCommission: Number(city.totalRevenue || 0) * commissionRate,
         bookings: Number(city.totalBookings || 0),
       })),
       topHotels: topHotels.map(hotel => ({
         id: hotel.hotelId,
         name: hotel.hotelName,
         city: hotel.city,
-        revenue: Number(hotel.totalRevenue || 0),
+        paidRevenue: Number(hotel.paidRevenue || 0),
+        pendingRevenue: Number(hotel.pendingRevenue || 0),
+        totalRevenue: Number(hotel.totalRevenue || 0),
+        paidCommission: Number(hotel.paidRevenue || 0) * commissionRate,
+        pendingCommission: Number(hotel.pendingRevenue || 0) * commissionRate,
+        totalCommission: Number(hotel.totalRevenue || 0) * commissionRate,
         bookings: Number(hotel.totalBookings || 0),
       })),
       recentBookings: recentBookings.map(booking => ({
@@ -340,32 +366,42 @@ export class AnalyticsService {
       ? Math.round(((occupiedRooms[0]?.count || 0) / totalRooms[0].count) * 100)
       : 0;
 
-    // Revenue metrics
-    const totalRevenue = await db
+    // Revenue metrics - Paid Revenue (confirmed + completed payments)
+    const totalPaidRevenue = await db
       .select({ total: sum(bookings.totalAmount) })
       .from(bookings)
       .where(and(
         eq(bookings.hotelId, hotelId),
-        eq(bookings.status, 'completed'),
+        eq(bookings.status, 'confirmed'),
         eq(bookings.paymentStatus, 'completed')
       ));
 
-    const currentMonthRevenue = await db
+    // Need to Pay Revenue (confirmed + pending payments)
+    const needToPayRevenue = await db
       .select({ total: sum(bookings.totalAmount) })
       .from(bookings)
       .where(and(
         eq(bookings.hotelId, hotelId),
-        eq(bookings.status, 'completed'),
+        eq(bookings.status, 'confirmed'),
+        eq(bookings.paymentStatus, 'pending')
+      ));
+
+    const currentMonthPaidRevenue = await db
+      .select({ total: sum(bookings.totalAmount) })
+      .from(bookings)
+      .where(and(
+        eq(bookings.hotelId, hotelId),
+        eq(bookings.status, 'confirmed'),
         eq(bookings.paymentStatus, 'completed'),
         between(bookings.createdAt, startOfMonth, now)
       ));
 
-    const lastMonthRevenue = await db
+    const lastMonthPaidRevenue = await db
       .select({ total: sum(bookings.totalAmount) })
       .from(bookings)
       .where(and(
         eq(bookings.hotelId, hotelId),
-        eq(bookings.status, 'completed'),
+        eq(bookings.status, 'confirmed'),
         eq(bookings.paymentStatus, 'completed'),
         between(bookings.createdAt, startOfLastMonth, endOfLastMonth)
       ));
@@ -486,6 +522,11 @@ export class AnalyticsService {
       .orderBy(desc(bookings.createdAt))
       .limit(10);
 
+    // Commission calculations
+    const commissionRate = 0.10;
+    const totalPaidCommission = Number(totalPaidRevenue[0]?.total || 0) * commissionRate;
+    const pendingCommission = Number(needToPayRevenue[0]?.total || 0) * commissionRate;
+
     return {
       overview: {
         hotelName: hotel.name,
@@ -494,12 +535,17 @@ export class AnalyticsService {
         availableRooms: Number(availableRooms[0]?.count || 0),
         occupiedRooms: Number(occupiedRooms[0]?.count || 0),
         occupancyRate: Number(occupancyRate),
-        totalRevenue: Number(totalRevenue[0]?.total || 0),
-        currentMonthRevenue: Number(currentMonthRevenue[0]?.total || 0),
-        lastMonthRevenue: Number(lastMonthRevenue[0]?.total || 0),
+        totalPaidRevenue: Number(totalPaidRevenue[0]?.total || 0),
+        needToPayRevenue: Number(needToPayRevenue[0]?.total || 0),
+        totalRevenue: Number(totalPaidRevenue[0]?.total || 0) + Number(needToPayRevenue[0]?.total || 0),
+        currentMonthRevenue: Number(currentMonthPaidRevenue[0]?.total || 0),
+        lastMonthRevenue: Number(lastMonthPaidRevenue[0]?.total || 0),
+        totalPaidCommission: totalPaidCommission,
+        pendingCommission: pendingCommission,
+        totalCommission: totalPaidCommission + pendingCommission,
         totalBookings: Number(totalBookings[0]?.count || 0),
-        revenueGrowth: lastMonthRevenue[0]?.total ? 
-          ((Number(currentMonthRevenue[0]?.total || 0) - Number(lastMonthRevenue[0]?.total)) / Number(lastMonthRevenue[0]?.total)) * 100 : 0,
+        revenueGrowth: lastMonthPaidRevenue[0]?.total ? 
+          ((Number(currentMonthPaidRevenue[0]?.total || 0) - Number(lastMonthPaidRevenue[0]?.total)) / Number(lastMonthPaidRevenue[0]?.total)) * 100 : 0,
       },
       bookingDistribution: {
         confirmed: Number(confirmedBookings[0]?.count || 0),
@@ -599,31 +645,42 @@ export class AnalyticsService {
       .from(bookings)
       .where(inArray(bookings.hotelId, hotelIds));
 
-    const totalRevenue = await db
+    // Paid Revenue (confirmed + completed payments)
+    const totalPaidRevenue = await db
       .select({ total: sum(bookings.totalAmount) })
       .from(bookings)
       .where(and(
         inArray(bookings.hotelId, hotelIds),
-        eq(bookings.status, 'completed'),
+        eq(bookings.status, 'confirmed'),
         eq(bookings.paymentStatus, 'completed')
       ));
 
-    const currentMonthRevenue = await db
+    // Need to Pay Revenue (confirmed + pending payments)
+    const needToPayRevenue = await db
       .select({ total: sum(bookings.totalAmount) })
       .from(bookings)
       .where(and(
         inArray(bookings.hotelId, hotelIds),
-        eq(bookings.status, 'completed'),
+        eq(bookings.status, 'confirmed'),
+        eq(bookings.paymentStatus, 'pending')
+      ));
+
+    const currentMonthPaidRevenue = await db
+      .select({ total: sum(bookings.totalAmount) })
+      .from(bookings)
+      .where(and(
+        inArray(bookings.hotelId, hotelIds),
+        eq(bookings.status, 'confirmed'),
         eq(bookings.paymentStatus, 'completed'),
         between(bookings.createdAt, startOfMonth, now)
       ));
 
-    const lastMonthRevenue = await db
+    const lastMonthPaidRevenue = await db
       .select({ total: sum(bookings.totalAmount) })
       .from(bookings)
       .where(and(
         inArray(bookings.hotelId, hotelIds),
-        eq(bookings.status, 'completed'),
+        eq(bookings.status, 'confirmed'),
         eq(bookings.paymentStatus, 'completed'),
         between(bookings.createdAt, startOfLastMonth, endOfLastMonth)
       ));
@@ -700,23 +757,24 @@ export class AnalyticsService {
       .where(inArray(hotels.id, hotelIds))
       .groupBy(hotels.starRating);
 
-    // Top hotels in this city
+    // Top hotels in this city with commission metrics
     const topHotels = await db
       .select({
         hotelId: hotels.id,
         hotelName: hotels.name,
-        totalRevenue: sum(bookings.totalAmount),
+        paidRevenue: sum(sql`CASE WHEN ${bookings.status} = 'confirmed' AND ${bookings.paymentStatus} = 'completed' THEN ${bookings.totalAmount} ELSE 0 END`),
+        pendingRevenue: sum(sql`CASE WHEN ${bookings.status} = 'confirmed' AND ${bookings.paymentStatus} = 'pending' THEN ${bookings.totalAmount} ELSE 0 END`),
+        totalRevenue: sum(sql`CASE WHEN ${bookings.status} = 'confirmed' THEN ${bookings.totalAmount} ELSE 0 END`),
         totalBookings: count(bookings.id),
       })
       .from(hotels)
       .leftJoin(bookings, eq(hotels.id, bookings.hotelId))
       .where(and(
         inArray(hotels.id, hotelIds),
-        eq(bookings.status, 'completed'),
-        eq(bookings.paymentStatus, 'completed')
+        eq(bookings.status, 'confirmed')
       ))
       .groupBy(hotels.id, hotels.name)
-      .orderBy(desc(sum(bookings.totalAmount)))
+      .orderBy(desc(sum(sql`CASE WHEN ${bookings.status} = 'confirmed' THEN ${bookings.totalAmount} ELSE 0 END`)))
       .limit(5);
 
     // Recent bookings in this city
@@ -739,17 +797,27 @@ export class AnalyticsService {
       .orderBy(desc(bookings.createdAt))
       .limit(10);
 
+    // Commission calculations
+    const commissionRate = 0.10;
+    const totalPaidCommission = Number(totalPaidRevenue[0]?.total || 0) * commissionRate;
+    const pendingCommission = Number(needToPayRevenue[0]?.total || 0) * commissionRate;
+
     return {
       overview: {
         cityName: city.name,
         totalHotels: cityHotels.length,
         totalRooms: Number(totalRooms[0]?.count || 0),
         totalBookings: Number(totalBookings[0]?.count || 0),
-        totalRevenue: Number(totalRevenue[0]?.total || 0),
-        currentMonthRevenue: Number(currentMonthRevenue[0]?.total || 0),
-        lastMonthRevenue: Number(lastMonthRevenue[0]?.total || 0),
-        revenueGrowth: lastMonthRevenue[0]?.total ? 
-          ((Number(currentMonthRevenue[0]?.total || 0) - Number(lastMonthRevenue[0]?.total)) / Number(lastMonthRevenue[0]?.total)) * 100 : 0,
+        totalPaidRevenue: Number(totalPaidRevenue[0]?.total || 0),
+        needToPayRevenue: Number(needToPayRevenue[0]?.total || 0),
+        totalRevenue: Number(totalPaidRevenue[0]?.total || 0) + Number(needToPayRevenue[0]?.total || 0),
+        currentMonthRevenue: Number(currentMonthPaidRevenue[0]?.total || 0),
+        lastMonthRevenue: Number(lastMonthPaidRevenue[0]?.total || 0),
+        totalPaidCommission: totalPaidCommission,
+        pendingCommission: pendingCommission,
+        totalCommission: totalPaidCommission + pendingCommission,
+        revenueGrowth: lastMonthPaidRevenue[0]?.total ? 
+          ((Number(currentMonthPaidRevenue[0]?.total || 0) - Number(lastMonthPaidRevenue[0]?.total)) / Number(lastMonthPaidRevenue[0]?.total)) * 100 : 0,
       },
       bookingDistribution: {
         confirmed: Number(confirmedBookings[0]?.count || 0),
@@ -765,7 +833,12 @@ export class AnalyticsService {
       topHotels: topHotels.map(hotel => ({
         id: hotel.hotelId,
         name: hotel.hotelName,
-        revenue: Number(hotel.totalRevenue || 0),
+        paidRevenue: Number(hotel.paidRevenue || 0),
+        pendingRevenue: Number(hotel.pendingRevenue || 0),
+        totalRevenue: Number(hotel.totalRevenue || 0),
+        paidCommission: Number(hotel.paidRevenue || 0) * commissionRate,
+        pendingCommission: Number(hotel.pendingRevenue || 0) * commissionRate,
+        totalCommission: Number(hotel.totalRevenue || 0) * commissionRate,
         bookings: Number(hotel.totalBookings || 0),
       })),
       recentBookings: recentBookings.map(booking => ({
