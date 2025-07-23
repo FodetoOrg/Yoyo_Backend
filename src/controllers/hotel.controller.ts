@@ -96,8 +96,12 @@ export class HotelController {
       const { id } = GetHotelParamsSchema.parse(request.params);
       const queryParams = request.query as any;
       const { guests, checkIn, checkOut, bookingType } = getHotelDetailsQuerySchema.parse(queryParams);
+
+      console.log('queryParams ',queryParams)
       
       const hotel = await this.hotelService.getHotelById(id);
+
+      console.log('hotel ',hotel)
 
       if (!hotel) {
         return reply.code(404).send({
@@ -142,8 +146,8 @@ export class HotelController {
       // Sort available rooms by price (ascending order - cheapest first)
       // Use appropriate price based on booking type
       const sortedRooms = rooms.sort((a, b) => {
-        const priceA = bookingType === "hourly" ? (a.pricePerHour || a.pricePerNight) : a.pricePerNight;
-        const priceB = bookingType === "hourly" ? (b.pricePerHour || b.pricePerNight) : b.pricePerNight;
+        const priceA = bookingType === "hourly" ? (a.pricePerHour ) : a.pricePerNight;
+        const priceB = bookingType === "hourly" ? (b.pricePerHour) : b.pricePerNight;
         return priceA - priceB;
       });
       
@@ -183,7 +187,7 @@ export class HotelController {
           capacity: room.capacity,
           addons: room.addons,
           bookingType: bookingType,
-          displayPrice: bookingType === "hourly" ? (room.pricePerHour || room.pricePerNight) : room.pricePerNight
+          displayPrice: bookingType === "hourly" ? (room.pricePerHour) : room.pricePerNight
         })),
         totalAvailableRooms: roomsWithAddons.length
       };

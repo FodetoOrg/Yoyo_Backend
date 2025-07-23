@@ -210,6 +210,7 @@ export const getHotelDetailsQuerySchema = z.object({
   guests: z.number().int().min(1).optional(),
   checkIn: z.string().optional(),
   checkOut: z.string().optional(),
+  bookingType:z.string().optional()
 });
 
 export const getHotelDetailsSchema = {
