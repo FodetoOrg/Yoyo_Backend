@@ -222,7 +222,7 @@ export class BookingService {
 
       // Add addons to booking if provided
       if (bookingData.addons && bookingData.addons.length > 0) {
-        await this.addonService.addBookingAddons(bookingId, bookingData.addons);
+        await this.addonService.addBookingAddons(bookingId, bookingData.addons,tx);
       }
       console.log('retriuning id ')
       return bookingId;

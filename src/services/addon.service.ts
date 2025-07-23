@@ -361,8 +361,8 @@ export class AddonService {
   async addBookingAddons(bookingId: string, addonSelections: Array<{
     addonId: string;
     quantity: number;
-  }>) {
-    const db = this.fastify.db;
+  }>,tx?: any) {
+    const db = tx || this.fastify.db;
 
     console.log('addons here ')
     // Get addon details for pricing
