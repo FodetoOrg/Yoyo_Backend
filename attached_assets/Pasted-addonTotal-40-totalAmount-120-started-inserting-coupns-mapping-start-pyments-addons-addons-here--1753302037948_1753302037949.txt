@@ -1,0 +1,62 @@
+addonTotal  40
+totalAmount  120
+started inserting
+coupns mapping start
+pyments
+addons 
+addons here 
+bookingaddondata  [
+  {
+    id: 'b91cfc3c-8418-4049-9f5b-ff601dc74154',
+    bookingId: 'c51ec22e-0d66-46b7-a9d6-59b861cceac7',
+    addonId: '18086546-9b4f-4372-87a5-2237e2df27b8',
+    quantity: 1,
+    unitPrice: 20,
+    totalPrice: 20,
+    createdAt: 2025-07-23T20:19:33.287Z
+  },
+  {
+    id: '09f41dda-8c89-448c-bb5c-c5204fd043d2',
+    bookingId: 'c51ec22e-0d66-46b7-a9d6-59b861cceac7',
+    addonId: '8e1d9796-ef14-48a5-b9df-87b9786b634f',
+    quantity: 1,
+    unitPrice: 20,
+    totalPrice: 20,
+    createdAt: 2025-07-23T20:19:33.287Z
+  }
+]
+[20:19:32 UTC] INFO: incoming request
+    reqId: "req-1"
+    req: {
+      "method": "POST",
+      "url": "/api/v1/bookings/",
+      "hostname": "192.168.1.5:3000",
+      "remoteAddress": "192.168.1.2",
+      "remotePort": 55078
+    }
+[20:19:43 UTC] ERROR: SERVER_ERROR: Server returned HTTP status 404
+    reqId: "req-1"
+    err: {
+      "type": "LibsqlError",
+      "message": "SERVER_ERROR: Server returned HTTP status 404: Server returned HTTP status 404",
+      "stack":
+          LibsqlError: SERVER_ERROR: Server returned HTTP status 404
+              at mapHranaError (/Users/sthipp005/Documents/personal/Hotel_app/Backend/node_modules/@libsql/client/lib-cjs/hrana.js:298:16)
+              at /Users/sthipp005/Documents/personal/Hotel_app/Backend/node_modules/@libsql/client/lib-cjs/hrana.js:181:23
+              at processTicksAndRejections (node:internal/process/task_queues:105:5)
+              at HttpTransaction.rollback (/Users/sthipp005/Documents/personal/Hotel_app/Backend/node_modules/@libsql/client/lib-cjs/hrana.js:184:13)
+              at LibSQLSession.transaction (/Users/sthipp005/Documents/personal/Hotel_app/Backend/node_modules/src/libsql/session.ts:113:4)
+              at BookingService.createBooking (/Users/sthipp005/Documents/personal/Hotel_app/Backend/src/services/booking.service.ts:117:21)
+              at BookingController.createBooking (/Users/sthipp005/Documents/personal/Hotel_app/Backend/src/controllers/booking.controller.ts:108:23)
+          caused by: HttpServerError: Server returned HTTP status 404
+              at errorFromResponse (/Users/sthipp005/Documents/personal/Hotel_app/Backend/node_modules/@libsql/hrana-client/lib-cjs/http/stream.js:356:16)
+              at processTicksAndRejections (node:internal/process/task_queues:105:5)
+      "code": "SERVER_ERROR",
+      "name": "LibsqlError"
+    }
+[20:19:43 UTC] INFO: request completed
+    reqId: "req-1"
+    res: {
+      "statusCode": 500
+    }
+    responseTime: 10512.933041989803
