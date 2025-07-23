@@ -95,7 +95,7 @@ export class HotelController {
     try {
       const { id } = GetHotelParamsSchema.parse(request.params);
       const queryParams = request.query as any;
-      const { guests, checkIn, checkOut } = getHotelDetailsQuerySchema.parse(queryParams);
+      const { guests, checkIn, checkOut, bookingType } = getHotelDetailsQuerySchema.parse(queryParams);
       
       const hotel = await this.hotelService.getHotelById(id);
 
@@ -111,6 +111,13 @@ export class HotelController {
       
       // Get all rooms for the hotel
       let rooms = await this.hotelService.getRoomsByHotelIdEnhanced(id);
+      
+      // Filter rooms by booking type
+      if (bookingType === "daily") {
+        rooms = rooms.filter(room => room.isDailyBooking === true);
+      } else if (bookingType === "hourly") {
+        rooms = rooms.filter(room => room.isHourlyBooking === true);
+      }
       
       // Filter rooms by guest capacity if provided
       if (guests && guests > 0) {
@@ -133,7 +140,12 @@ export class HotelController {
       }
       
       // Sort available rooms by price (ascending order - cheapest first)
-      const sortedRooms = rooms.sort((a, b) => a.pricePerNight - b.pricePerNight);
+      // Use appropriate price based on booking type
+      const sortedRooms = rooms.sort((a, b) => {
+        const priceA = bookingType === "hourly" ? (a.pricePerHour || a.pricePerNight) : a.pricePerNight;
+        const priceB = bookingType === "hourly" ? (b.pricePerHour || b.pricePerNight) : b.pricePerNight;
+        return priceA - priceB;
+      });
       
       // Get room addons for each room
       const roomsWithAddons = await Promise.all(
@@ -154,9 +166,12 @@ export class HotelController {
           image: roomsWithAddons[0].images.length > 0 ? roomsWithAddons[0].images[0].url : null,
           features: roomsWithAddons[0].description || roomsWithAddons[0].amenities.join(', '),
           pricePerNight: roomsWithAddons[0].pricePerNight,
+          pricePerHour: roomsWithAddons[0].pricePerHour,
           capacity: roomsWithAddons[0].capacity,
           addons: roomsWithAddons[0].addons,
-          isCurrent: true
+          isCurrent: true,
+          bookingType: bookingType,
+          displayPrice: bookingType === "hourly" ? (roomsWithAddons[0].pricePerHour || roomsWithAddons[0].pricePerNight) : roomsWithAddons[0].pricePerNight
         } : null,
         upgradeOptions: roomsWithAddons.slice(1).map(room => ({
           id: room.id,
@@ -164,8 +179,11 @@ export class HotelController {
           image: room.images.length > 0 ? room.images[0].url : null,
           features: room.description || room.amenities.join(', '),
           pricePerNight: room.pricePerNight,
+          pricePerHour: room.pricePerHour,
           capacity: room.capacity,
-          addons: room.addons
+          addons: room.addons,
+          bookingType: bookingType,
+          displayPrice: bookingType === "hourly" ? (room.pricePerHour || room.pricePerNight) : room.pricePerNight
         })),
         totalAvailableRooms: roomsWithAddons.length
       };
@@ -177,14 +195,15 @@ export class HotelController {
             ...hotel,
             rating: reviewsData.overallRating,
             reviewCount: reviewsData.totalReviews,
-            price: roomsWithAddons.length > 0 ? roomsWithAddons[0].pricePerNight : null,
+            price: roomsWithAddons.length > 0 ? (bookingType === "hourly" ? (roomsWithAddons[0].pricePerHour || roomsWithAddons[0].pricePerNight) : roomsWithAddons[0].pricePerNight) : null,
             availableRooms: roomsWithAddons.length,
             reviewsData,
             roomUpgradeData,
             searchCriteria: {
               guests,
               checkIn,
-              checkOut
+              checkOut,
+              bookingType
             }
           }
         },
