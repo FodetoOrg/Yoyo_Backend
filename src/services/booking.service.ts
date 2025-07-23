@@ -384,6 +384,9 @@ export class BookingService {
       return null;
     }
 
+    // Get booking addons
+    const bookingAddons = await this.addonService.getBookingAddons(booking.id);
+
     // Format booking data
     return {
       id: booking.id,
@@ -433,6 +436,16 @@ export class BookingService {
         status: p.status,
         paymentMethod: p.paymentMethod,
         transactionDate: p.transactionDate
+      })),
+      addons: bookingAddons.map(ba => ({
+        id: ba.id,
+        addonId: ba.addonId,
+        name: ba.addon.name,
+        description: ba.addon.description,
+        image: ba.addon.image,
+        quantity: ba.quantity,
+        unitPrice: ba.unitPrice,
+        totalPrice: ba.totalPrice
       }))
     };
   }
@@ -877,11 +890,14 @@ export class BookingService {
     // Get amenities (assuming these are stored in room type or hotel)
     const amenities = JSON.parse(booking.hotel.amenities) || []
 
+    // Get booking addons
+    const bookingAddons = await this.addonService.getBookingAddons(booking.id);
 
     return {
       id: booking.id,
       bookingReference: `REF${booking.id.slice(-9).toUpperCase()}`,
       status,
+      bookingType: booking.bookingType,
       hotelName: booking.hotel.name,
       hotelPhone: booking.hotel.contactNumber || '+91 9876543210',
       hotelEmail: booking.hotel.contactEmail || 'info@hotel.com',
@@ -900,7 +916,17 @@ export class BookingService {
         serviceFee
       },
       totalAmount: booking.totalAmount,
-      cancellationPolicy: booking.hotel.cancellationPolicy || 'Free cancellation up to 24 hours before check-in. After that, a 1-night charge will apply.'
+      cancellationPolicy: booking.hotel.cancellationPolicy || 'Free cancellation up to 24 hours before check-in. After that, a 1-night charge will apply.',
+      addons: bookingAddons.map(ba => ({
+        id: ba.id,
+        addonId: ba.addonId,
+        name: ba.addon.name,
+        description: ba.addon.description,
+        image: ba.addon.image,
+        quantity: ba.quantity,
+        unitPrice: ba.unitPrice,
+        totalPrice: ba.totalPrice
+      }))
     };
   }
 }
