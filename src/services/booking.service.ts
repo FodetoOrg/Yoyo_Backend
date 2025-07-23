@@ -64,10 +64,28 @@ export class BookingService {
       return { available: false, reason: 'Room not found or not available' };
     }
 
+    // Check if room supports the requested booking type
+    if (bookingType === 'hourly' && !room.isHourlyBooking) {
+      return { available: false, reason: 'Room does not support hourly bookings' };
+    }
+
+    if (bookingType === 'daily' && !room.isDailyBooking) {
+      return { available: false, reason: 'Room does not support daily bookings' };
+    }
+
     // Check guest capacity
     if (room.capacity < guestCount) {
       return { available: false, reason: `Room capacity (${room.capacity}) is less than requested guests (${guestCount})` };
     }
+
+    // Convert dates to ensure proper comparison (remove milliseconds for consistency)
+    const requestCheckIn = new Date(checkInDate);
+    const requestCheckOut = new Date(checkOutDate);
+    requestCheckIn.setMilliseconds(0);
+    requestCheckOut.setMilliseconds(0);
+
+    console.log('Checking availability for room:', roomId);
+    console.log('Request dates:', { checkIn: requestCheckIn, checkOut: requestCheckOut, bookingType });
 
     // Check if there are any overlapping bookings
     const overlappingBookings = await db.query.bookings.findMany({
@@ -75,15 +93,23 @@ export class BookingService {
         eq(bookings.roomId, roomId),
         not(eq(bookings.status, 'cancelled')),
         // Check for any date overlap: booking conflicts if checkIn < existing.checkOut AND checkOut > existing.checkIn
-        lt(bookings.checkInDate, checkOutDate), // existing booking starts before new booking ends
-        gt(bookings.checkOutDate, checkInDate)
+        lt(bookings.checkInDate, requestCheckOut), // existing booking starts before new booking ends
+        gt(bookings.checkOutDate, requestCheckIn)  // existing booking ends after new booking starts
       )
     });
 
     if (overlappingBookings.length > 0) {
+      console.log('Found overlapping bookings:', overlappingBookings.map(b => ({
+        id: b.id,
+        checkIn: b.checkInDate,
+        checkOut: b.checkOutDate,
+        status: b.status,
+        bookingType: b.bookingType
+      })));
       return { available: false, reason: 'Room is already booked for the selected dates' };
     }
 
+    console.log('Room is available');
     return { available: true, reason: null };
   }
   // Optimized createBooking method

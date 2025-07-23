@@ -345,7 +345,7 @@ export class HotelSearchService {
       .where(eq(hotels.status, 'active'))
       .limit(limit);
 
-    
+
     return Promise.all(
       hotelsWithOffers.map(async (item) => {
         const reviews = await db.query.hotelReviews.findMany({
@@ -408,7 +408,7 @@ export class HotelSearchService {
 
     // Filter by price based on booking type
     const priceField = bookingType === 'hourly' ? rooms.pricePerHour : rooms.pricePerNight;
-    
+
     if (priceRange?.min) {
       roomConditions.push(sql`${priceField} >= ${priceRange.min}`);
     }
@@ -455,22 +455,38 @@ export class HotelSearchService {
   ): Promise<boolean> {
     const db = this.fastify.db;
 
+    // Convert dates to ensure proper comparison (remove milliseconds for consistency)
+    const requestCheckIn = new Date(checkIn);
+    const requestCheckOut = new Date(checkOut);
+    requestCheckIn.setMilliseconds(0);
+    requestCheckOut.setMilliseconds(0);
+
+    console.log('Checking booking conflict for room:', roomId);
+    console.log('Request dates:', { checkIn: requestCheckIn, checkOut: requestCheckOut });
+
     // Check for overlapping bookings that are not cancelled
     // Two bookings overlap if: checkIn < existing.checkOut AND checkOut > existing.checkIn
-    console.log('checkin ', checkIn)
-    console.log('checkout ', checkOut)
-
     const conflictingBookings = await db.query.bookings.findMany({
       where: and(
         eq(bookings.roomId, roomId),
         not(eq(bookings.status, 'cancelled')),
-        lt(bookings.checkInDate, checkOut), // existing booking starts before new booking ends
-        gt(bookings.checkOutDate, checkIn)  // existing booking ends after new booking starts
+        lt(bookings.checkInDate, requestCheckOut), // existing booking starts before new booking ends
+        gt(bookings.checkOutDate, requestCheckIn)  // existing booking ends after new booking starts
       ),
       limit: 1
     });
 
-    console.log('conflictingBookings ', conflictingBookings)
+    if (conflictingBookings.length > 0) {
+      console.log('Found conflicting booking:', conflictingBookings.map(b => ({
+        id: b.id,
+        checkIn: b.checkInDate,
+        checkOut: b.checkOutDate,
+        status: b.status,
+        bookingType: b.bookingType
+      })));
+    } else {
+      console.log('No conflicting bookings found');
+    }
 
     return conflictingBookings.length > 0;
   }
@@ -519,18 +535,18 @@ export class HotelSearchService {
 
     // Calculate prices based on booking type
     let minPrice, maxPrice, totalPrice = null;
-    
+
     if (bookingType === 'hourly') {
       // Filter rooms that have hourly pricing
       const hourlyRooms = availableRooms.filter(r => r.pricePerHour && r.pricePerHour > 0);
-      
+
       if (hourlyRooms.length === 0) {
         return null; // No rooms available for hourly booking
       }
-      
+
       minPrice = Math.min(...hourlyRooms.map(r => r.pricePerHour));
       maxPrice = Math.max(...hourlyRooms.map(r => r.pricePerHour));
-      
+
       if (checkIn && checkOut) {
         const hours = Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60));
         totalPrice = minPrice * hours;
@@ -539,7 +555,7 @@ export class HotelSearchService {
       // Daily booking
       minPrice = Math.min(...availableRooms.map(r => r.pricePerNight));
       maxPrice = Math.max(...availableRooms.map(r => r.pricePerNight));
-      
+
       if (checkIn && checkOut) {
         const nights = Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24));
         totalPrice = minPrice * nights;

@@ -241,7 +241,7 @@ export class HotelService {
 
     // Process amenities if provided
     let processedData: any = { ...hotelData };
-    
+
     if (hotelData.amenities) {
       processedData.amenities = JSON.stringify(hotelData.amenities);
     }
@@ -732,7 +732,7 @@ export class HotelService {
     return true;
   }
 
-  // Check room availability for specific dates
+  // Check room availability
   async checkRoomAvailability(roomId: string, checkInDate: Date, checkOutDate: Date): Promise<boolean> {
     const db = this.fastify.db;
 
@@ -741,9 +741,15 @@ export class HotelService {
       where: eq(rooms.id, roomId)
     });
 
-    // if (!room || room.status !== 'available') {
-    //   return false;
-    // }
+    if (!room || room.status !== 'available') {
+      return false;
+    }
+
+    // Convert dates to ensure proper comparison (remove milliseconds for consistency)
+    const requestCheckIn = new Date(checkInDate);
+    const requestCheckOut = new Date(checkOutDate);
+    requestCheckIn.setMilliseconds(0);
+    requestCheckOut.setMilliseconds(0);
 
     // Check for overlapping bookings that are not cancelled
     // Two bookings overlap if: checkIn < existing.checkOut AND checkOut > existing.checkIn
@@ -751,8 +757,8 @@ export class HotelService {
       where: and(
         eq(bookings.roomId, roomId),
         not(eq(bookings.status, 'cancelled')),
-        lt(bookings.checkInDate, checkOutDate), // existing booking starts before new booking ends
-        gt(bookings.checkOutDate, checkInDate)  // existing booking ends after new booking starts
+        lt(bookings.checkInDate, requestCheckOut), // existing booking starts before new booking ends
+        gt(bookings.checkOutDate, requestCheckIn)  // existing booking ends after new booking starts
       ),
       limit: 1
     });
@@ -763,7 +769,7 @@ export class HotelService {
   // Get room addons
   async getRoomAddons(roomId: string) {
     const db = this.fastify.db;
-    
+
     const roomAddonsRetunerd = await db.query.roomAddons.findMany({
       where: eq(roomAddons.roomId, roomId),
       with: {
