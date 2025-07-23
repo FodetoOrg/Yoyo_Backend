@@ -90,6 +90,12 @@ export class BookingController {
         addonTotal = bookingData.selectedAddons.reduce((total, addon) => {
           return total + (addon.price * addon.quantity);
         }, 0);
+
+        if(bookingData.bookingType==='daily'){
+          const diffTime = Math.abs(checkOutDate.getTime() - checkInDate.getTime());
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          addonTotal = addonTotal*diffDays
+        }
         
         // Prepare addons for the booking service
         processedAddons = bookingData.selectedAddons.map(addon => ({
@@ -101,7 +107,7 @@ export class BookingController {
       console.log('addonTotal ',addonTotal)
 
       // Calculate final total amount
-      const totalAmount = roomTotal + addonTotal;
+      const totalAmount = roomTotal +  addonTotal;
       console.log('totalAmount ',totalAmount)
 
       // Create booking

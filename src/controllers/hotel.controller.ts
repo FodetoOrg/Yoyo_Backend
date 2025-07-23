@@ -130,6 +130,8 @@ export class HotelController {
       
       // If dates are provided, filter by availability
       if (checkIn && checkOut && rooms.length > 0) {
+        console.log('checkOut ',checkOut)
+        console.log('checkin ',checkIn)
         const checkInDate = new Date(checkIn);
         const checkOutDate = new Date(checkOut);
         

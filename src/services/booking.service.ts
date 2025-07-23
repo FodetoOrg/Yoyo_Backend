@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { FastifyInstance } from 'fastify';
-import { bookings, hotels, rooms, users, customerProfiles, coupons, payments, bookingCoupons } from '../models/schema';
+import { bookings, hotels, rooms, users, customerProfiles, coupons, payments, bookingCoupons, bookingAddons } from '../models/schema';
 import { eq, and, desc, asc, count, not, lt, gt, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { NotFoundError, ConflictError } from '../types/errors';
@@ -144,7 +144,7 @@ export class BookingService {
       // Calculate duration based on booking type
       let totalHours = 0;
       let nights = 0;
-      
+
       if (bookingData.bookingType === 'hourly') {
         totalHours = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60));
       } else {
@@ -248,7 +248,11 @@ export class BookingService {
 
       // Add addons to booking if provided
       if (bookingData.addons && bookingData.addons.length > 0) {
-        await this.addonService.addBookingAddons(bookingId, bookingData.addons,tx);
+        const data = await this.addonService.addBookingAddons(bookingId, bookingData.addons);
+        console.log('data addons us ',data)
+        if (data.length > 0) {
+          await tx.insert(bookingAddons).values(data);
+        }
       }
       console.log('retriuning id ')
       return bookingId;
@@ -294,7 +298,7 @@ export class BookingService {
     // Price validation based on booking type
     let expectedPrice = 0;
     let duration = 0;
-    
+
     if (bookingData.bookingType === 'hourly') {
       duration = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60));
       expectedPrice = room.pricePerHour * duration;
@@ -318,7 +322,7 @@ export class BookingService {
         );
 
         if (couponValidation) {
-          finalAmount =  finalAmount + couponValidation.discountAmount;
+          finalAmount = finalAmount + couponValidation.discountAmount;
 
           // Validate price with coupon
           if (Math.abs(bookingData.frontendPrice - finalAmount) > 0.01) {
@@ -778,7 +782,7 @@ export class BookingService {
     let duration = 0;
     let basePrice = 0;
     let priceDetails: any = {};
-    
+
     if (bookingType === 'hourly') {
       duration = Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60));
       basePrice = room.pricePerHour * duration;

@@ -736,6 +736,9 @@ export class HotelService {
   async checkRoomAvailability(roomId: string, checkInDate: Date, checkOutDate: Date): Promise<boolean> {
     const db = this.fastify.db;
 
+    console.log('----- checkInDate ',checkInDate)
+    console.log('------- checkou ',checkOutDate)
+
     // Get room from database
     const room = await db.query.rooms.findFirst({
       where: eq(rooms.id, roomId)
