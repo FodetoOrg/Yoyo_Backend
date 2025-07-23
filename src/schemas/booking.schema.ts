@@ -32,7 +32,15 @@ export const CreateBookingBodySchema = z.object({
   guestName: z.string().min(1, 'Guest name is required'),
   guestEmail: z.string().email('Invalid email'),
   guestPhone: z.string().min(1, 'Guest phone is required'),
-  specialRequests: z.string().optional(),
+  selectedAddons: z.array(z.object({
+    id: z.string().uuid(),
+    name: z.string(),
+    description: z.string().optional(),
+    image: z.string().optional(),
+    price: z.number().positive(),
+    quantity: z.number().int().positive(),
+    status: z.string().optional()
+  })).optional(),
   addons: z.array(z.object({
     addonId: z.string().uuid('Invalid addon ID'),
     quantity: z.number().min(1, 'Quantity must be at least 1'),
