@@ -181,7 +181,6 @@ export class HotelController {
             availableRooms: roomsWithAddons.length,
             reviewsData,
             roomUpgradeData,
-            availableRoomsWithAddons: roomsWithAddons,
             searchCriteria: {
               guests,
               checkIn,

@@ -764,14 +764,17 @@ export class HotelService {
   async getRoomAddons(roomId: string) {
     const db = this.fastify.db;
     
-    const roomAddons = await db.query.roomAddons.findMany({
+    const roomAddonsRetunerd = await db.query.roomAddons.findMany({
       where: eq(roomAddons.roomId, roomId),
       with: {
         addon: true,
       },
     });
 
-    return roomAddons.map(roomAddon => ({
+    console.log('roomAddonsRetunerd ',roomAddonsRetunerd)
+    console.log('for roomid ',roomId)
+
+    return roomAddonsRetunerd.map(roomAddon => ({
       id: roomAddon.addon.id,
       name: roomAddon.addon.name,
       description: roomAddon.addon.description,
