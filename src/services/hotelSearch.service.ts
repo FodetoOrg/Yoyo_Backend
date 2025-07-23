@@ -16,6 +16,9 @@ interface SearchFilters {
   children: number;
   infants: number;
 
+  // Booking type
+  bookingType?: 'daily' | 'hourly';
+
   // Filters
   priceRange?: { min?: number; max?: number };
   starRating?: number; // minimum star rating
@@ -52,6 +55,7 @@ export class HotelSearchService {
       adults,
       children,
       infants,
+      bookingType = 'daily',
       priceRange,
       starRating,
       amenities,
@@ -125,7 +129,8 @@ export class HotelSearchService {
         checkIn,
         checkOut,
         totalGuests,
-        priceRange
+        priceRange,
+        bookingType
       );
 
       if (availableHotelIds.length === 0) {
@@ -160,7 +165,7 @@ export class HotelSearchService {
     const hotelsWithPricing = [];
 
     for (const hotelData of hotelsData) {
-      const pricing = await this.getHotelPricing(hotelData.hotel.id, checkIn, checkOut, totalGuests);
+      const pricing = await this.getHotelPricing(hotelData.hotel.id, checkIn, checkOut, totalGuests, bookingType);
 
       // Skip hotels with no available rooms (pricing will be null)
       if (!pricing) {
@@ -296,7 +301,9 @@ export class HotelSearchService {
             range: pricing.range,
             currency: pricing.currency,
             totalPrice: pricing.totalPrice,
-            perNight: pricing.perNight
+            perNight: pricing.perNight,
+            perHour: pricing.perHour,
+            bookingType: pricing.bookingType
           } : null,
           images: {
             primary: hotel.images[0]?.url || null,
@@ -388,7 +395,8 @@ export class HotelSearchService {
     checkIn: Date,
     checkOut: Date,
     guestCount: number,
-    priceRange?: { min?: number; max?: number }
+    priceRange?: { min?: number; max?: number },
+    bookingType: 'daily' | 'hourly' = 'daily'
   ): Promise<string[]> {
     const db = this.fastify.db;
 
@@ -398,11 +406,19 @@ export class HotelSearchService {
       // Remove the status check as we'll check availability based on bookings
     ];
 
+    // Filter by price based on booking type
+    const priceField = bookingType === 'hourly' ? rooms.pricePerHour : rooms.pricePerNight;
+    
     if (priceRange?.min) {
-      roomConditions.push(sql`${rooms.pricePerNight} >= ${priceRange.min}`);
+      roomConditions.push(sql`${priceField} >= ${priceRange.min}`);
     }
     if (priceRange?.max) {
-      roomConditions.push(sql`${rooms.pricePerNight} <= ${priceRange.max}`);
+      roomConditions.push(sql`${priceField} <= ${priceRange.max}`);
+    }
+
+    // For hourly bookings, ensure rooms have hourly pricing
+    if (bookingType === 'hourly') {
+      roomConditions.push(sql`${rooms.pricePerHour} IS NOT NULL AND ${rooms.pricePerHour} > 0`);
     }
 
     // Get all rooms that match criteria
@@ -459,7 +475,7 @@ export class HotelSearchService {
     return conflictingBookings.length > 0;
   }
 
-  private async getHotelPricing(hotelId: string, checkIn?: Date, checkOut?: Date, guestCount?: number) {
+  private async getHotelPricing(hotelId: string, checkIn?: Date, checkOut?: Date, guestCount?: number, bookingType: 'daily' | 'hourly' = 'daily') {
     const db = this.fastify.db;
 
     let roomConditions: any[] = [
@@ -501,13 +517,33 @@ export class HotelSearchService {
       return null;
     }
 
-    const minPrice = Math.min(...availableRooms.map(r => r.pricePerNight));
-    const maxPrice = Math.max(...availableRooms.map(r => r.pricePerNight));
-
-    let totalPrice = null;
-    if (checkIn && checkOut) {
-      const nights = Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24));
-      totalPrice = minPrice * nights;
+    // Calculate prices based on booking type
+    let minPrice, maxPrice, totalPrice = null;
+    
+    if (bookingType === 'hourly') {
+      // Filter rooms that have hourly pricing
+      const hourlyRooms = availableRooms.filter(r => r.pricePerHour && r.pricePerHour > 0);
+      
+      if (hourlyRooms.length === 0) {
+        return null; // No rooms available for hourly booking
+      }
+      
+      minPrice = Math.min(...hourlyRooms.map(r => r.pricePerHour));
+      maxPrice = Math.max(...hourlyRooms.map(r => r.pricePerHour));
+      
+      if (checkIn && checkOut) {
+        const hours = Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60));
+        totalPrice = minPrice * hours;
+      }
+    } else {
+      // Daily booking
+      minPrice = Math.min(...availableRooms.map(r => r.pricePerNight));
+      maxPrice = Math.max(...availableRooms.map(r => r.pricePerNight));
+      
+      if (checkIn && checkOut) {
+        const nights = Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24));
+        totalPrice = minPrice * nights;
+      }
     }
 
     return {
@@ -515,7 +551,9 @@ export class HotelSearchService {
       range: { min: minPrice, max: maxPrice },
       currency: 'INR',
       totalPrice,
-      perNight: true,
+      perNight: bookingType === 'daily',
+      perHour: bookingType === 'hourly',
+      bookingType,
       availableRooms: availableRooms.length
     };
   }

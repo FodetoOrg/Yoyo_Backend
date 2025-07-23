@@ -30,6 +30,7 @@ export const SearchHotelsRequestSchema = z.object({
   radius: z.number().default(50),
   dateRange: DateRangeSchema.optional(),
   guests: GuestsSchema,
+  bookingType: z.enum(['daily', 'hourly']).default('daily'),
   priceRange: PriceRangeSchema.optional(),
   starRating: z.number().int().min(0).max(5).optional(),
   amenities: z.array(z.string()).optional(),
@@ -63,7 +64,9 @@ export const HotelPricingSchema = z.object({
   }),
   currency: z.string(),
   totalPrice: z.number().nullable(),
-  perNight: z.boolean(),
+  perNight: z.boolean().optional(),
+  perHour: z.boolean().optional(),
+  bookingType: z.enum(['daily', 'hourly']).optional(),
   availableRooms: z.number().optional()
 });
 
