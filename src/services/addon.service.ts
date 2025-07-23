@@ -1,7 +1,7 @@
 
 import { FastifyInstance } from 'fastify';
 import { v4 as uuidv4 } from 'uuid';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, inArray } from 'drizzle-orm';
 import { addons, roomAddons, bookingAddons } from '../models/Addon';
 import { rooms } from '../models/Room';
 import { uploadToS3 } from '../config/aws';
@@ -366,8 +366,9 @@ export class AddonService {
 
     console.log('addons here ')
     // Get addon details for pricing
+    const addonIds = addonSelections.map(s => s.addonId);
     const addonDetails = await db.query.addons.findMany({
-      where: (addons, { inArray }) => inArray(addons.id, addonSelections.map(s => s.addonId)),
+      where: (addons, { inArray }) => inArray(addons.id, addonIds),
     });
 
     const bookingAddonData = addonSelections.map(selection => {
@@ -386,7 +387,11 @@ export class AddonService {
     });
 
     console.log('bookingaddondata ',bookingAddonData)
-    await db.insert(bookingAddons).values(bookingAddonData);
+    
+    if (bookingAddonData.length > 0) {
+      await db.insert(bookingAddons).values(bookingAddonData);
+    }
+    
     console.log('done addons adding')
     return {
       addons: bookingAddonData,
