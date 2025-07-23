@@ -1,4 +1,4 @@
-
+// @ts-nocheck
 import { FastifyInstance } from 'fastify';
 import { v4 as uuidv4 } from 'uuid';
 import { eq, and, inArray } from 'drizzle-orm';

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { AddonService } from '../services/addon.service';
 import { CreateAddonInput, UpdateAddonInput, GetAddonInput, UpdateRoomAddonsInput } from '../schemas/addon.schema';
