@@ -12,6 +12,7 @@ export const BookingResponseSchema = z.object({
   guests: z.number().int(),
   totalAmount: z.number(),
   status: z.enum(['pending', 'confirmed', 'cancelled', 'completed']),
+  bookingType: z.enum(['daily', 'hourly']),
   specialRequests: z.string().nullable(),
   advanceAmount: z.number().min(0),
   remainingAmount: z.number().min(0),
@@ -19,6 +20,23 @@ export const BookingResponseSchema = z.object({
   discountAmount: z.number().min(0),
   createdAt: z.string(),
   updatedAt: z.string(),
+  addons: z.array(z.object({
+    id: z.string(),
+    addonId: z.string(),
+    name: z.string(),
+    description: z.string(),
+    image: z.string().optional(),
+    quantity: z.number().int(),
+    unitPrice: z.number(),
+    totalPrice: z.number()
+  })).optional(),
+  payments: z.array(z.object({
+    id: z.string(),
+    amount: z.number(),
+    status: z.string(),
+    paymentMethod: z.string(),
+    transactionDate: z.string()
+  })).optional()
 });
 
 // Create booking schemas
@@ -216,6 +234,7 @@ export const BookingDetailsResponseSchema = z.object({
   id: z.string(),
   bookingReference: z.string(),
   status: z.string(),
+  bookingType: z.enum(['daily', 'hourly']),
   hotelName: z.string(),
   hotelPhone: z.string(),
   hotelEmail: z.string(),
@@ -234,7 +253,17 @@ export const BookingDetailsResponseSchema = z.object({
     serviceFee: z.number()
   }),
   totalAmount: z.number(),
-  cancellationPolicy: z.string()
+  cancellationPolicy: z.string(),
+  addons: z.array(z.object({
+    id: z.string(),
+    addonId: z.string(),
+    name: z.string(),
+    description: z.string(),
+    image: z.string().optional(),
+    quantity: z.number().int(),
+    unitPrice: z.number(),
+    totalPrice: z.number()
+  }))
 });
 
 export const GetBookingDetailsResponseSchema = z.object({
