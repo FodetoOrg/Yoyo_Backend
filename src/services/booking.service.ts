@@ -141,7 +141,7 @@ export class BookingService {
           remainingAmount = finalAmount - advanceAmount;
         }
       }
-
+      console.log('started inserting')
       // Create booking record
       await tx.insert(bookings).values({
         id: bookingId,
@@ -167,6 +167,7 @@ export class BookingService {
         guestPhone: bookingData.guestPhone
       });
 
+      console.log('coupns mapping start')
       // Insert coupon usage if applicable
       if (couponValidation) {
         await tx.insert(bookingCoupons).values({
@@ -185,6 +186,7 @@ export class BookingService {
           .where(eq(coupons.id, couponValidation.coupon.id));
       }
 
+      console.log('pyments')
       // Create payment records
       const paymentId = uuidv4();
       await tx.insert(payments).values({
@@ -216,12 +218,13 @@ export class BookingService {
           transactionDate: paymentDueDate || new Date(),
         });
       }
+      console.log('addons ')
 
       // Add addons to booking if provided
       if (bookingData.addons && bookingData.addons.length > 0) {
         await this.addonService.addBookingAddons(bookingId, bookingData.addons);
       }
-
+      console.log('retriuning id ')
       return bookingId;
     });
 
@@ -289,11 +292,11 @@ export class BookingService {
         );
 
         if (couponValidation) {
-          finalAmount = couponValidation.finalAmount;
+          finalAmount =  finalAmount + couponValidation.discountAmount;
 
           // Validate price with coupon
-          if (Math.abs(bookingData.frontendPrice - couponValidation.finalAmount) > 0.01) {
-            throw new ConflictError(`Price mismatch: Expected ${couponValidation.finalAmount}, received ${bookingData.frontendPrice}`);
+          if (Math.abs(bookingData.frontendPrice - finalAmount) > 0.01) {
+            throw new ConflictError(`Price mismatch: Expected ${finalAmount}, received ${bookingData.frontendPrice}`);
           }
         }
       } catch (error) {
@@ -301,8 +304,8 @@ export class BookingService {
       }
     } else {
       // Validate price without coupon
-      if (Math.abs(bookingData.frontendPrice - expectedPrice) > 0.01) {
-        throw new ConflictError(`Price mismatch: Expected ${expectedPrice}, received ${bookingData.frontendPrice}`);
+      if (Math.abs(bookingData.frontendPrice - finalAmount) > 0.01) {
+        throw new ConflictError(`Price mismatch: Expected ${finalAmount}, received ${bookingData.frontendPrice}`);
       }
     }
 

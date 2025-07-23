@@ -364,6 +364,7 @@ export class AddonService {
   }>) {
     const db = this.fastify.db;
 
+    console.log('addons here ')
     // Get addon details for pricing
     const addonDetails = await db.query.addons.findMany({
       where: (addons, { inArray }) => inArray(addons.id, addonSelections.map(s => s.addonId)),
@@ -384,8 +385,9 @@ export class AddonService {
       };
     });
 
+    console.log('bookingaddondata ',bookingAddonData)
     await db.insert(bookingAddons).values(bookingAddonData);
-
+    console.log('done addons adding')
     return {
       addons: bookingAddonData,
       totalAddonCost: bookingAddonData.reduce((sum, item) => sum + item.totalPrice, 0),

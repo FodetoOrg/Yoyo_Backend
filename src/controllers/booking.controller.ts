@@ -83,6 +83,8 @@ export class BookingController {
       // Calculate addon total if selectedAddons are provided
       let addonTotal = 0;
       let processedAddons = [];
+
+      console.log('bookingData is  ',bookingData)
       
       if (bookingData.selectedAddons && bookingData.selectedAddons.length > 0) {
         addonTotal = bookingData.selectedAddons.reduce((total, addon) => {
@@ -96,8 +98,11 @@ export class BookingController {
         }));
       }
 
+      console.log('addonTotal ',addonTotal)
+
       // Calculate final total amount
       const totalAmount = roomTotal + addonTotal;
+      console.log('totalAmount ',totalAmount)
 
       // Create booking
       const booking = await this.bookingService.createBooking({
