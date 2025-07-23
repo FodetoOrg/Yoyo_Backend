@@ -65,20 +65,39 @@ export class BookingController {
         });
       }
 
-      // Calculate total amount based on booking type
+      // Calculate room price based on booking type
       const checkInDate = new Date(bookingData.checkIn);
       const checkOutDate = new Date(bookingData.checkOut);
-      let totalAmount = 0;
+      let roomTotal = 0;
       
       if (bookingData.bookingType === 'hourly') {
         const diffTime = Math.abs(checkOutDate.getTime() - checkInDate.getTime());
         const diffHours = Math.ceil(diffTime / (1000 * 60 * 60));
-        totalAmount = room.pricePerHour * diffHours;
+        roomTotal = room.pricePerHour * diffHours;
       } else {
         const diffTime = Math.abs(checkOutDate.getTime() - checkInDate.getTime());
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        totalAmount = room.pricePerNight * diffDays;
+        roomTotal = room.pricePerNight * diffDays;
       }
+
+      // Calculate addon total if selectedAddons are provided
+      let addonTotal = 0;
+      let processedAddons = [];
+      
+      if (bookingData.selectedAddons && bookingData.selectedAddons.length > 0) {
+        addonTotal = bookingData.selectedAddons.reduce((total, addon) => {
+          return total + (addon.price * addon.quantity);
+        }, 0);
+        
+        // Prepare addons for the booking service
+        processedAddons = bookingData.selectedAddons.map(addon => ({
+          addonId: addon.id,
+          quantity: addon.quantity
+        }));
+      }
+
+      // Calculate final total amount
+      const totalAmount = roomTotal + addonTotal;
 
       // Create booking
       const booking = await this.bookingService.createBooking({
@@ -97,7 +116,8 @@ export class BookingController {
         guestEmail: bookingData.guestEmail,
         guestName: bookingData.guestName,
         guestPhone: bookingData.guestPhone,
-        couponCode: bookingData.couponCode
+        couponCode: bookingData.couponCode,
+        addons: processedAddons.length > 0 ? processedAddons : undefined
       });
 
       console.log('booking final  is ',booking)
