@@ -29,6 +29,7 @@ export class HotelSearchController {
         adults: searchData.guests.adults,
         children: searchData.guests.children,
         infants: searchData.guests.infants,
+        bookingType: searchData.bookingType,
         priceRange: searchData.priceRange,
         starRating: searchData.starRating,
         amenities: searchData.amenities,
