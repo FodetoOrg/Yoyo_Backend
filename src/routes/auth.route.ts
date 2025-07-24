@@ -57,7 +57,7 @@ export default async function authRoutes(fastify: FastifyInstance) {
   fastify.put(
     "/profile",
     {
-      schema: updateProfileSchema,
+      // schema: updateProfileSchema,
       preHandler: [
         fastify.authenticate,
         rbacGuard(permissions.updateUserProfile),

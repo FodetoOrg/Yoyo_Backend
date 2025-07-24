@@ -115,8 +115,19 @@ export class AuthService {
       const hotelUser = await db.query.hotelUsers.findFirst({
         where: eq(hotelUsers.userId, user.id),
       });
-      console.log('hotelUser ',hotelUser)
+      console.log('hotelUser ', hotelUser)
       hotelId = hotelUser?.hotelId || null;
+    }
+    let email = '';
+    let gender = ''
+    let name = ''
+    if (user.role === UserRole.USER) {
+      const profile = await db.query.customerProfiles.findFirst({
+        where: eq(customerProfiles.userId, user.id)
+      })
+      email = profile.email
+      gender = profile.gender
+      name=profile.fullName
     }
 
     console.log("user ", user);
@@ -130,15 +141,18 @@ export class AuthService {
       accessToken: tokens.accessToken,
       refreshToken: tokens.refreshToken,
       user: {
+        
         id: user.id,
-        name: user.name || '',
+        name: name || '',
         phone: user.phone,
         hasOnboarded: user.hasOnboarded,
         createdAt: new Date(user.createdAt).toString() || '',
         updatedAt: new Date(user.updatedAt).toString() || '',
         status: user.status,
         role: user.role,
-        hotelId
+        hotelId,
+        email,
+        gender
       }
     };
 
@@ -268,6 +282,7 @@ export class AuthService {
     // If user is a customer, update both users table and customer_profiles table
     if (userRole === 'user') {
       return await db.transaction(async (tx) => {
+        console.log('updateData ',updateData)
         // Update user table if name is provided
         if (updateData.name) {
           await tx
@@ -283,8 +298,10 @@ export class AuthService {
         const existingProfile = await tx.query.customerProfiles.findFirst({
           where: eq(customerProfiles.userId, userId)
         });
+        console.log('existingProfile')
 
         if (existingProfile) {
+          console.log('exists ')
           // Update existing customer profile
           const profileUpdateData: any = {
             updatedAt: new Date(),
@@ -304,6 +321,7 @@ export class AuthService {
             .update(customerProfiles)
             .set(profileUpdateData)
             .where(eq(customerProfiles.userId, userId));
+          console.log('came here ')
         } else {
           // Create new customer profile
           const { v4: uuidv4 } = await import('uuid');
@@ -332,25 +350,17 @@ export class AuthService {
           return {
             user: {
               id: updatedUser.id,
-              name: updatedUser.name,
+              name:  updatedUser.customerProfile.fullName,
               phone: updatedUser.phone,
               role: updatedUser.role,
               status: updatedUser.status,
               hasOnboarded: updatedUser.hasOnboarded,
               createdAt: updatedUser.createdAt,
               updatedAt: updatedUser.updatedAt,
-            },
-            profile: {
-              fullName: updatedUser.customerProfile.fullName,
               email: updatedUser.customerProfile.email,
-              gender: updatedUser.customerProfile.gender,
-              notifications: {
-                bookingUpdates: updatedUser.customerProfile.bookingUpdatesEnabled,
-                checkinReminders: updatedUser.customerProfile.checkinRemindersEnabled,
-                securityAlerts: updatedUser.customerProfile.securityAlertsEnabled,
-                promotionalOffers: updatedUser.customerProfile.promotionalOffersEnabled,
-              }
+              gender: updatedUser.customerProfile.gender
             }
+            
           };
         }
 
@@ -396,16 +406,29 @@ export class AuthService {
       });
       hotelId = hotelUser?.hotelId || null;
     }
+    let email = '';
+    let gender = '';
+    let name = ''
+    if (user.role === UserRole.USER) {
+      const profile = await db.query.customerProfiles.findFirst({
+        where: eq(customerProfiles.userId, user.id)
+      })
+      email = profile.email
+      gender = profile.gender
+      name=profile.fullName
+    }
     return {
       id: user.id,
-      name: user.name || '',
+      name: name  || '',
       phone: user.phone,
       hasOnboarded: user.hasOnboarded,
       createdAt: new Date(user.createdAt).toString() || '',
       updatedAt: new Date(user.updatedAt).toString() || '',
       status: user.status,
       role: user.role,
-      hotelId
+      hotelId,
+      email,
+      gender
 
     };
   }

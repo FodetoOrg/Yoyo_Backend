@@ -27,13 +27,16 @@ export class AuthController {
 
       const result = await this.authService.loginWithFirebase(idToken, role);
 
-      const response = LoginResponseSchema.parse({
+      // const response = LoginResponseSchema.parse({
+      //   success: true,
+      //   data: result,
+      // });
+      // console.log("response is ", response);
+
+      return reply.status(HttpStatus.OK).send({
         success: true,
         data: result,
-      });
-      console.log("response is ", response);
-
-      return reply.status(HttpStatus.OK).send(response);
+    });
     } catch (error) {
       logger.error({ error }, "Error during login");
       console.log('error ',error)

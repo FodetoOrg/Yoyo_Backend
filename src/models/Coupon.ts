@@ -3,6 +3,8 @@ import { integer, sqliteTable, text, real } from "drizzle-orm/sqlite-core";
 import { cities } from "./cities";
 import { hotels } from "./Hotel";
 import { roomTypes } from "./RoomType";
+import { users } from "./User";
+import { bookings } from "./Booking";
 
 // Coupons table
 export const coupons = sqliteTable('coupons', {
@@ -34,9 +36,21 @@ export const couponMappings = sqliteTable('coupon_mappings', {
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(new Date()),
 });
 
+
+export const couponUsages = sqliteTable('coupon_usages',{
+  id: text('id').primaryKey(),
+  couponId: text('coupon_id').references(() => coupons.id).notNull(),
+  hotelId: text('hotel_id').references(() => hotels.id),
+  userId: text('user_id').references(() => users.id).notNull().unique(),
+  bookingId: text("booking_id").references(() => bookings.id).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(new Date()),
+
+})
+
 // Define relationships
 export const couponsRelations = relations(coupons, ({ many }) => ({
   mappings: many(couponMappings),
+  couponUsages:many(couponUsages)
 }));
 
 export const couponMappingsRelations = relations(couponMappings, ({ one }) => ({
@@ -55,6 +69,25 @@ export const couponMappingsRelations = relations(couponMappings, ({ one }) => ({
   roomType: one(roomTypes, {
     fields: [couponMappings.roomTypeId],
     references: [roomTypes.id],
+  }),
+}));
+
+export const couponUsagesRelations = relations(couponUsages, ({ one }) => ({
+  coupon: one(coupons, {
+    fields: [couponUsages.couponId],
+    references: [coupons.id],
+  }),
+  hotel: one(hotels, {
+    fields: [couponUsages.hotelId],
+    references: [hotels.id],
+  }),
+  user: one(users, {
+    fields: [couponUsages.userId],
+    references: [users.id],
+  }),
+  booking: one(bookings, {
+    fields: [couponUsages.bookingId],
+    references: [bookings.id],
   }),
 }));
 

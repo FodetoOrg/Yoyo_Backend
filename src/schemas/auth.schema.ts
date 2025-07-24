@@ -35,7 +35,10 @@ export const RefreshTokenRequestSchema = z.object({
 export const LoginResponseSchema = z.object({
   success: z.boolean(),
   data: AuthTokensSchema.extend({
-    user: UserSchema,
+    user: UserSchema.extend({
+      gender:z.string().nullable(),
+      email:z.string().nullable()
+    }),
   }),
 });
 

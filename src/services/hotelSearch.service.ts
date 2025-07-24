@@ -2,6 +2,7 @@
 import { FastifyInstance } from "fastify";
 import { hotels, hotelImages, rooms, hotelReviews, wishlists, coupons, couponMappings, bookings } from "../models/schema";
 import { eq, and, like, between, sql, desc, asc, inArray, exists, avg, count, not, or, lt, gt } from "drizzle-orm";
+import dayjs from "dayjs";
 
 interface SearchFilters {
   // Location
@@ -15,6 +16,7 @@ interface SearchFilters {
   adults: number;
   children: number;
   infants: number;
+  isNearby:boolean;
 
   // Booking type
   bookingType?: 'daily' | 'hourly';
@@ -117,14 +119,14 @@ export class HotelSearchService {
 
       // Sort by distance first to get nearest hotels
       hotelsData = hotelsData.sort((a, b) => (a.distance || 0) - (b.distance || 0));
-      console.log('calculated distance ', hotelsData)
+    
 
       // Filter by radius after calculating distance
       hotelsData = hotelsData.filter(hotel => hotel.distance <= radius);
     }
 
     // STEP 2: Filter by available rooms for dates and guest capacity
-    if (checkIn && checkOut) {
+    if (filters?.isNearby ===false &&  checkIn && checkOut) {
       const availableHotelIds = await this.getHotelsWithAvailableRooms(
         checkIn,
         checkOut,
@@ -160,6 +162,7 @@ export class HotelSearchService {
     if (!coordinates || sortBy !== 'distance') {
       hotelsData = this.sortHotels(hotelsData, sortBy);
     }
+    console.log('calculated distance ', hotelsData)
 
     // Get pricing for each hotel and filter out hotels with no available rooms
     const hotelsWithPricing = [];
@@ -244,6 +247,7 @@ export class HotelSearchService {
       infants: 0,
       sortBy: 'distance',
       limit,
+      isNearby:true
     };
 
     const result = await this.searchHotels(searchFilters);
@@ -456,10 +460,15 @@ export class HotelSearchService {
     const db = this.fastify.db;
 
     // Convert dates to ensure proper comparison (remove milliseconds for consistency)
-    const requestCheckIn = new Date(checkIn);
-    const requestCheckOut = new Date(checkOut);
+
+    const requestCheckIn = dayjs(checkIn).toDate(); 
+    const requestCheckOut = dayjs(checkOut).toDate(); 
+
     requestCheckIn.setMilliseconds(0);
     requestCheckOut.setMilliseconds(0);
+
+    console.log('checkin in search ',checkIn)
+    console.log('checkout in search ',checkOut)
 
     console.log('Checking booking conflict for room:', roomId);
     console.log('Request dates:', { checkIn: requestCheckIn, checkOut: requestCheckOut });

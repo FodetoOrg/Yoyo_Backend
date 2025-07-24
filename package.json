@@ -37,6 +37,7 @@
     "@fastify/swagger-ui": "^2.1.0",
     "@firebase/auth": "^1.10.4",
     "@types/nodemailer": "^6.4.17",
+    "dayjs": "^1.11.13",
     "dotenv": "^16.3.1",
     "drizzle-orm": "^0.38.2",
     "expo-server-sdk": "^3.15.0",

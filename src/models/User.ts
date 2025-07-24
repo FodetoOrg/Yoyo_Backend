@@ -11,6 +11,7 @@ import { hotels } from "./Hotel";
 import { payments } from "./Payment";
 import { reviews } from "./Review";
 import { UserRole, UserStatus } from "../types/common";
+import { customerProfiles } from "./CustomerProfile";
 
 // User table
 export const users = sqliteTable("users", {
@@ -44,11 +45,16 @@ export const users = sqliteTable("users", {
 }));
 
 // Define relationships
-export const usersRelations = relations(users, ({ many }) => ({
+export const usersRelations = relations(users, ({ many, one }) => ({
   bookings: many(bookings),
   hotels: many(hotels, { relationName: "hotelOwner" }),
   reviews: many(reviews),
   payments: many(payments),
+  customerProfile: one(customerProfiles,{
+    fields: [users.id],
+    references: [customerProfiles.userId],
+  }
+  )
 }));
 
 export type User = InferSelectModel<typeof users>;

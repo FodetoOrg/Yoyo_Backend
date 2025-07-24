@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { FastifyInstance } from 'fastify';
-import { bookings, hotels, rooms, users, customerProfiles, coupons, payments, bookingCoupons, bookingAddons } from '../models/schema';
+import { bookings, hotels, rooms, users, customerProfiles, coupons, payments, bookingCoupons, bookingAddons, couponUsages } from '../models/schema';
 import { eq, and, desc, asc, count, not, lt, gt, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { NotFoundError, ConflictError } from '../types/errors';
@@ -79,13 +79,10 @@ export class BookingService {
     }
 
     // Convert dates to ensure proper comparison (remove milliseconds for consistency)
-    const requestCheckIn = new Date(checkInDate);
-    const requestCheckOut = new Date(checkOutDate);
-    requestCheckIn.setMilliseconds(0);
-    requestCheckOut.setMilliseconds(0);
+
 
     console.log('Checking availability for room:', roomId);
-    console.log('Request dates:', { checkIn: requestCheckIn, checkOut: requestCheckOut, bookingType });
+
 
     // Check if there are any overlapping bookings
     const overlappingBookings = await db.query.bookings.findMany({
@@ -93,8 +90,8 @@ export class BookingService {
         eq(bookings.roomId, roomId),
         not(eq(bookings.status, 'cancelled')),
         // Check for any date overlap: booking conflicts if checkIn < existing.checkOut AND checkOut > existing.checkIn
-        lt(bookings.checkInDate, requestCheckOut), // existing booking starts before new booking ends
-        gt(bookings.checkOutDate, requestCheckIn)  // existing booking ends after new booking starts
+        lt(bookings.checkInDate, checkOutDate), // existing booking starts before new booking ends
+        gt(bookings.checkOutDate, checkInDate)  // existing booking ends after new booking starts
       )
     });
 
@@ -159,7 +156,7 @@ export class BookingService {
       let advanceAmount = 0;
 
       if (finalPaymentMode === 'offline') {
-        paymentDueDate = new Date(bookingData.checkIn);
+        paymentDueDate = new Date(bookingData.checkIn + 'Z');
         paymentDueDate.setHours(paymentDueDate.getHours() - 24);
 
         if (bookingData.advanceAmount && bookingData.advanceAmount > 0) {
@@ -167,7 +164,8 @@ export class BookingService {
           remainingAmount = finalAmount - advanceAmount;
         }
       }
-      console.log('started inserting')
+      console.log('started inserting ', bookingData.checkIn)
+      console.log(bookingData.checkOut)
       // Create booking record
       await tx.insert(bookings).values({
         id: bookingId,
@@ -203,6 +201,7 @@ export class BookingService {
           discountAmount: couponValidation.discountAmount,
         });
 
+
         // Update coupon usage count
         await tx.update(coupons)
           .set({
@@ -210,6 +209,14 @@ export class BookingService {
             updatedAt: new Date()
           })
           .where(eq(coupons.id, couponValidation.coupon.id));
+
+          await tx.insert(couponUsages).values({
+            id: uuidv4(),
+            bookingId: bookingId,
+            couponId: couponValidation.coupon.id,
+            hotelId:bookingData.hotelId,
+            userId:bookingData.userId
+          })
       }
 
       console.log('pyments')
@@ -249,7 +256,7 @@ export class BookingService {
       // Add addons to booking if provided
       if (bookingData.addons && bookingData.addons.length > 0) {
         const data = await this.addonService.addBookingAddons(bookingId, bookingData.addons);
-        console.log('data addons us ',data)
+        console.log('data addons us ', data)
         if (data.length > 0) {
           await tx.insert(bookingAddons).values(data);
         }
@@ -318,11 +325,12 @@ export class BookingService {
           bookingData.hotelId,
           room.roomType,
           bookingData.totalAmount,
+          bookingData.userId,
           bookingData.bookingType
         );
 
         if (couponValidation) {
-          finalAmount = finalAmount + couponValidation.discountAmount;
+          finalAmount = finalAmount - couponValidation.discountAmount;
 
           // Validate price with coupon
           if (Math.abs(bookingData.frontendPrice - finalAmount) > 0.01) {
@@ -330,6 +338,7 @@ export class BookingService {
           }
         }
       } catch (error) {
+        console.log('error ', error)
         throw new NotFoundError('Coupon Not Found');
       }
     } else {
@@ -891,15 +900,36 @@ export class BookingService {
     }
 
     // Calculate nights
-    const checkInDate = new Date(booking.checkInDate);
-    const checkOutDate = new Date(booking.checkOutDate);
-    const nights = Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24));
+    // const checkInDate = new Date(booking.checkInDate);
+    // const checkOutDate = new Date(booking.checkOutDate);
+    // const nights = Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24));
 
     // Calculate price breakdown
-    const roomRate = booking.room.pricePerNight;
-    const subtotal = roomRate * nights;
-    const taxes = Math.round(subtotal * 0.12); // 12% GST
-    const serviceFee = 100; // Fixed service fee
+    let roomRate =0;
+
+    let nights=0;
+    // let subTotal = 0;
+    console.log('booking.checkInDate ',booking.checkInDate)
+    const checkInDate = new Date(booking.checkInDate );
+    const checkOutDate = new Date(booking.checkOutDate);
+    let subtotal = 0;
+
+    if (booking.bookingType === 'hourly') {
+      const diffTime = Math.abs(checkOutDate.getTime() - checkInDate.getTime());
+      const diffHours = Math.ceil(diffTime / (1000 * 60 * 60));
+      nights =diffHours
+      subtotal = booking.room.pricePerHour * diffHours;
+     roomRate =booking.room.pricePerHour;
+
+    } else {
+      const diffTime = Math.abs(checkOutDate.getTime() - checkInDate.getTime());
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      nights=diffDays
+      subtotal = booking.room.pricePerNight * diffDays;
+      roomRate =booking.room.pricePerNight;
+    }
+    const taxes = 0; // 12% GST
+    const serviceFee = 0; // Fixed service fee
     const totalCalculated = subtotal + taxes + serviceFee;
 
     // Determine status based on dates and booking status
@@ -923,6 +953,9 @@ export class BookingService {
     // Get booking addons
     const bookingAddons = await this.addonService.getBookingAddons(booking.id);
 
+    console.log('checkin date ',checkInDate)
+    console.log('checkout ',checkOutDate)
+
     return {
       id: booking.id,
       bookingReference: `REF${booking.id.slice(-9).toUpperCase()}`,
@@ -934,10 +967,10 @@ export class BookingService {
       address: `${booking.hotel.address}, ${booking.hotel.city}, ${booking.hotel.state}`,
       image: booking.hotel.images?.[0]?.url || 'https://example.com/hotel.jpg',
       roomType: booking.room.roomType?.name || booking.room.name,
-      checkIn: checkInDate.toISOString(),
-      checkOut: checkOutDate.toISOString(),
+      checkIn: checkInDate,
+      checkOut: checkOutDate,
       guests: booking.guestCount,
-      nights,
+      nights ,
       amenities,
       priceBreakdown: {
         roomRate,

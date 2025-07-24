@@ -33,7 +33,7 @@ export class BookingController {
 
       // Check if room exists and is available
       const room = await this.hotelService.getRoomById(bookingData.roomId);
-
+      console.log('room is in booking ',room)
       if (!room) {
         return reply.code(404).send({
           success: false,
@@ -44,6 +44,7 @@ export class BookingController {
 
       // Validate room belongs to the specified hotel
       if (room.hotelId !== bookingData.hotelId) {
+        console.log('failed if check for hotelid')
         return reply.code(400).send({
           success: false,
           message: 'Room does not belong to the specified hotel',
@@ -53,10 +54,13 @@ export class BookingController {
       // Check if the room is available for the requested dates and guest count
       const availabilityCheck = await this.bookingService.checkRoomAvailability(
         bookingData.roomId,
-        new Date(bookingData.checkIn),
-        new Date(bookingData.checkOut),
-        bookingData.guests
+        new Date(bookingData.checkIn + 'Z'),
+        new Date(bookingData.checkOut+ 'Z'),
+        bookingData.guests,
+        bookingData.bookingType
       );
+
+      console.log('availabilityCheck ',availabilityCheck)
 
       if (!availabilityCheck.available) {
         return reply.code(400).send({
@@ -66,8 +70,8 @@ export class BookingController {
       }
 
       // Calculate room price based on booking type
-      const checkInDate = new Date(bookingData.checkIn);
-      const checkOutDate = new Date(bookingData.checkOut);
+      const checkInDate = new Date(bookingData.checkIn+'Z');
+      const checkOutDate = new Date(bookingData.checkOut+'Z');
       let roomTotal = 0;
       
       if (bookingData.bookingType === 'hourly') {
@@ -343,8 +347,8 @@ export class BookingController {
 
       const priceDetails = await this.bookingService.getCheckoutPriceDetails(
         roomId,
-        new Date(checkIn),
-        new Date(checkOut),
+        new Date(checkIn + 'Z'),
+        new Date(checkOut+'Z'),
         parseInt(guests),
         bookingType
       );

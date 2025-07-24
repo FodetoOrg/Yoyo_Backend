@@ -92,7 +92,10 @@ export default async function couponRoutes(fastify: FastifyInstance) {
       ...validateCouponSchema,
       tags: ['coupons'],
       summary: 'Validate coupon for booking',
-      security: [{ bearerAuth: [] }]
-    }
+      security: [{ bearerAuth: [] }],
+
+
+    },
+    preHandler: [fastify.authenticate]
   }, (request, reply) => couponController.validateCoupon(request, reply));
 }

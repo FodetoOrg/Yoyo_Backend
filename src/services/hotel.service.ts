@@ -744,24 +744,26 @@ export class HotelService {
       where: eq(rooms.id, roomId)
     });
 
+    console.log('room is ',room)
+
     if (!room || room.status !== 'available') {
       return false;
     }
 
-    // Convert dates to ensure proper comparison (remove milliseconds for consistency)
-    const requestCheckIn = new Date(checkInDate);
-    const requestCheckOut = new Date(checkOutDate);
-    requestCheckIn.setMilliseconds(0);
-    requestCheckOut.setMilliseconds(0);
 
-    // Check for overlapping bookings that are not cancelled
-    // Two bookings overlap if: checkIn < existing.checkOut AND checkOut > existing.checkIn
+
+    const bookingsr = await db.query.bookings.findMany({
+      where: 
+       and( eq(bookings.roomId, roomId),
+        not(eq(bookings.status, 'cancelled')))
+    })
+    console.log('bookings ',bookingsr)
     const overlappingBookings = await db.query.bookings.findMany({
       where: and(
         eq(bookings.roomId, roomId),
         not(eq(bookings.status, 'cancelled')),
-        lt(bookings.checkInDate, requestCheckOut), // existing booking starts before new booking ends
-        gt(bookings.checkOutDate, requestCheckIn)  // existing booking ends after new booking starts
+        lt(bookings.checkInDate, checkOutDate), // existing booking starts before new booking ends
+        gt(bookings.checkOutDate, checkInDate)  // existing booking ends after new booking starts
       ),
       limit: 1
     });

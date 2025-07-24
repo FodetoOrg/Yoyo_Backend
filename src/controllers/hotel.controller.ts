@@ -1,6 +1,8 @@
 // @ts-nocheck
 import { FastifyRequest, FastifyReply } from "fastify";
 import { HotelService } from "../services/hotel.service";
+import dayjs from "dayjs";
+import utc from 'dayjs/plugin/utc';
 import { z } from "zod";
 import {
   CreateHotelBodySchema,
@@ -35,7 +37,7 @@ export class HotelController {
   }
 
   async getHotels(request: FastifyRequest, reply: FastifyReply) {
-    console.log("getHotels ",request.user);
+    console.log("getHotels ", request.user);
     const hotels = await this.hotelService.getHotels();
     return reply.code(200).send({
       success: true,
@@ -97,11 +99,11 @@ export class HotelController {
       const queryParams = request.query as any;
       const { guests, checkIn, checkOut, bookingType } = getHotelDetailsQuerySchema.parse(queryParams);
 
-      console.log('queryParams ',queryParams)
-      
+      console.log('queryParams ', queryParams)
+
       const hotel = await this.hotelService.getHotelById(id);
 
-      console.log('hotel ',hotel)
+      console.log('hotel ', hotel)
 
       if (!hotel) {
         return reply.code(404).send({
@@ -112,29 +114,34 @@ export class HotelController {
 
       // Get reviews data
       const reviewsData = await this.hotelService.getHotelReviews(id);
-      
+
       // Get all rooms for the hotel
       let rooms = await this.hotelService.getRoomsByHotelIdEnhanced(id);
-      
+
+      console.log('rooms avialble in detils are ', rooms)
       // Filter rooms by booking type
       if (bookingType === "daily") {
         rooms = rooms.filter(room => room.isDailyBooking === true);
       } else if (bookingType === "hourly") {
         rooms = rooms.filter(room => room.isHourlyBooking === true);
       }
-      
+
+      console.log('guests ', guests)
       // Filter rooms by guest capacity if provided
       if (guests && guests > 0) {
         rooms = rooms.filter(room => room.capacity >= guests);
       }
-      
+      console.log('checkin and checkout ', checkIn)
+      console.log('checkout ', checkOut)
+      console.log('rooms ', rooms)
+
       // If dates are provided, filter by availability
       if (checkIn && checkOut && rooms.length > 0) {
-        console.log('checkOut ',checkOut)
-        console.log('checkin ',checkIn)
-        const checkInDate = new Date(checkIn);
-        const checkOutDate = new Date(checkOut);
-        
+        console.log('checkOut ', checkOut)
+        console.log('checkin ', checkIn)
+        const checkInDate = new Date(checkIn+'Z'); // Adding 'Z' makes it UTC
+        const checkOutDate = new Date(checkOut+'Z');
+
         const availableRooms = [];
         for (const room of rooms) {
           const isAvailable = await this.hotelService.checkRoomAvailability(room.id, checkInDate, checkOutDate);
@@ -144,15 +151,15 @@ export class HotelController {
         }
         rooms = availableRooms;
       }
-      
+
       // Sort available rooms by price (ascending order - cheapest first)
       // Use appropriate price based on booking type
       const sortedRooms = rooms.sort((a, b) => {
-        const priceA = bookingType === "hourly" ? (a.pricePerHour ) : a.pricePerNight;
+        const priceA = bookingType === "hourly" ? (a.pricePerHour) : a.pricePerNight;
         const priceB = bookingType === "hourly" ? (b.pricePerHour) : b.pricePerNight;
         return priceA - priceB;
       });
-      
+
       // Get room addons for each room
       const roomsWithAddons = await Promise.all(
         sortedRooms.map(async (room) => {
@@ -163,7 +170,7 @@ export class HotelController {
           };
         })
       );
-      
+
       // Create room upgrade data structure - only if there are available rooms
       const roomUpgradeData = {
         currentRoom: roomsWithAddons.length > 0 ? {
@@ -196,7 +203,7 @@ export class HotelController {
 
       return reply.code(200).send({
         success: true,
-        data: { 
+        data: {
           hotel: {
             ...hotel,
             rating: reviewsData.overallRating,
@@ -230,7 +237,7 @@ export class HotelController {
   async createHotel(request: AuthenticatedRequest, reply: FastifyReply) {
     try {
       const hotelData = CreateHotelBodySchema.parse(request.body);
-      
+
       // Handle image uploads if present
       let imageUrls: string[] = [];
       if (hotelData.images && hotelData.images.length > 0) {
@@ -242,7 +249,7 @@ export class HotelController {
         );
       }
 
-    
+
       hotelData.images = imageUrls;
 
       // Create hotel with image URLs
@@ -271,7 +278,7 @@ export class HotelController {
     try {
       // throw new ForbiddenError("dont have accesss");
       const { id } = GetHotelParamsSchema.parse(request.params);
-      console.log('request.body ',request.body)
+      console.log('request.body ', request.body)
       // const hotelData = UpdateHotelBodySchema.parse(request.body);
       const hotel = await this.hotelService.updateHotel(id, request.body);
       return reply.code(200).send({
@@ -280,7 +287,7 @@ export class HotelController {
         data: { hotel },
       });
     } catch (error) {
-      console.log('error ',error)
+      console.log('error ', error)
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
           success: false,
@@ -316,7 +323,7 @@ export class HotelController {
     try {
       const { id: hotelId } = GetHotelParamsSchema.parse(request.params);
       const roomData = request.body as any; // Handle dynamic frontend data
-      
+
       // Validate required fields
       if (!roomData.name || !roomData.roomNumber || !roomData.pricePerNight) {
         return reply.code(400).send({
@@ -324,7 +331,7 @@ export class HotelController {
           message: 'Missing required fields: name, roomNumber, pricePerNight',
         });
       }
-      
+
       const room = await this.hotelService.createRoom({
         hotelId,
         roomNumber: roomData.roomNumber,
@@ -344,7 +351,7 @@ export class HotelController {
         status: roomData.status || 'available',
         images: Array.isArray(roomData.images) ? roomData.images : [],
       });
-      
+
       return reply.code(201).send({
         success: true,
         message: "Room created successfully",
@@ -364,7 +371,7 @@ export class HotelController {
       const { id: hotelId } = GetHotelParamsSchema.parse(request.params);
       const { roomId } = request.params as { roomId: string };
       const roomData = request.body as any; // Handle dynamic frontend data
-      
+
       const room = await this.hotelService.getUpdatedRoom(roomId, {
         hotelId,
         roomNumber: roomData.roomNumber,
@@ -384,7 +391,7 @@ export class HotelController {
         status: roomData.status,
         images: Array.isArray(roomData.images) ? roomData.images : undefined,
       });
-      
+
       return reply.code(200).send({
         success: true,
         message: "Room updated successfully",
@@ -403,7 +410,7 @@ export class HotelController {
     try {
       const { id: hotelId } = GetHotelParamsSchema.parse(request.params);
       const rooms = await this.hotelService.getRoomsByHotelIdEnhanced(hotelId);
-      
+
       return reply.code(200).send({
         success: true,
         data: { rooms },
@@ -415,7 +422,7 @@ export class HotelController {
   }
 
   async getHotelUsers(request: FastifyRequest, reply: FastifyReply) {
-    const {hotelId} = request.query;
+    const { hotelId } = request.query;
     const hotelUsers = await this.hotelService.getHotelUsers(hotelId);
     return reply.code(200).send({
       success: true,

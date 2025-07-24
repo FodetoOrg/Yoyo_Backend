@@ -1,6 +1,6 @@
-// @ts-nocheck
+
 import { FastifyInstance } from "fastify";
-import { coupons, couponMappings, cities, hotels, roomTypes } from "../models/schema";
+import { coupons, couponMappings, cities, hotels, roomTypes, couponUsages } from "../models/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { NotFoundError, ConflictError } from "../types/errors";
@@ -108,7 +108,7 @@ export class CouponService {
   // Get coupon by ID
   async getCouponById(id: string) {
     const db = this.fastify.db;
-    
+
     const coupon = await db.query.coupons.findFirst({
       where: eq(coupons.id, id),
       with: {
@@ -164,7 +164,7 @@ export class CouponService {
   // Create coupon
   async createCoupon(data: CouponCreateParams) {
     const db = this.fastify.db;
-    
+
     // Check if coupon code already exists
     const existingCoupon = await db.query.coupons.findFirst({
       where: eq(coupons.code, data.code),
@@ -176,7 +176,7 @@ export class CouponService {
 
     return await db.transaction(async (tx) => {
       const couponId = uuidv4();
-      
+
       // Create coupon
       await tx.insert(coupons).values({
         id: couponId,
@@ -239,7 +239,7 @@ export class CouponService {
   // Update coupon
   async updateCoupon(id: string, data: Partial<CouponCreateParams>) {
     const db = this.fastify.db;
-    
+
     // Check if coupon exists
     await this.getCouponById(id);
 
@@ -315,28 +315,29 @@ export class CouponService {
   // Delete coupon
   async deleteCoupon(id: string) {
     const db = this.fastify.db;
-    
+
     // Check if coupon exists
     await this.getCouponById(id);
 
     return await db.transaction(async (tx) => {
       // Delete mappings first
       await tx.delete(couponMappings).where(eq(couponMappings.couponId, id));
-      
+
       // Delete coupon
       await tx.delete(coupons).where(eq(coupons.id, id));
-      
+
       return true;
     });
   }
 
   // Get all coupons for users (no permission restrictions)
-  async getUserCoupons(filters: CouponFilters = {}) {
+  async getUserCoupons(filters: CouponFilters = {}, userId) {
     const db = this.fastify.db;
     const { status, page = 1, limit = 10 } = filters;
 
     let whereCondition = status ? eq(coupons.status, status) : undefined;
 
+    // First get all coupons
     const couponList = await db.query.coupons.findMany({
       where: whereCondition,
       with: {
@@ -352,6 +353,16 @@ export class CouponService {
       limit,
       offset: (page - 1) * limit,
     });
+
+    // Get coupon IDs that this user has used
+    const usedCouponIds = await db.query.couponUsages.findMany({
+      where: eq(couponUsages.userId, userId),
+      columns: {
+        couponId: true,
+      },
+    });
+
+    const usedCouponIdSet = new Set(usedCouponIds.map(usage => usage.couponId));
 
     // Get total count
     const totalCoupons = await db.query.coupons.findMany({
@@ -372,6 +383,7 @@ export class CouponService {
         usageLimit: coupon.usageLimit,
         usedCount: coupon.usedCount,
         status: coupon.status,
+        isUsed: usedCouponIdSet.has(coupon.id), // Check if user has used this coupon
         mappings: {
           cities: coupon.mappings.filter(m => m.cityId).map(m => ({
             id: m.city?.id,
@@ -397,9 +409,10 @@ export class CouponService {
   }
 
   // Validate coupon for booking
-  async validateCoupon(code: string, hotelId: string, roomTypeId: string, orderAmount: number, bookingType: 'daily' | 'hourly' = 'daily') {
+  // Validate coupon for booking
+  async validateCoupon(code: string, hotelId: string, roomTypeId: string, orderAmount: number,userId: string, bookingType: 'daily' | 'hourly' = 'daily') {
     const db = this.fastify.db;
-    
+
     const coupon = await db.query.coupons.findFirst({
       where: eq(coupons.code, code),
       with: {
@@ -407,31 +420,77 @@ export class CouponService {
       },
     });
 
+    console.log('coupon is ', coupon);
+
     if (!coupon) {
       throw new NotFoundError(`Coupon with code "${code}" not found`);
     }
 
+    console.log('came 4');
     // Check if coupon is active
     if (coupon.status !== 'active') {
       throw new Error('Coupon is not active');
     }
 
-    // Check validity dates
+    console.log('came 5');
+    // Check if user has already used this coupon
+    // Ensure both values are strings and not null/undefined
+    const safeCouponId = coupon.id ? String(coupon.id) : null;
+    const safeUserId = userId ? String(userId) : null;
+
+    console.log('coupn id is ',coupon.id)
+    console.log('userid is ',userId)
+    if (!safeCouponId || !safeUserId) {
+      throw new Error('Invalid coupon ID or user ID');
+    }
+
+    // Check if user has already used this coupon
+    const existingUsage = await db.query.couponUsages.findFirst({
+      where: and(
+        eq(couponUsages.couponId, safeCouponId),
+        eq(couponUsages.userId, safeUserId)
+      ),
+    });
+
+    console.log('existingUsage ', existingUsage);
+
+    console.log('existingUsage ', existingUsage);
+
+    if (existingUsage) {
+      throw new BadRequestError('You have already used this coupon');
+    }
+
+    // Check validity dates - Simplified approach
     const now = new Date();
-    if (now < coupon.validFrom || now > coupon.validTo) {
+
+    // Ensure we're working with Date objects
+    const validFrom = coupon.validFrom instanceof Date ? coupon.validFrom : new Date(coupon.validFrom);
+    const validTo = coupon.validTo instanceof Date ? coupon.validTo : new Date(coupon.validTo);
+
+    console.log('Date comparison:', {
+      now: now.toISOString(),
+      validFrom: validFrom.toISOString(),
+      validTo: validTo.toISOString()
+    });
+
+    if (now < validFrom || now > validTo) {
+      console.log('coupon time is up');
       throw new Error('Coupon is not valid for current date');
     }
 
     // Check usage limit
     if (coupon.usageLimit && coupon.usedCount >= coupon.usageLimit) {
+      console.log('coupon usage up');
       throw new Error('Coupon usage limit exceeded');
     }
 
     // Check minimum order amount
     if (orderAmount < coupon.minOrderAmount) {
+      console.log('Minimum order amount not reached');
       throw new Error(`Minimum order amount of ₹${coupon.minOrderAmount} required`);
     }
 
+    console.log('came here');
     // Check booking type applicability
     if (coupon.applicableBookingTypes !== 'both') {
       if (coupon.applicableBookingTypes !== bookingType) {
@@ -439,14 +498,51 @@ export class CouponService {
       }
     }
 
-    // Check mappings
-    const isValidForHotel = coupon.mappings.some(mapping => 
-      mapping.hotelId === hotelId || 
-      mapping.roomTypeId === roomTypeId ||
-      mapping.cityId // City mapping would need hotel's city check
-    );
+    // Check mappings - improved logic
+    let isValidForHotel = false;
+
+    // If no mappings exist, coupon is valid for all
+    if (!coupon.mappings || coupon.mappings.length === 0) {
+      isValidForHotel = true;
+    } else {
+      // Check each mapping
+      for (const mapping of coupon.mappings) {
+        // Direct hotel match
+        if (mapping.hotelId && mapping.hotelId === hotelId) {
+          isValidForHotel = true;
+          break;
+        }
+
+        // Direct room type match
+        if (mapping.roomTypeId && mapping.roomTypeId === roomTypeId) {
+          isValidForHotel = true;
+          break;
+        }
+
+        // City mapping - need to check hotel's city
+        if (mapping.cityId) {
+          try {
+            // Make sure we're passing the hotelId as a string, not a Date or other object
+            const hotel = await db.query.hotels.findFirst({
+              where: eq(hotels.id, hotelId.toString()), // Ensure it's a string
+              columns: { cityId: true }
+            });
+
+            if (hotel && hotel.cityId === mapping.cityId) {
+              isValidForHotel = true;
+              break;
+            }
+          } catch (error) {
+            console.error('Error checking hotel city mapping:', error);
+            // Continue to next mapping instead of failing completely
+            continue;
+          }
+        }
+      }
+    }
 
     if (!isValidForHotel) {
+      console.log('it is not valid hotel');
       throw new Error('Coupon is not valid for this hotel or room type');
     }
 
@@ -461,6 +557,9 @@ export class CouponService {
       discountAmount = coupon.discountValue;
     }
 
+    // Ensure discount doesn't exceed order amount
+    discountAmount = Math.min(discountAmount, orderAmount);
+
     return {
       coupon: {
         id: coupon.id,
@@ -469,7 +568,7 @@ export class CouponService {
         discountValue: coupon.discountValue,
       },
       discountAmount,
-      finalAmount: orderAmount - discountAmount,
+      finalAmount: Math.max(orderAmount - discountAmount, 0),
     };
   }
 }

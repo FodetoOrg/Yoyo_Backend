@@ -13,6 +13,7 @@ import { v4 as uuidv4 } from "uuid";
 const nodemailer = require('nodemailer');
 import admin from "../config/firebase/firebase";
 import { Expo, ExpoPushMessage, ExpoPushTicket } from 'expo-server-sdk';
+import { NotFoundError } from "../types/errors";
 
 interface NotificationData {
   userId: string;
@@ -56,6 +57,7 @@ export class NotificationService {
         where: eq(pushTokens.pushToken, token)
       });
 
+      console.log('existingToken ', existingToken)
       const tokenData = {
         userId,
         pushToken: token,
@@ -66,6 +68,8 @@ export class NotificationService {
         lastUsed: new Date(),
         updatedAt: new Date(),
       };
+
+      console.log('tokenData ', tokenData)
 
       return await db.transaction(async (tx) => {
         if (existingToken) {
@@ -81,6 +85,7 @@ export class NotificationService {
           id: uuidv4(),
           ...tokenData,
         }).returning();
+        console.log('newToken ',newToken)
         return newToken[0];
       })
     } catch (error) {
@@ -129,12 +134,22 @@ export class NotificationService {
 
   // Send test notification
   async sendTestNotification(userId: string, message: string) {
-    return await this.queueNotification({
+    const db = this.fastify.db;
+
+    const tokens = await db.query.pushTokens.findFirst({
+      where:eq(pushTokens.userId,userId)
+    }) 
+    console.log('tokens ',tokens)
+    if(!tokens){
+      throw new NotFoundError('Expo Token NotFound')
+    }
+    return await this.sendImmediateNotification({
       userId,
       type: 'push',
       title: 'Test Notification',
       message,
-      source: 'test'
+      source: 'test',
+      pushToken:tokens.pushToken
     });
   }
   // Send immediate notification (bypasses queue for urgent notifications)
@@ -158,6 +173,7 @@ export class NotificationService {
         console.log(`Immediate notification blocked by user preferences: ${data.type} for user ${data.userId}`);
         return { success: false, reason: 'Blocked by user preferences' };
       }
+      console.log('came here in notifiy 1')
 
       // Send directly without queuing
       let result;
@@ -239,9 +255,11 @@ export class NotificationService {
     pushToken: string;
   }) {
     if (!Expo.isExpoPushToken(data.pushToken)) {
+      console.log('invalid token ')
       throw new Error('Invalid Expo push token');
     }
 
+    console.log('came here in notifiy 2')
     const message: ExpoPushMessage = {
       to: data.pushToken,
       title: data.title,

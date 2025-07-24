@@ -36,7 +36,10 @@ export class HotelSearchController {
         sortBy: searchData.sortBy,
         page: searchData.page,
         limit: searchData.limit,
+        isNearby: false
       };
+
+      console.log('searchFilters ',searchFilters)
 
       // Prioritize coordinates-based search over city-based search
       if (searchFilters.coordinates && (!searchFilters.city || searchFilters.city.trim() === '')) {
@@ -178,7 +181,7 @@ export class HotelSearchController {
         limit,
       });
 
-      console.log('offers ',hotels)
+      console.log('offers ', hotels)
       return reply.code(200).send({
         success: true,
         data: {

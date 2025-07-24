@@ -220,7 +220,8 @@ export class CouponController {
   async validateCoupon(request: FastifyRequest, reply: FastifyReply) {
     try {
       const { code, hotelId, roomTypeId, orderAmount } = validateCouponSchema.parse(request.body);
-      const result = await this.couponService.validateCoupon(code, hotelId, roomTypeId, orderAmount);
+      console.log('user is in coupn validate ',request.user)
+      const result = await this.couponService.validateCoupon(code, hotelId, roomTypeId, orderAmount,request.user.id);
       
       return reply.code(200).send({
         success: true,
@@ -249,7 +250,7 @@ export class CouponController {
   async getUserCoupons(request: FastifyRequest, reply: FastifyReply) {
     try {
       const filters = couponFiltersSchema.parse(request.query);
-      const result = await this.couponService.getUserCoupons(filters);
+      const result = await this.couponService.getUserCoupons(filters,request.user.id);
       
       return reply.code(200).send({
         success: true,

@@ -128,7 +128,9 @@ export const CouponListResponseSchema = z.object({
 export const UserCouponListResponseSchema = z.object({
   success: z.boolean(),
   data: z.object({
-    coupons: z.array(UserCouponSchema),
+    coupons: z.array(UserCouponSchema.extend({
+      isUsed:z.boolean()
+    })),
     total: z.number().int().min(0),
     page: z.number().int().min(1),
     limit: z.number().int().min(1),
