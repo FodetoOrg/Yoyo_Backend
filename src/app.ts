@@ -33,6 +33,7 @@ import customerProfileRoutes from './routes/customerProfile.route';
 import wishlistRoutes from './routes/wishlist.route';
 import { getNotificationProcessor } from './jobs/notification-processor';
 import addonRoutes from "./routes/addon.route";
+import hourlyStayRoutes from "./routes/roomHourlyStay.route";
 
 // Create Fastify instance
 export const app: FastifyInstance = fastify({
@@ -90,6 +91,7 @@ app.register(hotelSearchRoutes, { prefix: '/api/v1/search' });
 app.register(customerProfileRoutes, { prefix: '/api/v1/profile' });
 app.register(wishlistRoutes, { prefix: '/api/v1/wishlist' });
 app.register(addonRoutes, { prefix: '/api/v1/addons' });
+app.register(hourlyStayRoutes, { prefix: '/api/v1/hourlyStays' });
 
 // Default route
 app.get('/', async () => {

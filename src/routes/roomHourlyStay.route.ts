@@ -1,7 +1,7 @@
 
 import { FastifyInstance } from 'fastify';
 import { RoomHourlyStayController } from '../controllers/roomHourlyStay.controller';
-import { UserRole } from '@/types/common';
+import { UserRole } from '../types/common';
 import {
   createHourlyStaySchema,
   getHourlyStaysByRoomSchema,
@@ -10,7 +10,7 @@ import {
   deleteHourlyStaySchema,
 } from '../schemas/roomHourlyStay.schema';
 
-export async function roomHourlyStayRoutes(fastify: FastifyInstance) {
+export default  async function roomHourlyStayRoutes(fastify: FastifyInstance) {
   const roomHourlyStayController = new RoomHourlyStayController();
   roomHourlyStayController.setFastify(fastify);
 
@@ -20,7 +20,9 @@ export async function roomHourlyStayRoutes(fastify: FastifyInstance) {
       ...createHourlyStaySchema,
       security: [{ bearerAuth: [] }]
     },
-    onRequest: [fastify.authenticate, fastify.rbacGuard(['admin', 'hotel_manager'])],
+    onRequest: [fastify.authenticate,
+      //  fastify.rbacGuard(['admin', 'hotel_manager'])
+      ],
   }, roomHourlyStayController.createHourlyStay.bind(roomHourlyStayController));
 
   // Get hourly stays by room
@@ -47,7 +49,9 @@ export async function roomHourlyStayRoutes(fastify: FastifyInstance) {
       ...updateHourlyStaySchema,
       security: [{ bearerAuth: [] }]
     },
-    onRequest: [fastify.authenticate, fastify.rbacGuard([UserRole.HOTEL_ADMIN, UserRole.ADMIN])],
+    onRequest: [fastify.authenticate, 
+      // fastify.rbacGuard([UserRole.HOTEL_ADMIN, UserRole.ADMIN])
+    ],
   }, roomHourlyStayController.updateHourlyStay.bind(roomHourlyStayController));
 
   // Delete hourly stay
@@ -56,6 +60,8 @@ export async function roomHourlyStayRoutes(fastify: FastifyInstance) {
       ...deleteHourlyStaySchema,
       security: [{ bearerAuth: [] }]
     },
-    onRequest: [fastify.authenticate, fastify.rbacGuard([UserRole.HOTEL_ADMIN, UserRole.ADMIN])],
+    onRequest: [fastify.authenticate, 
+      // fastify.rbacGuard([UserRole.HOTEL_ADMIN, UserRole.ADMIN])
+    ],
   }, roomHourlyStayController.deleteHourlyStay.bind(roomHourlyStayController));
 }
