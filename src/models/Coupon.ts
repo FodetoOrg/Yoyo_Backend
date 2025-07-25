@@ -41,7 +41,7 @@ export const couponUsages = sqliteTable('coupon_usages',{
   id: text('id').primaryKey(),
   couponId: text('coupon_id').references(() => coupons.id).notNull(),
   hotelId: text('hotel_id').references(() => hotels.id),
-  userId: text('user_id').references(() => users.id).notNull().unique(),
+  userId: text('user_id').references(() => users.id).notNull(),
   bookingId: text("booking_id").references(() => bookings.id).notNull(),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(new Date()),
 

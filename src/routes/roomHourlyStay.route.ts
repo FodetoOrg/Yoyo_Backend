@@ -1,6 +1,7 @@
 
 import { FastifyInstance } from 'fastify';
 import { RoomHourlyStayController } from '../controllers/roomHourlyStay.controller';
+import { UserRole } from '@/types/common';
 
 export async function roomHourlyStayRoutes(fastify: FastifyInstance) {
   const roomHourlyStayController = new RoomHourlyStayController();
@@ -23,11 +24,11 @@ export async function roomHourlyStayRoutes(fastify: FastifyInstance) {
 
   // Update hourly stay
   fastify.put('/hourly-stays/:id', {
-    onRequest: [fastify.authenticate, fastify.rbacGuard(['admin', 'hotel_manager'])],
+    onRequest: [fastify.authenticate, fastify.rbacGuard([UserRole.HOTEL_ADMIN, UserRole.HOTEL_ADMIN])],
   }, roomHourlyStayController.updateHourlyStay.bind(roomHourlyStayController));
 
   // Delete hourly stay
   fastify.delete('/hourly-stays/:id', {
-    onRequest: [fastify.authenticate, fastify.rbacGuard(['admin', 'hotel_manager'])],
+    onRequest: [fastify.authenticate, fastify.rbacGuard([UserRole.HOTEL_ADMIN, UserRole.HOTEL_ADMIN])],
   }, roomHourlyStayController.deleteHourlyStay.bind(roomHourlyStayController));
 }
