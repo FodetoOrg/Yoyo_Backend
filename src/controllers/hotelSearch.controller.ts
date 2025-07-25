@@ -20,12 +20,14 @@ export class HotelSearchController {
     try {
       const searchData = SearchHotelsRequestSchema.parse(request.body);
 
+      console.log('searchData ',searchData)
+
       const searchFilters = {
         coordinates: searchData.coordinates,
         city: searchData.city,
         radius: searchData.radius,
-        checkIn: searchData.dateRange ? new Date(searchData.dateRange.startDate) : undefined,
-        checkOut: searchData.dateRange ? new Date(searchData.dateRange.endDate) : undefined,
+        checkIn: searchData.dateRange ? new Date(searchData.dateRange.startDate+'Z') : undefined,
+        checkOut: searchData.dateRange ? new Date(searchData.dateRange.endDate+'Z') : undefined,
         adults: searchData.guests.adults,
         children: searchData.guests.children,
         infants: searchData.guests.infants,
