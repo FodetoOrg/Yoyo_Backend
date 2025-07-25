@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { FastifyInstance } from "fastify";
-import { hotels, hotelImages, rooms, hotelReviews, wishlists, coupons, couponMappings, bookings } from "../models/schema";
+import { hotels, hotelImages, rooms, hotelReviews, wishlists, coupons, couponMappings, bookings, roomHourlyStays } from "../models/schema";
 import { eq, and, like, between, sql, desc, asc, inArray, exists, avg, count, not, or, lt, gt } from "drizzle-orm";
 import dayjs from "dayjs";
 
@@ -176,6 +176,7 @@ export class HotelSearchService {
       }
 
       const offers = await this.getHotelOffers(hotelData.hotel.id);
+      const hourlyStays = await this.getHotelHourlyStays(hotelData.hotel.id);
 
       hotelsWithPricing.push({
         id: hotelData.hotel.id,
@@ -193,6 +194,7 @@ export class HotelSearchService {
         },
         pricing: pricing,
         offers: offers,
+        hourlyStays: hourlyStays,
         images: {
           primary: hotelData.primaryImage,
           gallery: await this.getHotelImages(hotelData.hotel.id),
@@ -284,6 +286,7 @@ export class HotelSearchService {
           : 0;
 
         const pricing = await this.getHotelPricing(hotel.id);
+        const hourlyStays = await this.getHotelHourlyStays(hotel.id);
 
         console.log('hotel is ', hotel)
 
@@ -309,6 +312,7 @@ export class HotelSearchService {
             perHour: pricing.perHour,
             bookingType: pricing.bookingType
           } : null,
+          hourlyStays: hourlyStays,
           images: {
             primary: hotel.images[0]?.url || null,
             gallery: []
@@ -364,6 +368,7 @@ export class HotelSearchService {
           : 0;
 
         const pricing = await this.getHotelPricing(item.hotel.id);
+        const hourlyStays = await this.getHotelHourlyStays(item.hotel.id);
 
         return {
           id: item.hotel.id,
@@ -379,6 +384,7 @@ export class HotelSearchService {
             count: reviews.length,
           },
           pricing,
+          hourlyStays: hourlyStays,
           images: {
             primary: item.primaryImage,
           },
@@ -615,6 +621,55 @@ export class HotelSearchService {
     });
 
     return images.map(img => img.url);
+  }
+
+  private async getHotelHourlyStays(hotelId: string) {
+    const db = this.fastify.db;
+
+    const hourlyStays = await db
+      .select({
+        id: roomHourlyStays.id,
+        hours: roomHourlyStays.hours,
+        price: roomHourlyStays.price,
+        name: roomHourlyStays.name,
+        description: roomHourlyStays.description,
+        roomId: roomHourlyStays.roomId,
+        roomName: rooms.name,
+      })
+      .from(roomHourlyStays)
+      .innerJoin(rooms, eq(roomHourlyStays.roomId, rooms.id))
+      .where(and(
+        eq(rooms.hotelId, hotelId),
+        eq(roomHourlyStays.isActive, true),
+        eq(rooms.status, 'available')
+      ))
+      .orderBy([asc(roomHourlyStays.hours)]);
+
+    // Group by hours to get unique hourly packages with min price
+    const hourlyPackages = hourlyStays.reduce((acc, stay) => {
+      const existing = acc.find(p => p.hours === stay.hours);
+      if (!existing) {
+        acc.push({
+          hours: stay.hours,
+          name: stay.name,
+          description: stay.description,
+          minPrice: stay.price,
+          availableRooms: 1
+        });
+      } else {
+        existing.minPrice = Math.min(existing.minPrice, stay.price);
+        existing.availableRooms += 1;
+      }
+      return acc;
+    }, [] as Array<{
+      hours: number;
+      name: string;
+      description: string | null;
+      minPrice: number;
+      availableRooms: number;
+    }>);
+
+    return hourlyPackages;
   }
 
   private sortHotels(hotels: any[], sortBy: string) {

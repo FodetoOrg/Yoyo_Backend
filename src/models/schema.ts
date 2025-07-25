@@ -21,6 +21,8 @@ export * from './PaymentOrder';
 export * from './CustomerProfile';
 export * from './Wishlist';
 export { roomsRelations, rooms, Room } from './Room';
+export { roomTypes, roomTypesRelations, type RoomType } from './RoomType';
+export { roomHourlyStays, roomHourlyStaysRelations, type RoomHourlyStay } from './RoomHourlyStay';
 export { 
   addons, 
   roomAddons, 

@@ -5,6 +5,7 @@ import { hotels } from "./Hotel";
 import { roomTypes } from "./RoomType";
 import { bookings } from "./Booking";
 import { roomImages } from "./RoomImage";
+import { roomHourlyStays } from "./RoomHourlyStay";
 
 // Room table
 export const rooms = sqliteTable('rooms', {
@@ -42,6 +43,7 @@ export const roomsRelations = relations(rooms, ({ one, many }) => ({
   }),
   bookings: many(bookings),
   images: many(roomImages),
+  hourlyStays: many(roomHourlyStays),
 }));
 
 // Export type

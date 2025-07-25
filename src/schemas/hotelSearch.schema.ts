@@ -46,6 +46,13 @@ export const HomeTabQuerySchema = z.object({
 });
 
 // Response schemas
+
+export const HourlyStaySchema = z.object({
+  duration: z.number().int(),
+  price: z.number(),
+  currency: z.string(),
+});
+
 export const HotelImageSchema = z.object({
   primary: z.string().url().nullable(),
   gallery: z.array(z.string().url()).optional(),
@@ -91,6 +98,7 @@ export const HotelSearchResultSchema = z.object({
   rating: HotelRatingSchema,
   pricing: HotelPricingSchema.nullable(),
   offers: z.array(HotelOfferSchema).optional(),
+  hourlyStays: z.array(HourlyStaySchema).optional(),
   images: HotelImageSchema,
   paymentOptions: z.object({
     onlineEnabled: z.boolean(),
@@ -110,6 +118,7 @@ export const HotelOffersResultSchema = z.object({
   rating: HotelRatingSchema,
   pricing: HotelPricingSchema.nullable(),
   offers: z.array(HotelOfferSchema).optional(),
+  hourlyStays: z.array(HourlyStaySchema).optional(),
   images: HotelImageSchema,
   paymentOptions: z.object({
     onlineEnabled: z.boolean(),
@@ -156,6 +165,7 @@ export const LatestHotelResultSchema = z.object({
     availableRooms: z.number().optional()
   }).nullable(),
   offers: z.array(HotelOfferSchema).optional(),
+  hourlyStays: z.array(HourlyStaySchema).optional(),
   images: HotelImageSchema,
   isNew: z.boolean().optional(),
   paymentOptions: z.object({
