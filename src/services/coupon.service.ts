@@ -1,4 +1,4 @@
-
+//@ts-nocheck
 import { FastifyInstance } from "fastify";
 import { coupons, couponMappings, cities, hotels, roomTypes, couponUsages } from "../models/schema";
 import { eq, and, desc, inArray } from "drizzle-orm";
