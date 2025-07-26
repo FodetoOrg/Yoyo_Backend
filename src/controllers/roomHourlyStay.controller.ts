@@ -98,8 +98,9 @@ export class RoomHourlyStayController {
     try {
       const { id } = request.params as { id: string };
       const data = UpdateHourlyStaySchema.parse(request.body);
-      
+      console.log('request.body ',request.body)
       const hourlyStay = await this.roomHourlyStayService.updateHourlyStay(id, data);
+      console.log('hourlyStay ',hourlyStay)
 
       return reply.code(200).send({
         success: true,

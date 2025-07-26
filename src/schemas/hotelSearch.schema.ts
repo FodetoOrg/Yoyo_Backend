@@ -48,9 +48,11 @@ export const HomeTabQuerySchema = z.object({
 // Response schemas
 
 export const HourlyStaySchema = z.object({
-  duration: z.number().int(),
-  price: z.number(),
-  currency: z.string(),
+  hours: z.number().int(),
+  minPrice: z.number(),
+  availableRooms: z.number(),
+  name:z.string()
+
 });
 
 export const HotelImageSchema = z.object({

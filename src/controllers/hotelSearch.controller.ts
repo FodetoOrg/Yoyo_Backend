@@ -146,6 +146,8 @@ export class HotelSearchController {
         limit,
       });
 
+      // console.log('hotels in atest ',JSON.stringify(hotels))
+
       return reply.code(200).send({
         success: true,
         data: {

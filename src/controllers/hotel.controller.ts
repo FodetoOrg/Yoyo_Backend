@@ -93,6 +93,8 @@ export class HotelController {
     }
   }
 
+
+
   async getHotelDetails(request: FastifyRequest, reply: FastifyReply) {
     try {
       const { id } = GetHotelParamsSchema.parse(request.params);
@@ -139,8 +141,12 @@ export class HotelController {
       if (checkIn && checkOut && rooms.length > 0) {
         console.log('checkOut ', checkOut)
         console.log('checkin ', checkIn)
-        const checkInDate = new Date(checkIn+'Z'); // Adding 'Z' makes it UTC
-        const checkOutDate = new Date(checkOut+'Z');
+        const checkInDate = new Date(checkIn.endsWith('Z') || checkIn.includes('+') ? checkIn : checkIn + 'Z');
+        const checkOutDate = new Date(checkOut.endsWith('Z') || checkOut.includes('+') ? checkOut : checkOut + 'Z');
+
+
+        console.log('checkInDate', checkInDate);
+        console.log('checkOutDate', checkOutDate);
 
         const availableRooms = [];
         for (const room of rooms) {

@@ -732,6 +732,15 @@ export class HotelService {
     return true;
   }
 
+
+  async  normalizeDate(dateStr){
+    // If date already has a timezone indicator, use it directly
+    if (dateStr.endsWith('Z') || dateStr.includes('+')) {
+      return new Date(dateStr);
+    }
+    return new Date(dateStr + 'Z');
+  };
+
   // Check room availability
   async checkRoomAvailability(roomId: string, checkInDate: Date, checkOutDate: Date): Promise<boolean> {
     const db = this.fastify.db;

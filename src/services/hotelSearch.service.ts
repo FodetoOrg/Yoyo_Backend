@@ -1,4 +1,4 @@
-// @ts-nocheck
+
 import { FastifyInstance } from "fastify";
 import { hotels, hotelImages, rooms, hotelReviews, wishlists, coupons, couponMappings, bookings, roomHourlyStays } from "../models/schema";
 import { eq, and, like, between, sql, desc, asc, inArray, exists, avg, count, not, or, lt, gt } from "drizzle-orm";
@@ -643,7 +643,7 @@ export class HotelSearchService {
         eq(roomHourlyStays.isActive, true),
         eq(rooms.status, 'available')
       ))
-      .orderBy([asc(roomHourlyStays.hours)]);
+      .orderBy(asc(roomHourlyStays.hours));
 
     // Group by hours to get unique hourly packages with min price
     const hourlyPackages = hourlyStays.reduce((acc, stay) => {
