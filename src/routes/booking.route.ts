@@ -125,7 +125,8 @@ export default async function bookingRoutes(fastify: FastifyInstance) {
       },
       tags: ['bookings'],
       summary: 'Cancel a booking',
-      security: [{ bearerAuth: [] }]
+      security: [{ bearerAuth: [] }],
+      preHandler: [fastify.authenticate],
     }
   }, (request, reply) => bookingController.cancelBooking(request, reply));
 
@@ -168,6 +169,7 @@ export default async function bookingRoutes(fastify: FastifyInstance) {
       tags: ['bookings'],
       summary: 'Update guest details',
       security: [{ bearerAuth: [] }]
-    }
+    },
+    preHandler:[fastify.authenticate]
   }, (request, reply) => bookingController.updateGuestDetails(request, reply));
 }

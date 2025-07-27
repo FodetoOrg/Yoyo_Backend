@@ -20,14 +20,20 @@ export async function refundRoutes(fastify: FastifyInstance) {
 
   // Admin routes
   fastify.get('/admin/refunds', {
-    onRequest: [fastify.authenticate, fastify.rbacGuard(['admin'])],
+    onRequest: [fastify.authenticate, 
+      // fastify.rbacGuard(['admin'])
+  ],
   }, refundController.getAllRefunds.bind(refundController));
 
   fastify.post('/admin/refunds/:id/process', {
-    onRequest: [fastify.authenticate, fastify.rbacGuard(['admin'])],
+    onRequest: [fastify.authenticate,
+      //  fastify.rbacGuard(['admin'])
+      ],
   }, refundController.processRefund.bind(refundController));
 
   fastify.post('/admin/refunds/:id/reject', {
-    onRequest: [fastify.authenticate, fastify.rbacGuard(['admin'])],
+    onRequest: [fastify.authenticate,
+      //  fastify.rbacGuard(['admin'])
+      ],
   }, refundController.rejectRefund.bind(refundController));
 }

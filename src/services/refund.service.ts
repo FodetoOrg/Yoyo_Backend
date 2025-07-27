@@ -9,9 +9,14 @@ export class RefundService {
   private fastify: FastifyInstance;
   private notificationService: NotificationService;
 
-  constructor(fastify: FastifyInstance) {
+  constructor() {
+
+    this.notificationService = new NotificationService();
+  }
+
+  setFastify(fastify: FastifyInstance) {
     this.fastify = fastify;
-    this.notificationService = new NotificationService(fastify);
+    this.notificationService.setFastify(fastify)
   }
 
   // Calculate cancellation fee and refund amount
@@ -49,6 +54,7 @@ export class RefundService {
     refundType: 'cancellation' | 'no_show' | 'admin_refund';
   }) {
     const db = this.fastify.db;
+    console.log('cma ein refund ')
 
     return await db.transaction(async (tx) => {
       // Get booking with hotel and payment details

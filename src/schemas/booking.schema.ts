@@ -331,7 +331,12 @@ export const GetBookingDetailsResponseSchema = z.object({
       paymentStaus:z.string(),
       paymentAmount:z.number().int(),
       latitude:z.number(),
-      longitude:z.number()
+      longitude:z.number(),
+      guestName:z.string(),
+      guestEmail:z.string(),
+      guestPhone:z.string()
+
+      
     })
   })
 });

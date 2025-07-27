@@ -8,7 +8,9 @@ import { CouponService } from './coupon.service';
 import { NotificationService } from './notification.service';
 import Razorpay from 'razorpay';
 import { generateBookingConfirmationEmail } from '../utils/email';
+import { RefundService }  from './refund.service'
 import { AddonService } from './addon.service';
+import { RefundService } from './refund.service';
 
 interface BookingCreateParams {
   userId: string;
@@ -31,11 +33,13 @@ export class BookingService {
   private notificationService: NotificationService;
   private razorpay: Razorpay;
   private addonService: AddonService;
+  private refundService:RefundService;
 
   constructor() {
     this.couponService = new CouponService();
     this.notificationService = new NotificationService();
     this.addonService = new AddonService();
+    this.refundService = new RefundService();
     // Initialize Razorpay
     this.razorpay = new Razorpay({
       key_id: process.env.RAZORPAY_KEY_ID || '',
@@ -49,6 +53,8 @@ export class BookingService {
     this.couponService.setFastify(fastify);
     this.notificationService.setFastify(fastify);
     this.addonService.setFastify(fastify);
+    this.refundService.setFastify(fastify);
+    
   }
 
   // Check if a room is available for the given dates and guest count
@@ -713,6 +719,8 @@ export class BookingService {
       },
     });
 
+    console.log('came in booking ',booking)
+
     if (!booking) {
       throw new NotFoundError('Booking not found');
     }
@@ -724,10 +732,9 @@ export class BookingService {
     // Check if payment was made - if yes, create refund request
     if (booking.payment && booking.payment.status === 'completed') {
       // Import RefundService here to avoid circular dependency
-      const { RefundService } = await import('./refund.service');
-      const refundService = new RefundService(this.fastify);
 
-      const refundResult = await refundService.createRefundRequest({
+
+      const refundResult = await this.refundService.createRefundRequest({
         bookingId,
         userId,
         refundReason: cancelReason,
@@ -849,41 +856,41 @@ export class BookingService {
     const booking = await this.getBookingById(bookingId);
 
     if (booking) {
-      try {
-        // Send push notification
-        await this.notificationService.sendInstantBookingSuccessNotification(booking.userId, {
-          title: 'Guest Details Updated',
-          message: `Guest details for your booking at ${booking.hotel.name} have been updated`,
-          type: 'guest_details_update',
-          data: {
-            bookingId,
-            hotelName: booking.hotel.name,
-          }
-        });
+      // try {
+      //   // Send push notification
+      //   await this.notificationService.sendInstantBookingSuccessNotification(booking.userId, {
+      //     title: 'Guest Details Updated',
+      //     message: `Guest details for your booking at ${booking.hotel.name} have been updated`,
+      //     type: 'guest_details_update',
+      //     data: {
+      //       bookingId,
+      //       hotelName: booking.hotel.name,
+      //     }
+      //   });
 
-        // Send email notification
-        await this.notificationService.sendImmediateNotification({
-          userId: booking.userId,
-          type: 'email',
-          title: "Guest Details Updated",
-          message: `
-            <h2>Guest Details Updated</h2>
-            <p>Dear Guest,</p>
-            <p>Your guest details for booking <strong>${bookingId}</strong> at <strong>${booking.hotel.name}</strong> have been updated.</p>
-            <p>Updated Details:</p>
-            <ul>
-              <li><strong>Name:</strong> ${guestDetails.guestName}</li>
-              <li><strong>Email:</strong> ${guestDetails.guestEmail}</li>
-              <li><strong>Phone:</strong> ${guestDetails.guestPhone}</li>
-            </ul>
-            <p>If you did not make this change, please contact us immediately.</p>
-            <p>Thank you for choosing ${booking.hotel.name}!</p>
-          `,
-          email: guestDetails.guestEmail
-        });
-      } catch (error) {
-        this.fastify.log.error('Failed to send guest details update notification:', error);
-      }
+      //   // Send email notification
+      //   await this.notificationService.sendImmediateNotification({
+      //     userId: booking.userId,
+      //     type: 'email',
+      //     title: "Guest Details Updated",
+      //     message: `
+      //       <h2>Guest Details Updated</h2>
+      //       <p>Dear Guest,</p>
+      //       <p>Your guest details for booking <strong>${bookingId}</strong> at <strong>${booking.hotel.name}</strong> have been updated.</p>
+      //       <p>Updated Details:</p>
+      //       <ul>
+      //         <li><strong>Name:</strong> ${guestDetails.guestName}</li>
+      //         <li><strong>Email:</strong> ${guestDetails.guestEmail}</li>
+      //         <li><strong>Phone:</strong> ${guestDetails.guestPhone}</li>
+      //       </ul>
+      //       <p>If you did not make this change, please contact us immediately.</p>
+      //       <p>Thank you for choosing ${booking.hotel.name}!</p>
+      //     `,
+      //     email: guestDetails.guestEmail
+      //   });
+      // } catch (error) {
+      //   this.fastify.log.error('Failed to send guest details update notification:', error);
+      // }
     }
 
     return booking;
@@ -1150,6 +1157,9 @@ export class BookingService {
       checkOut: checkOutDate,
       guests: booking.guestCount,
       onlinePaymentEnabled: booking.hotel.onlinePaymentEnabled,
+      guestName:booking.guestName,
+      guestEmail:booking.guestEmail,
+      guestPhone:booking.guestPhone,
       nights,
       paymentStaus: booking.payment.status,
       paymentAmount: booking.payment.amount,

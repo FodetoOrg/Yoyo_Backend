@@ -390,6 +390,7 @@ export class BookingController {
           message: 'Booking not found',
         });
       }
+      console.log('in cacnel booking ',booking)
 
       // Check if the user is authorized to cancel this booking
       // Only the user who created the booking, hotel owner, or admin can cancel it
@@ -417,7 +418,7 @@ export class BookingController {
         });
       }
 
-      const cancelledBooking = await this.bookingService.cancelBooking(id, reason, role);
+      const cancelledBooking = await this.bookingService.cancelBooking(id, request.user.id ,reason);
 
       return reply.code(200).send({
         success: true,
