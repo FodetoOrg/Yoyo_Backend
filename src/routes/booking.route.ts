@@ -122,15 +122,7 @@ export default async function bookingRoutes(fastify: FastifyInstance) {
     }
   }, (request, reply) => bookingController.cancelBooking(request, reply));
 
-  // Enable online payment for existing booking
-  fastify.post('/:bookingId/enable-online-payment', {
-    // onRequest: [fastify.authenticate],
-    schema: {
-      tags: ['bookings'],
-      summary: 'Enable online payment for an existing booking',
-      security: [{ bearerAuth: [] }]
-    }
-  }, (request, reply) => bookingController.enableOnlinePayment(request, reply));
+  
 
   // Update booking status (admin/hotel only)
   fastify.put('/:bookingId/status', {
