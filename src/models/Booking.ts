@@ -53,7 +53,10 @@ export const bookingsRelations = relations(bookings, ({ one, many }) => ({
     fields: [bookings.roomId],
     references: [rooms.id],
   }),
-  payment: many(payments),
+  payment: one(payments,{
+    fields: [bookings.id],
+    references: [payments.bookingId],
+  }),
   review: one(reviews, {
     fields: [bookings.id],
     references: [reviews.bookingId],

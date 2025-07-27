@@ -33,7 +33,7 @@ export class BookingController {
 
       // Check if room exists and is available
       const room = await this.hotelService.getRoomById(bookingData.roomId);
-      console.log('room is in booking ',room)
+      console.log('room is in booking ', room)
       if (!room) {
         return reply.code(404).send({
           success: false,
@@ -55,12 +55,12 @@ export class BookingController {
       const availabilityCheck = await this.bookingService.checkRoomAvailability(
         bookingData.roomId,
         new Date(bookingData.checkIn + 'Z'),
-        new Date(bookingData.checkOut+ 'Z'),
+        new Date(bookingData.checkOut + 'Z'),
         bookingData.guests,
         bookingData.bookingType
       );
 
-      console.log('availabilityCheck ',availabilityCheck)
+      console.log('availabilityCheck ', availabilityCheck)
 
       if (!availabilityCheck.available) {
         return reply.code(400).send({
@@ -70,10 +70,10 @@ export class BookingController {
       }
 
       // Calculate room price based on booking type
-      const checkInDate = new Date(bookingData.checkIn+'Z');
-      const checkOutDate = new Date(bookingData.checkOut+'Z');
+      const checkInDate = new Date(bookingData.checkIn + 'Z');
+      const checkOutDate = new Date(bookingData.checkOut + 'Z');
       let roomTotal = 0;
-      
+
       if (bookingData.bookingType === 'hourly') {
         const diffTime = Math.abs(checkOutDate.getTime() - checkInDate.getTime());
         const diffHours = Math.ceil(diffTime / (1000 * 60 * 60));
@@ -88,19 +88,19 @@ export class BookingController {
       let addonTotal = 0;
       let processedAddons = [];
 
-      console.log('bookingData is  ',bookingData)
-      
+      console.log('bookingData is  ', bookingData)
+
       if (bookingData.selectedAddons && bookingData.selectedAddons.length > 0) {
         addonTotal = bookingData.selectedAddons.reduce((total, addon) => {
           return total + (addon.price * addon.quantity);
         }, 0);
 
-        if(bookingData.bookingType==='daily'){
+        if (bookingData.bookingType === 'daily') {
           const diffTime = Math.abs(checkOutDate.getTime() - checkInDate.getTime());
           const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-          addonTotal = addonTotal*diffDays
+          addonTotal = addonTotal * diffDays
         }
-        
+
         // Prepare addons for the booking service
         processedAddons = bookingData.selectedAddons.map(addon => ({
           addonId: addon.id,
@@ -108,11 +108,11 @@ export class BookingController {
         }));
       }
 
-      console.log('addonTotal ',addonTotal)
+      console.log('addonTotal ', addonTotal)
 
       // Calculate final total amount
-      const totalAmount = roomTotal +  addonTotal;
-      console.log('totalAmount ',totalAmount)
+      const totalAmount = roomTotal + addonTotal;
+      console.log('totalAmount ', totalAmount)
 
       // Create booking
       const booking = await this.bookingService.createBooking({
@@ -135,15 +135,15 @@ export class BookingController {
         addons: processedAddons.length > 0 ? processedAddons : undefined
       });
 
-      console.log('booking final  is ',booking)
+      console.log('booking final  is ', booking)
       return reply.code(201).send({
         success: true,
         message: 'Booking created successfully',
         data: {
-          booking:{
+          booking: {
             ...booking,
-            checkIn:booking?.checkInDate,
-            checkOut:booking?.checkOutDate,
+            checkIn: booking?.checkInDate,
+            checkOut: booking?.checkOutDate,
             guests: booking?.guestCount,
 
 
@@ -348,7 +348,7 @@ export class BookingController {
       const priceDetails = await this.bookingService.getCheckoutPriceDetails(
         roomId,
         new Date(checkIn + 'Z'),
-        new Date(checkOut+'Z'),
+        new Date(checkOut + 'Z'),
         parseInt(guests),
         bookingType
       );
@@ -502,9 +502,6 @@ export class BookingController {
       });
     }
   }
-}
-
-
   // Update booking status
   async updateBookingStatus(request: FastifyRequest, reply: FastifyReply) {
     try {
@@ -608,3 +605,7 @@ export class BookingController {
       });
     }
   }
+
+}
+
+

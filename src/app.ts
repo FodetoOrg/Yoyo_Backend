@@ -131,7 +131,7 @@ app.setErrorHandler((error, request, reply) => {
 // Start notification processor
 app.addHook('onReady', async () => {
   const processor = getNotificationProcessor(app);
-  processor.start(30000); // Process every 30 seconds
+  // processor.start(30000); // Process every 30 seconds
 
   app.log.info('Notification processor started');
 });

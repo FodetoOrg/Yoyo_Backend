@@ -269,7 +269,13 @@ export const BookingDetailsResponseSchema = z.object({
 export const GetBookingDetailsResponseSchema = z.object({
   success: z.boolean(),
   data: z.object({
-    booking: BookingDetailsResponseSchema
+    booking: BookingDetailsResponseSchema.extend({
+      onlinePaymentEnabled: z.boolean(),
+      paymentStaus:z.string(),
+      paymentAmount:z.number().int(),
+      latitude:z.number(),
+      longitude:z.number()
+    })
   })
 });
 

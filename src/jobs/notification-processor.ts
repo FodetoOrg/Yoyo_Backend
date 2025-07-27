@@ -38,7 +38,7 @@ export class NotificationProcessor {
     // Process immediately on start
     setImmediate(async () => {
       try {
-        const processed = await this.notificationService.processNotificationQueue(50);
+        // const processed = await this.notificationService.processNotificationQueue(50);
         if (processed > 0) {
           console.log(`Initial processing: ${processed} notifications`);
         }

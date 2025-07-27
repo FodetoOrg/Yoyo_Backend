@@ -21,7 +21,7 @@ export const payments = sqliteTable('payments', {
   offlinePaymentDetails: text('offline_payment_details'), // JSON for offline payment info
   receivedBy: text('received_by'), // Staff member who received offline payment
   receiptNumber: text('receipt_number'), // For offline payments
-  status: text('status').notNull().default('pending'), // pending, completed, failed, refunded
+  status: text('status').notNull().default('pending'), // pending, completed, failed, refund ,refund_completed
   transactionDate: integer('transaction_date', { mode: 'timestamp' }).notNull().default(new Date()),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(new Date()),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(new Date()),

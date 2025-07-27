@@ -210,13 +210,13 @@ export class BookingService {
           })
           .where(eq(coupons.id, couponValidation.coupon.id));
 
-          await tx.insert(couponUsages).values({
-            id: uuidv4(),
-            bookingId: bookingId,
-            couponId: couponValidation.coupon.id,
-            hotelId:bookingData.hotelId,
-            userId:bookingData.userId
-          })
+        await tx.insert(couponUsages).values({
+          id: uuidv4(),
+          bookingId: bookingId,
+          couponId: couponValidation.coupon.id,
+          hotelId: bookingData.hotelId,
+          userId: bookingData.userId
+        })
       }
 
       console.log('pyments')
@@ -468,14 +468,14 @@ export class BookingService {
         pricePerNight: booking.room.pricePerNight,
         pricePerHour: booking.room.pricePerHour
       },
-      payment: booking.payment.map(p => ({
-        id: p.id,
-        amount: p.amount,
-        currency: p.currency,
-        status: p.status,
-        paymentMethod: p.paymentMethod,
-        transactionDate: p.transactionDate
-      })),
+      payment: {
+        id: booking.payment.id,
+        amount: booking.payment.amount,
+        currency: booking.payment.currency,
+        status: booking.payment.status,
+        paymentMethod: booking.payment.paymentMethod,
+        transactionDate: booking.payment.transactionDate
+      },
       addons: bookingAddons.map(ba => ({
         id: ba.id,
         addonId: ba.addonId,
@@ -704,16 +704,31 @@ export class BookingService {
   async cancelBooking(bookingId: string, reason: string, cancelledBy: string) {
     const db = this.fastify.db;
 
-    await db
-      .update(bookings)
-      .set({
-        status: 'cancelled',
-        cancelReason: reason,
-        cancelledBy,
-        cancelledAt: new Date(),
-        updatedAt: new Date()
-      })
-      .where(eq(bookings.id, bookingId));
+    await db.transaction(async (tx) => {
+      await tx
+        .update(bookings)
+        .set({
+          status: 'cancelled',
+          cancelReason: reason,
+          cancelledBy,
+          cancelledAt: new Date(),
+          updatedAt: new Date()
+        })
+        .where(eq(bookings.id, bookingId));
+
+      await tx
+        .update(payments)
+        .set({
+          status: 'refund',
+
+          updatedAt: new Date()
+        })
+        .where(and(eq(payments.bookingId, bookingId), eq(payments.paymentMode, "online"), eq(payments.status, 'completed')));
+
+    }
+    )
+
+
 
     // Get the updated booking
     const booking = await this.getBookingById(bookingId);
@@ -810,7 +825,7 @@ export class BookingService {
       .where(eq(bookings.id, bookingId));
 
     const booking = await this.getBookingById(bookingId);
-    
+
     if (booking) {
       try {
         // Send push notification
@@ -1021,7 +1036,8 @@ export class BookingService {
           with: {
             roomType: true
           }
-        }
+        },
+        payment: true
       }
     });
 
@@ -1040,28 +1056,28 @@ export class BookingService {
     // const nights = Math.ceil((checkOutDate.getTime() - checkInDate.getTime()) / (1000 * 60 * 60 * 24));
 
     // Calculate price breakdown
-    let roomRate =0;
+    let roomRate = 0;
 
-    let nights=0;
+    let nights = 0;
     // let subTotal = 0;
-    console.log('booking.checkInDate ',booking.checkInDate)
-    const checkInDate = new Date(booking.checkInDate );
+    console.log('booking.checkInDate ', booking.checkInDate)
+    const checkInDate = new Date(booking.checkInDate);
     const checkOutDate = new Date(booking.checkOutDate);
     let subtotal = 0;
 
     if (booking.bookingType === 'hourly') {
       const diffTime = Math.abs(checkOutDate.getTime() - checkInDate.getTime());
       const diffHours = Math.ceil(diffTime / (1000 * 60 * 60));
-      nights =diffHours
+      nights = diffHours
       subtotal = booking.room.pricePerHour * diffHours;
-     roomRate =booking.room.pricePerHour;
+      roomRate = booking.room.pricePerHour;
 
     } else {
       const diffTime = Math.abs(checkOutDate.getTime() - checkInDate.getTime());
       const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-      nights=diffDays
+      nights = diffDays
       subtotal = booking.room.pricePerNight * diffDays;
-      roomRate =booking.room.pricePerNight;
+      roomRate = booking.room.pricePerNight;
     }
     const taxes = 0; // 12% GST
     const serviceFee = 0; // Fixed service fee
@@ -1070,15 +1086,17 @@ export class BookingService {
     // Determine status based on dates and booking status
     let status = booking.status;
     const now = new Date();
-    if (booking.status === 'confirmed') {
-      if (now < checkInDate) {
-        status = 'upcoming';
-      } else if (now > checkOutDate) {
-        status = 'completed';
-      } else {
-        status = 'confirmed';
-      }
-    }
+    // if (booking.status === 'confirmed') {
+    //   if (now < checkInDate) {
+    //     status = 'upcoming';
+    //   } else if (now > checkOutDate) {
+    //     status = 'completed';
+    //   } else {
+    //     status = 'confirmed';
+    //   }
+    // }
+
+    console.log('booking ', booking)
 
     console.log('booking.hotel.amenities ', booking.hotel.amenities)
 
@@ -1088,8 +1106,8 @@ export class BookingService {
     // Get booking addons
     const bookingAddons = await this.addonService.getBookingAddons(booking.id);
 
-    console.log('checkin date ',checkInDate)
-    console.log('checkout ',checkOutDate)
+    console.log('checkin date ', checkInDate)
+    console.log('checkout ', checkOutDate)
 
     return {
       id: booking.id,
@@ -1105,8 +1123,13 @@ export class BookingService {
       checkIn: checkInDate,
       checkOut: checkOutDate,
       guests: booking.guestCount,
-      nights ,
+      onlinePaymentEnabled: booking.hotel.onlinePaymentEnabled,
+      nights,
+      paymentStaus: booking.payment.status,
+      paymentAmount: booking.payment.amount,
       amenities,
+      latitude: booking.hotel.mapCoordinates.split(",")[0],
+      longitude: booking.hotel.mapCoordinates.split(",")[1],
       priceBreakdown: {
         roomRate,
         subtotal,

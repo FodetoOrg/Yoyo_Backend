@@ -40,7 +40,7 @@ interface PaymentHistoryFilters {
   paymentMode?: string;
   page?: number;
   limit?: number;
-  hotelId?:string;
+  hotelId?: string;
 }
 
 export class PaymentService {
@@ -50,8 +50,8 @@ export class PaymentService {
 
   constructor() {
     this.razorpay = new Razorpay({
-      key_id: process.env.RAZORPAY_KEY_ID || '',
-      key_secret: process.env.RAZORPAY_KEY_SECRET || ''
+      key_id: process.env.RAZORPAY_KEY_ID,
+      key_secret: process.env.RAZORPAY_KEY_SECRET
     });
     this.notificationService = new NotificationService();
   }
@@ -73,6 +73,8 @@ export class PaymentService {
         with: { user: true, hotel: true, room: true }
       });
 
+      console.log('booking ', booking);
+
       if (!booking) {
         throw new Error('Booking not found');
       }
@@ -88,6 +90,7 @@ export class PaymentService {
           eq(paymentOrders.status, 'created')
         )
       });
+      console.log('existingOrder ', existingOrder);
 
       if (existingOrder && new Date() < existingOrder.expiresAt) {
         return {
@@ -100,10 +103,19 @@ export class PaymentService {
 
       // Create Razorpay order
       const receipt = `receipt_${bookingId}_${Date.now()}`;
+      console.log('receipt ', receipt);
+
+      // Validate Razorpay configuration before making API call
+      if (!this.razorpay) {
+        throw new Error('Razorpay client not initialized');
+      }
+
+      console.log('Creating Razorpay order with amount:', Math.round(amount * 100));
+
       const razorpayOrder = await this.razorpay.orders.create({
         amount: Math.round(amount * 100), // Convert to paise
         currency,
-        receipt,
+        receipt: receipt.slice(0, 40),
         payment_capture: 1,
         notes: {
           bookingId,
@@ -111,6 +123,8 @@ export class PaymentService {
           hotelId: booking.hotelId
         }
       });
+
+      console.log('Razorpay order created successfully:', razorpayOrder.id);
 
       // Find existing payment record
       const existingPayment = await db.query.payments.findFirst({
@@ -148,15 +162,6 @@ export class PaymentService {
           .where(eq(payments.id, existingPayment.id));
       }
 
-      // Send order created notification
-      await this.notificationService.sendNotificationFromTemplate('payment_order_created', userId, {
-        bookingId,
-        orderId: razorpayOrder.id,
-        amount,
-        hotelName: booking.hotel.name,
-        expiresAt: expiresAt.toISOString()
-      });
-
       return {
         orderId: razorpayOrder.id,
         amount,
@@ -167,13 +172,29 @@ export class PaymentService {
     } catch (error) {
       console.error('Error creating payment order:', error);
 
-      // Send error notification
-      await this.notificationService.sendNotificationFromTemplate('payment_order_failed', userId, {
-        bookingId,
-        error: error.message
-      });
+      // Better error message extraction
+      let errorMessage = 'Unknown error occurred';
 
-      throw new Error(`Failed to create payment order: ${error.message}`);
+      if (error.error?.description) {
+        // Razorpay specific error
+        errorMessage = error.error.description;
+        console.error('Razorpay error details:', {
+          code: error.error.code,
+          description: error.error.description,
+          statusCode: error.statusCode
+        });
+      } else if (error.message) {
+        // Standard error
+        errorMessage = error.message;
+      }
+
+      // Send error notification
+      // await this.notificationService.sendNotificationFromTemplate('payment_order_failed', userId, {
+      //   bookingId,
+      //   error: errorMessage
+      // });
+
+      throw new Error(`Failed to create payment order: ${errorMessage}`);
     }
   }
 
@@ -220,30 +241,31 @@ export class PaymentService {
           })
           .where(eq(paymentOrders.id, paymentOrder.id));
 
-        // Create payment record
-        const paymentId = uuidv4();
-        await tx.insert(payments).values({
-          id: paymentId,
-          bookingId: paymentOrder.bookingId,
-          userId: paymentOrder.userId,
-          amount: razorpayPayment.amount / 100, // Convert from paise
-          currency: razorpayPayment.currency,
-          paymentMethod: razorpayPayment.method,
+          console.log('came here ')
+
+        const paymentReturned = await tx.update(payments).set({
+          status: 'completed',
+          transactionDate: new Date(razorpayPayment.created_at * 1000),
+          paymentMethod:'online',
           razorpayPaymentId,
           razorpayOrderId,
           razorpaySignature,
-          status: 'completed',
-          transactionDate: new Date(razorpayPayment.created_at * 1000),
-        });
+        }).where(eq(payments.bookingId, paymentOrder.bookingId)).returning();
 
+       
+        console.log('came here 2')
+       
         // Update booking status
         await tx.update(bookings)
           .set({
             status: 'confirmed',
             paymentStatus: 'completed',
-            updatedAt: new Date()
+            updatedAt: new Date(),
+            paymentMode:'online'
           })
           .where(eq(bookings.id, paymentOrder.bookingId));
+
+          console.log(' udpated bookings ',paymentOrder.bookingId)
 
         // Send success notifications
         await this.notificationService.sendNotificationFromTemplate('payment_success', paymentOrder.userId, {
@@ -265,7 +287,7 @@ export class PaymentService {
 
         return {
           success: true,
-          paymentId,
+          paymentId:paymentReturned[0].id,
           bookingId: paymentOrder.bookingId,
           amount: razorpayPayment.amount / 100
         };
@@ -530,12 +552,12 @@ export class PaymentService {
   // Get payment history
   async getPaymentHistory(filters: PaymentHistoryFilters) {
     const db = this.fastify.db;
-    const { userId, bookingId, status, paymentMode, page = 1, limit = 10,hotelId } = filters;
+    const { userId, bookingId, status, paymentMode, page = 1, limit = 10, hotelId } = filters;
 
-    console.log('userid ',userId)
+    console.log('userid ', userId)
     console.log(bookingId)
     console.log(paymentMode)
-    console.log('sttaus ',status)
+    console.log('sttaus ', status)
     console.log(hotelId)
 
     let whereConditions: any[] = [];
@@ -565,8 +587,8 @@ export class PaymentService {
         user: {
           columns: {
             id: true,
-            name:true,
-            phone:true
+            name: true,
+            phone: true
           }
         },
         booking: {
@@ -576,7 +598,7 @@ export class PaymentService {
                 id: true,
                 name: true,
               },
-              where:hotelId ? eq(hotels.id,hotelId) :eq(1,1)
+              where: hotelId ? eq(hotels.id, hotelId) : eq(1, 1)
             },
             room: {
               columns: {
@@ -601,12 +623,12 @@ export class PaymentService {
     return {
       payments: paymentHistory.map(payment => ({
         id: payment.id,
-        user:{
-          id:payment.user.id,
-          name:payment.user.name,
-          phone:payment.user.phone
+        user: {
+          id: payment.user.id,
+          name: payment.user.name,
+          phone: payment.user.phone
         },
-       
+
         bookingId: payment.bookingId,
         amount: payment.amount,
         currency: payment.currency,
@@ -617,10 +639,10 @@ export class PaymentService {
         receiptNumber: payment.receiptNumber,
         transactionDate: payment.transactionDate,
         createdAt: payment.createdAt,
-        razorpayOrderId:payment.razorpayOrderId || null,
-        razorpayPaymentId:payment.razorpayPaymentId || null,
-        razorpaySignature:payment.razorpaySignature || null,
-        hotelId:payment.booking.hotel.id,
+        razorpayOrderId: payment.razorpayOrderId || null,
+        razorpayPaymentId: payment.razorpayPaymentId || null,
+        razorpaySignature: payment.razorpaySignature || null,
+        hotelId: payment.booking.hotel.id,
         booking: {
           id: payment.booking.id,
           checkInDate: payment.booking.checkInDate,
