@@ -35,6 +35,7 @@ import { getNotificationProcessor } from './jobs/notification-processor';
 import addonRoutes from "./routes/addon.route";
 import hourlyStayRoutes from "./routes/roomHourlyStay.route";
 import { partnerContactRoutes } from './routes/partnerContact.route';
+import { refundRoutes } from './routes/refund.route';
 
 // Create Fastify instance
 export const app: FastifyInstance = fastify({
@@ -94,6 +95,7 @@ app.register(wishlistRoutes, { prefix: '/api/v1/wishlist' });
 app.register(addonRoutes, { prefix: '/api/v1/addons' });
 app.register(hourlyStayRoutes, { prefix: '/api/v1/hourlyStays' });
 app.register(partnerContactRoutes, { prefix: '/api/v1/partner-contacts' });
+app.register(refundRoutes, { prefix: '/api/v1' });
 
 // Default route
 app.get('/', async () => {

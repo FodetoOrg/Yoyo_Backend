@@ -1,4 +1,3 @@
-
 // @ts-nocheck
 import { FastifyInstance } from "fastify";
 import { bookings, hotels, users, payments, rooms, cities } from "../models/schema";
@@ -22,7 +21,7 @@ export class AnalyticsService {
   // Get dashboard analytics
   async getDashboardAnalytics(type: 'super' | 'hotel', hotelId?: string) {
     const db = this.fastify.db;
-    
+
     if (type === 'super') {
       return await this.getSuperAdminDashboard();
     } else {
@@ -34,7 +33,7 @@ export class AnalyticsService {
   private async getSuperAdminDashboard() {
     console.log('called super')
     const db = this.fastify.db;
-    
+
     // Get current date ranges
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -140,11 +139,11 @@ export class AnalyticsService {
     // Last 6 months data
     const last6MonthsData = [];
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    
+
     for (let i = 5; i >= 0; i--) {
       const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
-      
+
       // New users this month
       const newUsers = await db
         .select({ count: count() })
@@ -322,7 +321,7 @@ export class AnalyticsService {
   // Hotel-specific dashboard analytics
   private async getHotelDashboard(hotelId: string) {
     const db = this.fastify.db;
-    
+
     // Get current date ranges
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -439,11 +438,11 @@ export class AnalyticsService {
     // Get monthly time series data for the last 6 months
     const timeSeriesData = [];
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    
+
     for (let i = 5; i >= 0; i--) {
       const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
-      
+
       const monthData = await db
         .select({
           bookings: count(bookings.id),
@@ -523,9 +522,10 @@ export class AnalyticsService {
       .limit(10);
 
     // Commission calculations
-    const commissionRate = 0.10;
+    const commissionRate = hotel.commissionRate / 100; // Convert percentage to decimal
     const totalPaidCommission = Number(totalPaidRevenue[0]?.total || 0) * commissionRate;
     const pendingCommission = Number(needToPayRevenue[0]?.total || 0) * commissionRate;
+    const amountToPayHotel = Number(totalPaidRevenue[0]?.total || 0) - totalPaidCommission;
 
     return {
       overview: {
@@ -587,7 +587,7 @@ export class AnalyticsService {
   // Get city analytics
   async getCityAnalytics(cityId: string) {
     const db = this.fastify.db;
-    
+
     // Get city info
     const city = await db.query.cities.findFirst({
       where: eq(cities.id, cityId),
@@ -721,11 +721,11 @@ export class AnalyticsService {
     // Get monthly time series data
     const timeSeriesData = [];
     const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-    
+
     for (let i = 5; i >= 0; i--) {
       const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
-      
+
       const monthData = await db
         .select({
           bookings: count(bookings.id),
@@ -880,7 +880,7 @@ export class AnalyticsService {
 
     // Get time series data based on period
     let timeSeriesData: any[] = [];
-    
+
     if (period === 'daily') {
       // Daily revenue for the selected period
       timeSeriesData = await db

@@ -308,7 +308,7 @@ export class BookingService {
 
     if (bookingData.bookingType === 'hourly') {
       duration = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60));
-      expectedPrice = room.pricePerHour * duration;
+      basePrice = room.pricePerHour * duration;
     } else {
       duration = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60 * 24));
       expectedPrice = room.pricePerNight * duration;
@@ -701,38 +701,60 @@ export class BookingService {
   }
 
   // Cancel a booking
-  async cancelBooking(bookingId: string, reason: string, cancelledBy: string) {
+  async cancelBooking(bookingId: string, userId: string, cancelReason: string) {
     const db = this.fastify.db;
 
-    await db.transaction(async (tx) => {
-      await tx
-        .update(bookings)
+    // Find the booking first to validate
+    const booking = await db.query.bookings.findFirst({
+      where: and(eq(bookings.id, bookingId), eq(bookings.userId, userId)),
+      with: {
+        payment: true,
+        hotel: true
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundError('Booking not found');
+    }
+
+    if (booking.status === 'cancelled') {
+      throw new ConflictError('Booking is already cancelled');
+    }
+
+    // Check if payment was made - if yes, create refund request
+    if (booking.payment && booking.payment.status === 'completed') {
+      // Import RefundService here to avoid circular dependency
+      const { RefundService } = await import('./refund.service');
+      const refundService = new RefundService(this.fastify);
+
+      const refundResult = await refundService.createRefundRequest({
+        bookingId,
+        userId,
+        refundReason: cancelReason,
+        refundType: 'cancellation'
+      });
+
+      return {
+        message: 'Booking cancelled successfully. Refund request created.',
+        refundInfo: refundResult
+      };
+    } else {
+      // No payment made, just cancel the booking
+      await db.update(bookings)
         .set({
           status: 'cancelled',
-          cancelReason: reason,
-          cancelledBy,
+          cancellationReason: cancelReason,
+          cancelledBy: 'user',
           cancelledAt: new Date(),
-          updatedAt: new Date()
+          updatedAt: new Date(),
         })
         .where(eq(bookings.id, bookingId));
 
-      await tx
-        .update(payments)
-        .set({
-          status: 'refund',
-
-          updatedAt: new Date()
-        })
-        .where(and(eq(payments.bookingId, bookingId), eq(payments.paymentMode, "online"), eq(payments.status, 'completed')));
-
+      return {
+        message: 'Booking cancelled successfully. No refund required as payment was not completed.',
+        refundInfo: null
+      };
     }
-    )
-
-
-
-    // Get the updated booking
-    const booking = await this.getBookingById(bookingId);
-    return booking;
   }
 
   // Update booking status
@@ -923,8 +945,7 @@ export class BookingService {
     const room = await db.query.rooms.findFirst({
       where: eq(rooms.id, roomId),
       with: {
-        hotel: true
-      }
+        hotel: true      }
     });
 
     if (!room) {
