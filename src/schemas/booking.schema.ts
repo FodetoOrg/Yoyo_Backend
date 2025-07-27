@@ -229,6 +229,48 @@ export const CancelBookingErrorSchema = z.object({
   message: z.string()
 });
 
+// Update booking status schemas
+export const UpdateBookingStatusParamsSchema = z.object({
+  id: z.string().uuid()
+});
+
+export const UpdateBookingStatusBodySchema = z.object({
+  status: z.enum(['confirmed', 'cancelled', 'checked-in', 'completed']),
+  cancellationReason: z.string().optional()
+});
+
+export const UpdateBookingStatusResponseSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  data: z.object({
+    booking: BookingResponseSchema
+  })
+});
+
+// Update guest details schemas
+export const UpdateGuestDetailsParamsSchema = z.object({
+  id: z.string().uuid()
+});
+
+export const UpdateGuestDetailsBodySchema = z.object({
+  guestName: z.string().min(1, 'Guest name is required'),
+  guestEmail: z.string().email('Invalid email'),
+  guestPhone: z.string().min(1, 'Guest phone is required')
+});
+
+export const UpdateGuestDetailsResponseSchema = z.object({
+  success: z.boolean(),
+  message: z.string(),
+  data: z.object({
+    booking: BookingResponseSchema
+  })
+});
+
+// Cancel booking with reason schemas
+export const CancelBookingBodySchema = z.object({
+  cancellationReason: z.string().min(1, 'Cancellation reason is required')
+});
+
 // Booking details schemas
 export const BookingDetailsResponseSchema = z.object({
   id: z.string(),
@@ -254,6 +296,21 @@ export const BookingDetailsResponseSchema = z.object({
   }),
   totalAmount: z.number(),
   cancellationPolicy: z.string(),
+  refundInfo: z.object({
+    id: z.string(),
+    refundType: z.string(),
+    originalAmount: z.number(),
+    cancellationFeeAmount: z.number(),
+    refundAmount: z.number(),
+    cancellationFeePercentage: z.number(),
+    refundReason: z.string(),
+    status: z.string(),
+    refundMethod: z.string(),
+    expectedProcessingDays: z.number(),
+    processedAt: z.string().datetime().nullable(),
+    rejectionReason: z.string().nullable(),
+    createdAt: z.string().datetime()
+  }).nullable(),
   addons: z.array(z.object({
     id: z.string(),
     addonId: z.string(),
@@ -329,5 +386,32 @@ export const getAllBookingsSchema = {
   querystring: zodToJsonSchema(GetAllBookingsQuerySchema),
   response: {
     200: zodToJsonSchema(GetAllBookingsResponseSchema)
+  }
+};
+
+export const updateBookingStatusSchema = {
+  params: zodToJsonSchema(UpdateBookingStatusParamsSchema),
+  body: zodToJsonSchema(UpdateBookingStatusBodySchema),
+  response: {
+    200: zodToJsonSchema(UpdateBookingStatusResponseSchema),
+    404: zodToJsonSchema(GetBookingErrorSchema)
+  }
+};
+
+export const updateGuestDetailsSchema = {
+  params: zodToJsonSchema(UpdateGuestDetailsParamsSchema),
+  body: zodToJsonSchema(UpdateGuestDetailsBodySchema),
+  response: {
+    200: zodToJsonSchema(UpdateGuestDetailsResponseSchema),
+    404: zodToJsonSchema(GetBookingErrorSchema)
+  }
+};
+
+export const cancelBookingWithReasonSchema = {
+  params: zodToJsonSchema(CancelBookingParamsSchema),
+  body: zodToJsonSchema(CancelBookingBodySchema),
+  response: {
+    200: zodToJsonSchema(CancelBookingResponseSchema),
+    404: zodToJsonSchema(CancelBookingErrorSchema)
   }
 };
