@@ -494,3 +494,72 @@ export class BookingController {
     }
   }
 }
+
+
+  // Enable online payment for existing booking
+  async enableOnlinePayment(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { bookingId } = request.params as { bookingId: string };
+      const userId = (request as any).user.id;
+
+      const result = await this.bookingService.enableOnlinePayment(bookingId, userId);
+
+      return reply.code(200).send({
+        success: true,
+        message: 'Online payment enabled',
+        data: result,
+      });
+    } catch (error) {
+      return reply.code(400).send({
+        success: false,
+        message: error.message || 'Failed to enable online payment',
+      });
+    }
+  }
+
+  // Update booking status
+  async updateBookingStatus(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { bookingId } = request.params as { bookingId: string };
+      const { status, reason } = request.body as { status: string; reason?: string };
+      const updatedBy = (request as any).user.role;
+
+      const result = await this.bookingService.updateBookingStatus(bookingId, status, updatedBy, reason);
+
+      return reply.code(200).send({
+        success: true,
+        message: 'Booking status updated successfully',
+        data: result,
+      });
+    } catch (error) {
+      return reply.code(400).send({
+        success: false,
+        message: error.message || 'Failed to update booking status',
+      });
+    }
+  }
+
+  // Update guest details
+  async updateGuestDetails(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { bookingId } = request.params as { bookingId: string };
+      const guestDetails = request.body as {
+        guestName: string;
+        guestEmail: string;
+        guestPhone: string;
+      };
+
+      const result = await this.bookingService.updateGuestDetails(bookingId, guestDetails);
+
+      return reply.code(200).send({
+        success: true,
+        message: 'Guest details updated successfully',
+        data: result,
+      });
+    } catch (error) {
+      return reply.code(400).send({
+        success: false,
+        message: error.message || 'Failed to update guest details',
+      });
+    }
+  }

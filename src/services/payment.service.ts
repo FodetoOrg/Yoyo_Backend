@@ -112,6 +112,14 @@ export class PaymentService {
         }
       });
 
+      // Find existing payment record
+      const existingPayment = await db.query.payments.findFirst({
+        where: and(
+          eq(payments.bookingId, bookingId),
+          eq(payments.status, 'pending')
+        )
+      });
+
       // Store order in database
       const paymentOrderId = uuidv4();
       const expiresAt = new Date();
@@ -127,6 +135,18 @@ export class PaymentService {
         receipt,
         expiresAt,
       });
+
+      // Link payment order to existing payment
+      if (existingPayment) {
+        await db.update(payments)
+          .set({
+            paymentOrderId: paymentOrderId,
+            paymentMode: 'online',
+            paymentMethod: 'razorpay',
+            updatedAt: new Date()
+          })
+          .where(eq(payments.id, existingPayment.id));
+      }
 
       // Send order created notification
       await this.notificationService.sendNotificationFromTemplate('payment_order_created', userId, {

@@ -178,13 +178,13 @@ export class BookingService {
         totalHours: totalHours,
         guestCount: bookingData.guests,
         totalAmount: finalAmount,
-        paymentMode: finalPaymentMode,
+        paymentMode: 'offline', // Always start as offline
         requiresOnlinePayment,
         paymentDueDate,
         advanceAmount,
         remainingAmount,
         specialRequests: bookingData.specialRequests,
-        status: finalPaymentMode === 'offline' ? 'confirmed' : 'pending',
+        status: 'confirmed', // Always confirm booking immediately
         paymentStatus: 'pending',
         guestEmail: bookingData.guestEmail,
         guestName: bookingData.guestName,
@@ -230,7 +230,7 @@ export class BookingService {
         currency: 'INR',
         paymentType: finalPaymentMode === 'offline' && advanceAmount > 0 ? 'advance' : 'full',
         paymentMethod: finalPaymentMode === 'offline' ? (hotel.defaultPaymentMethod || 'cash') : 'razorpay',
-        paymentMode: finalPaymentMode,
+        paymentMode: 'offline',
         status: 'pending',
         transactionDate: new Date(),
       });

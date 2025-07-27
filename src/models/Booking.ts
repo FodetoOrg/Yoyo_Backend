@@ -22,8 +22,11 @@ export const bookings = sqliteTable('bookings', {
   totalAmount: real('total_amount').notNull(),
   paymentMode: text('payment_mode').notNull().default('offline'), // 'online', 'offline'
   requiresOnlinePayment: integer('requires_online_payment', { mode: 'boolean' }).notNull().default(false),
-  status: text('status').notNull().default('pending'), // pending, confirmed, cancelled, completed
+  status: text('status').notNull().default('pending'), // confirmed, cancelled, checked_in, completed
   paymentStatus: text('payment_status').notNull().default('pending'), // pending, completed, failed, refunded
+  cancellationReason: text('cancellation_reason'),
+  cancelledBy: text('cancelled_by'), // 'user' or 'hotel'
+  cancelledAt: integer('cancelled_at', { mode: 'timestamp' }),
   bookingDate: integer('booking_date', { mode: 'timestamp' }).notNull().default(new Date()),
   specialRequests: text('special_requests'),
   paymentDueDate: integer('payment_due_date', { mode: 'timestamp' }), // For offline payments

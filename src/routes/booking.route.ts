@@ -32,7 +32,7 @@ export default async function bookingRoutes(fastify: FastifyInstance) {
     },
     // preHandler: rbacGuard(permissions.createBooking)
   }, (request, reply) => bookingController.createBooking(request, reply));
-  
+
   // Get booking by ID
   fastify.get('/:id', {
     schema: {
@@ -52,7 +52,7 @@ export default async function bookingRoutes(fastify: FastifyInstance) {
       security: [{ bearerAuth: [] }]
     }
   }, (request, reply) => bookingController.getBookingDetails(request, reply));
-  
+
   // Get all bookings (admin only)
   fastify.get('/', {
     schema: {
@@ -74,7 +74,7 @@ export default async function bookingRoutes(fastify: FastifyInstance) {
     },
     preHandler:[fastify.authenticate]
   }, (request, reply) => bookingController.getUserBookings(request, reply));
-  
+
   // Get hotel bookings
   fastify.get('/hotel/:id', {
     schema: {
@@ -92,7 +92,7 @@ export default async function bookingRoutes(fastify: FastifyInstance) {
       security: [{ bearerAuth: [] }]
     }
   }, (request, reply) => bookingController.getHotelBookings(request, reply));
-  
+
   // Get checkout price details
   fastify.get('/checkout/price-details', {
     schema: {
@@ -121,4 +121,34 @@ export default async function bookingRoutes(fastify: FastifyInstance) {
       security: [{ bearerAuth: [] }]
     }
   }, (request, reply) => bookingController.cancelBooking(request, reply));
+
+  // Enable online payment for existing booking
+  fastify.post('/:bookingId/enable-online-payment', {
+    // onRequest: [fastify.authenticate],
+    schema: {
+      tags: ['bookings'],
+      summary: 'Enable online payment for an existing booking',
+      security: [{ bearerAuth: [] }]
+    }
+  }, (request, reply) => bookingController.enableOnlinePayment(request, reply));
+
+  // Update booking status (admin/hotel only)
+  fastify.put('/:bookingId/status', {
+    // onRequest: [fastify.authenticate, fastify.rbacGuard(['admin', 'hotel_manager'])],
+    schema: {
+      tags: ['bookings'],
+      summary: 'Update booking status (admin/hotel only)',
+      security: [{ bearerAuth: [] }]
+    }
+  }, (request, reply) => bookingController.updateBookingStatus(request, reply));
+
+  // Update guest details
+  fastify.put('/:bookingId/guest-details', {
+    // onRequest: [fastify.authenticate],
+    schema: {
+      tags: ['bookings'],
+      summary: 'Update guest details',
+      security: [{ bearerAuth: [] }]
+    }
+  }, (request, reply) => bookingController.updateGuestDetails(request, reply));
 }
