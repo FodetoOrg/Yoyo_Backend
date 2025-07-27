@@ -59,9 +59,8 @@ export const bookingsRelations = relations(bookings, ({ one, many }) => ({
     references: [reviews.bookingId],
   }),
   bookingCoupons: many(bookingCoupons),
-  
+
 }));
 
 // Export type
 export type Booking = InferSelectModel<typeof bookings>;
-

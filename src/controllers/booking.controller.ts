@@ -370,8 +370,17 @@ export class BookingController {
   async cancelBooking(request: FastifyRequest, reply: FastifyReply) {
     try {
       const { id } = CancelBookingParamsSchema.parse(request.params);
+      const { reason } = request.body as { reason: string };
       const userId = request.user.id;
       const role = request.user.role;
+
+      // Validate cancel reason is provided
+      if (!reason || reason.trim().length === 0) {
+        return reply.code(400).send({
+          success: false,
+          message: 'Cancel reason is required',
+        });
+      }
 
       const booking = await this.bookingService.getBookingById(id);
 
@@ -408,7 +417,7 @@ export class BookingController {
         });
       }
 
-      const cancelledBooking = await this.bookingService.cancelBooking(id);
+      const cancelledBooking = await this.bookingService.cancelBooking(id, reason, role);
 
       return reply.code(200).send({
         success: true,
@@ -496,35 +505,41 @@ export class BookingController {
 }
 
 
-  // Enable online payment for existing booking
-  async enableOnlinePayment(request: FastifyRequest, reply: FastifyReply) {
-    try {
-      const { bookingId } = request.params as { bookingId: string };
-      const userId = (request as any).user.id;
-
-      const result = await this.bookingService.enableOnlinePayment(bookingId, userId);
-
-      return reply.code(200).send({
-        success: true,
-        message: 'Online payment enabled',
-        data: result,
-      });
-    } catch (error) {
-      return reply.code(400).send({
-        success: false,
-        message: error.message || 'Failed to enable online payment',
-      });
-    }
-  }
-
   // Update booking status
   async updateBookingStatus(request: FastifyRequest, reply: FastifyReply) {
     try {
       const { bookingId } = request.params as { bookingId: string };
       const { status, reason } = request.body as { status: string; reason?: string };
-      const updatedBy = (request as any).user.role;
+      const userId = request.user.id;
+      const role = request.user.role;
 
-      const result = await this.bookingService.updateBookingStatus(bookingId, status, updatedBy, reason);
+      // Validate required cancel reason for cancelled status
+      if (status === 'cancelled' && !reason) {
+        return reply.code(400).send({
+          success: false,
+          message: 'Cancel reason is required when cancelling a booking',
+        });
+      }
+
+      const booking = await this.bookingService.getBookingById(bookingId);
+
+      if (!booking) {
+        return reply.code(404).send({
+          success: false,
+          message: 'Booking not found',
+        });
+      }
+
+      // Check authorization - only hotel owner, admin, or booking user can update status
+      const hotel = await this.hotelService.getHotelById(booking.hotelId);
+      if (booking.userId !== userId && hotel?.ownerId !== userId && role !== 'admin') {
+        return reply.code(403).send({
+          success: false,
+          message: 'Unauthorized. You do not have permission to update this booking',
+        });
+      }
+
+      const result = await this.bookingService.updateBookingStatus(bookingId, status, role, reason);
 
       return reply.code(200).send({
         success: true,
@@ -532,6 +547,7 @@ export class BookingController {
         data: result,
       });
     } catch (error) {
+      request.log.error(error);
       return reply.code(400).send({
         success: false,
         message: error.message || 'Failed to update booking status',
@@ -548,6 +564,34 @@ export class BookingController {
         guestEmail: string;
         guestPhone: string;
       };
+      const userId = request.user.id;
+      const role = request.user.role;
+
+      // Validate required fields
+      if (!guestDetails.guestName || !guestDetails.guestEmail || !guestDetails.guestPhone) {
+        return reply.code(400).send({
+          success: false,
+          message: 'Guest name, email, and phone are required',
+        });
+      }
+
+      const booking = await this.bookingService.getBookingById(bookingId);
+
+      if (!booking) {
+        return reply.code(404).send({
+          success: false,
+          message: 'Booking not found',
+        });
+      }
+
+      // Check authorization - only hotel owner, admin, or booking user can update guest details
+      const hotel = await this.hotelService.getHotelById(booking.hotelId);
+      if (booking.userId !== userId && hotel?.ownerId !== userId && role !== 'admin') {
+        return reply.code(403).send({
+          success: false,
+          message: 'Unauthorized. You do not have permission to update this booking',
+        });
+      }
 
       const result = await this.bookingService.updateGuestDetails(bookingId, guestDetails);
 
@@ -557,6 +601,7 @@ export class BookingController {
         data: result,
       });
     } catch (error) {
+      request.log.error(error);
       return reply.code(400).send({
         success: false,
         message: error.message || 'Failed to update guest details',

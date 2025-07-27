@@ -116,6 +116,13 @@ export default async function bookingRoutes(fastify: FastifyInstance) {
   fastify.put('/:id/cancel', {
     schema: {
       ...cancelBookingSchema,
+      body: {
+        type: 'object',
+        properties: {
+          reason: { type: 'string', minLength: 1 }
+        },
+        required: ['reason']
+      },
       tags: ['bookings'],
       summary: 'Cancel a booking',
       security: [{ bearerAuth: [] }]
@@ -126,8 +133,20 @@ export default async function bookingRoutes(fastify: FastifyInstance) {
 
   // Update booking status (admin/hotel only)
   fastify.put('/:bookingId/status', {
-    // onRequest: [fastify.authenticate, fastify.rbacGuard(['admin', 'hotel_manager'])],
     schema: {
+      body: {
+        type: 'object',
+        properties: {
+          status: { 
+            type: 'string', 
+            enum: ['confirmed', 'cancelled', 'checked-in', 'completed'] 
+          },
+          reason: { type: 'string' }
+        },
+        required: ['status'],
+        if: { properties: { status: { const: 'cancelled' } } },
+        then: { required: ['status', 'reason'] }
+      },
       tags: ['bookings'],
       summary: 'Update booking status (admin/hotel only)',
       security: [{ bearerAuth: [] }]
@@ -136,8 +155,16 @@ export default async function bookingRoutes(fastify: FastifyInstance) {
 
   // Update guest details
   fastify.put('/:bookingId/guest-details', {
-    // onRequest: [fastify.authenticate],
     schema: {
+      body: {
+        type: 'object',
+        properties: {
+          guestName: { type: 'string', minLength: 1 },
+          guestEmail: { type: 'string', format: 'email' },
+          guestPhone: { type: 'string', minLength: 10 }
+        },
+        required: ['guestName', 'guestEmail', 'guestPhone']
+      },
       tags: ['bookings'],
       summary: 'Update guest details',
       security: [{ bearerAuth: [] }]

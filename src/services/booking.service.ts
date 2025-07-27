@@ -701,19 +701,154 @@ export class BookingService {
   }
 
   // Cancel a booking
-  async cancelBooking(bookingId: string) {
+  async cancelBooking(bookingId: string, reason: string, cancelledBy: string) {
     const db = this.fastify.db;
 
     await db
       .update(bookings)
       .set({
         status: 'cancelled',
+        cancelReason: reason,
+        cancelledBy,
+        cancelledAt: new Date(),
         updatedAt: new Date()
       })
       .where(eq(bookings.id, bookingId));
 
     // Get the updated booking
     const booking = await this.getBookingById(bookingId);
+    return booking;
+  }
+
+  // Update booking status
+  async updateBookingStatus(bookingId: string, status: string, updatedBy: string, reason?: string) {
+    const db = this.fastify.db;
+
+    const updateData: any = {
+      status,
+      updatedAt: new Date()
+    };
+
+    // Add cancel-specific fields if status is cancelled
+    if (status === 'cancelled') {
+      updateData.cancelReason = reason;
+      updateData.cancelledBy = updatedBy;
+      updateData.cancelledAt = new Date();
+    }
+
+    // Add check-in timestamp if status is checked-in
+    if (status === 'checked-in') {
+      updateData.checkedInAt = new Date();
+    }
+
+    // Add completion timestamp if status is completed
+    if (status === 'completed') {
+      updateData.completedAt = new Date();
+    }
+
+    await db
+      .update(bookings)
+      .set(updateData)
+      .where(eq(bookings.id, bookingId));
+
+    // Send notification for status update
+    const booking = await this.getBookingById(bookingId);
+    if (booking) {
+      try {
+        let notificationMessage = '';
+        switch (status) {
+          case 'confirmed':
+            notificationMessage = `Your booking at ${booking.hotel.name} has been confirmed`;
+            break;
+          case 'cancelled':
+            notificationMessage = `Your booking at ${booking.hotel.name} has been cancelled. Reason: ${reason}`;
+            break;
+          case 'checked-in':
+            notificationMessage = `You have been checked in at ${booking.hotel.name}`;
+            break;
+          case 'completed':
+            notificationMessage = `Your stay at ${booking.hotel.name} has been completed. Thank you for choosing us!`;
+            break;
+          default:
+            notificationMessage = `Your booking status has been updated to ${status}`;
+        }
+
+        await this.notificationService.sendInstantBookingSuccessNotification(booking.userId, {
+          title: 'Booking Status Updated',
+          message: notificationMessage,
+          type: 'booking_status_update',
+          data: {
+            bookingId,
+            status,
+            hotelName: booking.hotel.name,
+          }
+        });
+      } catch (error) {
+        this.fastify.log.error('Failed to send booking status update notification:', error);
+      }
+    }
+
+    return booking;
+  }
+
+  // Update guest details
+  async updateGuestDetails(bookingId: string, guestDetails: {
+    guestName: string;
+    guestEmail: string;
+    guestPhone: string;
+  }) {
+    const db = this.fastify.db;
+
+    await db
+      .update(bookings)
+      .set({
+        guestName: guestDetails.guestName,
+        guestEmail: guestDetails.guestEmail,
+        guestPhone: guestDetails.guestPhone,
+        updatedAt: new Date()
+      })
+      .where(eq(bookings.id, bookingId));
+
+    const booking = await this.getBookingById(bookingId);
+    
+    if (booking) {
+      try {
+        // Send push notification
+        await this.notificationService.sendInstantBookingSuccessNotification(booking.userId, {
+          title: 'Guest Details Updated',
+          message: `Guest details for your booking at ${booking.hotel.name} have been updated`,
+          type: 'guest_details_update',
+          data: {
+            bookingId,
+            hotelName: booking.hotel.name,
+          }
+        });
+
+        // Send email notification
+        await this.notificationService.sendImmediateNotification({
+          userId: booking.userId,
+          type: 'email',
+          title: "Guest Details Updated",
+          message: `
+            <h2>Guest Details Updated</h2>
+            <p>Dear Guest,</p>
+            <p>Your guest details for booking <strong>${bookingId}</strong> at <strong>${booking.hotel.name}</strong> have been updated.</p>
+            <p>Updated Details:</p>
+            <ul>
+              <li><strong>Name:</strong> ${guestDetails.guestName}</li>
+              <li><strong>Email:</strong> ${guestDetails.guestEmail}</li>
+              <li><strong>Phone:</strong> ${guestDetails.guestPhone}</li>
+            </ul>
+            <p>If you did not make this change, please contact us immediately.</p>
+            <p>Thank you for choosing ${booking.hotel.name}!</p>
+          `,
+          email: guestDetails.guestEmail
+        });
+      } catch (error) {
+        this.fastify.log.error('Failed to send guest details update notification:', error);
+      }
+    }
+
     return booking;
   }
 
