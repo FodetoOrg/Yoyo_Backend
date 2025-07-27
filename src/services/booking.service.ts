@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { FastifyInstance } from 'fastify';
-import { bookings, hotels, rooms, users, customerProfiles, coupons, payments, bookingCoupons, bookingAddons, couponUsages } from '../models/schema';
+import { bookings, hotels, rooms, users, customerProfiles, coupons, payments, bookingCoupons, bookingAddons, couponUsages, refunds } from '../models/schema';
 import { eq, and, desc, asc, count, not, lt, gt, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { NotFoundError, ConflictError } from '../types/errors';
@@ -1071,6 +1071,11 @@ export class BookingService {
       throw new Error('Unauthorized. You do not have permission to view this booking');
     }
 
+    // Get refund information if exists
+    const refundInfo = await db.query.refunds.findFirst({
+      where: eq(refunds.bookingId, bookingId)
+    });
+
     // Calculate nights
     // const checkInDate = new Date(booking.checkInDate);
     // const checkOutDate = new Date(booking.checkOutDate);
@@ -1159,6 +1164,21 @@ export class BookingService {
       },
       totalAmount: booking.totalAmount,
       cancellationPolicy: booking.hotel.cancellationPolicy || 'Free cancellation up to 24 hours before check-in. After that, a 1-night charge will apply.',
+      refundInfo: refundInfo ? {
+        id: refundInfo.id,
+        refundType: refundInfo.refundType,
+        originalAmount: refundInfo.originalAmount,
+        cancellationFeeAmount: refundInfo.cancellationFeeAmount,
+        refundAmount: refundInfo.refundAmount,
+        cancellationFeePercentage: refundInfo.cancellationFeePercentage,
+        refundReason: refundInfo.refundReason,
+        status: refundInfo.status,
+        refundMethod: refundInfo.refundMethod,
+        expectedProcessingDays: refundInfo.expectedProcessingDays,
+        processedAt: refundInfo.processedAt,
+        rejectionReason: refundInfo.rejectionReason,
+        createdAt: refundInfo.createdAt
+      } : null,
       addons: bookingAddons.map(ba => ({
         id: ba.id,
         addonId: ba.addonId,
