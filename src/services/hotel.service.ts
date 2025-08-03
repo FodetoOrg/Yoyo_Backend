@@ -1,4 +1,4 @@
-// @ts-nocheck
+
 import { FastifyInstance } from "fastify";
 import {
   hotels,
@@ -14,11 +14,13 @@ import {
   bookings,
   roomAddons,
 } from "../models/schema";
+
 import { v4 as uuidv4 } from "uuid";
 import { eq, and, like, inArray, exists, not, isNull, desc, or, sql, lt, gt } from "drizzle-orm";
 import { UserRole } from "../types/common";
 import { ForbiddenError } from "../types/errors";
 import { uploadToS3 } from "../config/aws";
+
 
 interface HotelSearchParams {
   city: string;
@@ -73,10 +75,19 @@ export class HotelService {
     this.fastify = fastify;
   }
 
-  async getHotels() {
+  async getHotels(type) {
     const db = this.fastify.db;
-    const hotels = await db.query.hotels.findMany();
-    return hotels;
+    let whereConditions: any[] = [];
+    if (type && (type === 'active' || type === 'inactive')) {
+      whereConditions.push(eq(hotels.status, type));
+    }
+
+    const hotelsReturn = await db.query.hotels.findMany(
+      {
+        where: and(...whereConditions),
+      }
+    );
+    return hotelsReturn;
   }
 
   // Search hotels by city and other criteria
@@ -334,7 +345,7 @@ export class HotelService {
       );
 
       // 7. Insert new image records into DB
-      if(imageUrls.length>0){
+      if (imageUrls.length > 0) {
         await tx.insert(hotelImages).values(
           imageUrls.map(url => ({
             id: uuidv4(),
@@ -733,7 +744,7 @@ export class HotelService {
   }
 
 
-  async  normalizeDate(dateStr){
+  async normalizeDate(dateStr) {
     // If date already has a timezone indicator, use it directly
     if (dateStr.endsWith('Z') || dateStr.includes('+')) {
       return new Date(dateStr);
@@ -745,15 +756,15 @@ export class HotelService {
   async checkRoomAvailability(roomId: string, checkInDate: Date, checkOutDate: Date): Promise<boolean> {
     const db = this.fastify.db;
 
-    console.log('----- checkInDate ',checkInDate)
-    console.log('------- checkou ',checkOutDate)
+    console.log('----- checkInDate ', checkInDate)
+    console.log('------- checkou ', checkOutDate)
 
     // Get room from database
     const room = await db.query.rooms.findFirst({
       where: eq(rooms.id, roomId)
     });
 
-    console.log('room is ',room)
+    console.log('room is ', room)
 
     if (!room || room.status !== 'available') {
       return false;
@@ -762,11 +773,11 @@ export class HotelService {
 
 
     const bookingsr = await db.query.bookings.findMany({
-      where: 
-       and( eq(bookings.roomId, roomId),
-        not(eq(bookings.status, 'cancelled')))
+      where:
+        and(eq(bookings.roomId, roomId),
+          not(eq(bookings.status, 'cancelled')))
     })
-    console.log('bookings ',bookingsr)
+    console.log('bookings ', bookingsr)
     const overlappingBookings = await db.query.bookings.findMany({
       where: and(
         eq(bookings.roomId, roomId),
@@ -791,8 +802,8 @@ export class HotelService {
       },
     });
 
-    console.log('roomAddonsRetunerd ',roomAddonsRetunerd)
-    console.log('for roomid ',roomId)
+    console.log('roomAddonsRetunerd ', roomAddonsRetunerd)
+    console.log('for roomid ', roomId)
 
     return roomAddonsRetunerd.map(roomAddon => ({
       id: roomAddon.addon.id,

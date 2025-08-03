@@ -25,15 +25,12 @@ export class AddonController {
       const addonData = request.body;
       const user = (request as AuthenticatedRequest).user;
 
-      // Check if user has permission to manage this hotel
-      if (user.role === 'hotel' && user.hotelId !== hotelId) {
-        return reply.code(403).send({
-          success: false,
-          message: 'You can only manage addons for your own hotel',
-        });
-      }
+        console.log('user addon is ',user)
 
-      const addon = await this.addonService.createAddon(hotelId, addonData);
+      
+
+    
+      const addon = await this.addonService.createAddon(hotelId, addonData,user);
 
       return reply.code(201).send({
         success: true,
@@ -53,7 +50,9 @@ export class AddonController {
     try {
       const { hotelId } = request.params;
 
-      const addons = await this.addonService.getHotelAddons(hotelId);
+      const {status} = request.query;
+
+      const addons = await this.addonService.getHotelAddons(hotelId,status);
 
       console.log('addons are ',addons)
 
@@ -62,6 +61,7 @@ export class AddonController {
         data: { addons },
       });
     } catch (error: any) {
+      console.log('error ',error)
       return reply.code(500).send({
         success: false,
         message: error.message || 'Failed to fetch addons',
@@ -109,15 +109,9 @@ export class AddonController {
       const updateData = request.body;
       const user = (request as AuthenticatedRequest).user;
 
-      // Check if user has permission to manage this hotel
-      if (user.role === 'hotel' && user.hotelId !== hotelId) {
-        return reply.code(403).send({
-          success: false,
-          message: 'You can only manage addons for your own hotel',
-        });
-      }
+     
 
-      const addon = await this.addonService.updateAddon(hotelId, addonId, updateData);
+      const addon = await this.addonService.updateAddon(hotelId, addonId, updateData,user);
 
       if (!addon) {
         return reply.code(404).send({
@@ -132,6 +126,7 @@ export class AddonController {
         data: { addon },
       });
     } catch (error: any) {
+      console.log('error ',error)
       return reply.code(500).send({
         success: false,
         message: error.message || 'Failed to update addon',

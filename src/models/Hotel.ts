@@ -18,7 +18,7 @@ export const hotels = sqliteTable("hotels", {
   starRating: text("star_rating"),
   amenities: text("amenities"), // Stored as JSON string
   ownerId: text("owner_id").references(() => users.id),
-commissionRate: integer("commission_rate").notNull().default(10), // Percentage
+  commissionRate: integer("commission_rate").notNull().default(10), // Percentage
   mapCoordinates: text("map_coordinates").notNull().default('17.4065,78.4772'),
   paymentMode: text("payment_mode").notNull().default('offline'), // 'online', 'offline', 'both'
   onlinePaymentEnabled: integer("online_payment_enabled", { mode: 'boolean' }).notNull().default(false),
@@ -76,4 +76,4 @@ export const hotelUsersRelations = relations(hotelUsers, ({ one }) => ({
 // Export type
 export type Hotel = InferSelectModel<typeof hotels>;
 
-export {};
+export { };

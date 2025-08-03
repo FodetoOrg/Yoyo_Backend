@@ -62,12 +62,13 @@ export class RoomService {
       isHourlyBooking,
       isDailyBooking,
       page = 1,
-      limit = 10,
+      limit = 100,
       search
     } = filters;
 
     let whereConditions: any[] = [];
 
+    console.log('filters ',filters)
     // Hotel filter
     if (hotelId) {
       whereConditions.push(eq(rooms.hotelId, hotelId));
@@ -104,6 +105,7 @@ export class RoomService {
       whereConditions.push(eq(rooms.isDailyBooking, isDailyBooking));
     }
 
+    console.log('where conditions are ',whereConditions)
     const roomResults = await db.query.rooms.findMany({
       where: whereConditions.length > 0 ? and(...whereConditions) : undefined,
       with: {
@@ -124,6 +126,8 @@ export class RoomService {
       limit,
       offset: (page - 1) * limit,
     });
+
+    console.log('roomResults ',roomResults)
 
     // Apply search filter if needed (since Drizzle doesn't support complex LIKE with joins easily)
     let filteredResults = roomResults;

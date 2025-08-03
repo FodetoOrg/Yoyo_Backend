@@ -1,4 +1,4 @@
-// @ts-nocheck
+//@ts-nocheck
 import { FastifyInstance } from 'fastify';
 import { v4 as uuidv4 } from 'uuid';
 import { eq, and, inArray } from 'drizzle-orm';
@@ -6,6 +6,7 @@ import { addons, roomAddons, bookingAddons } from '../models/Addon';
 import { rooms } from '../models/Room';
 import { uploadToS3 } from '../config/aws';
 import { ConflictError, NotFoundError } from '../types/errors';
+import { hotels } from '../models/Hotel';
 
 export class AddonService {
   constructor(private fastify: FastifyInstance) { }
@@ -21,8 +22,21 @@ export class AddonService {
     description?: string;
     image?: string;
     price: number;
-  }) {
+  }, user) {
     const db = this.fastify.db;
+
+    const hotel = await db.query.hotels.findFirst({
+      where: (eq(hotels.ownerId, user.id))
+    })
+
+    // Check if user has permission to manage this hotel
+    if (user.role === 'hotel' && hotel.id !== hotelId) {
+      return reply.code(403).send({
+        success: false,
+        message: 'You can only manage addons for your own hotel',
+      });
+    }
+
 
     let newAddon = {
       id: uuidv4(),
@@ -55,13 +69,20 @@ export class AddonService {
   }
 
   // Get all addons for a hotel
-  async getHotelAddons(hotelId: string) {
+  async getHotelAddons(hotelId: string, status: string | null | undefined) {
     const db = this.fastify.db;
+    let whereConditions: any[] = [];
+    console.log('came here addoons  ', status)
+    if (status && (status === 'active' || status === 'inactive')) {
+      whereConditions.push(eq(addons.status, status));
+    }
+
 
     return await db.query.addons.findMany({
       where: and(
         eq(addons.hotelId, hotelId),
-        eq(addons.status, 'active')
+
+        ...whereConditions
       ),
       orderBy: (addons, { asc }) => [asc(addons.name)],
     });
@@ -86,9 +107,22 @@ export class AddonService {
     image?: string;
     price?: number;
     status?: string;
-  }) {
+  }, user) {
     const db = this.fastify.db;
     let image = null;
+
+    const hotel = await db.query.hotels.findFirst({
+      where: (eq(hotels.ownerId, user.id))
+    })
+
+    // Check if user has permission to manage this hotel
+    if (user.role === 'hotel' && hotel.id !== hotelId) {
+      return reply.code(403).send({
+        success: false,
+        message: 'You can only manage addons for your own hotel',
+      });
+    }
+
 
     if (updateData.image && updateData.image.startsWith('data:image/')) {
 
@@ -97,16 +131,16 @@ export class AddonService {
     }
 
 
-    if (updateData.image && !image) {
-      throw Error('Unable to Process Request')
-    }
+    // if (updateData.image && !image ) {
+    //   throw Error('Unable to Process Request')
+    // }
 
 
 
     await db.update(addons)
       .set({
         ...updateData,
-        image:image,
+        image: updateData.image.startsWith('data:image/') ? image : updateData.image,
         updatedAt: new Date(),
       })
       .where(and(
@@ -362,7 +396,7 @@ export class AddonService {
     addonId: string;
     quantity: number;
   }>) {
-    const db =  this.fastify.db;
+    const db = this.fastify.db;
 
     console.log('addons here ')
     // Get addon details for pricing
@@ -386,14 +420,14 @@ export class AddonService {
       };
     });
 
-    console.log('bookingaddondata ',bookingAddonData)
-    
+    console.log('bookingaddondata ', bookingAddonData)
+
     if (bookingAddonData.length > 0) {
       return bookingAddonData
     }
     return []
-    
-    
+
+
   }
 
   // Get booking addons

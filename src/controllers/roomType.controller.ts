@@ -33,8 +33,11 @@ export class RoomTypeController {
   // Get all room types
   async getRoomTypes(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const roomTypes = await this.roomTypeService.getRoomTypes();
+
+      const {type } = request.query
+      const roomTypes = await this.roomTypeService.getRoomTypes(type);
       
+
       return reply.code(200).send({
         success: true,
         data: roomTypes,

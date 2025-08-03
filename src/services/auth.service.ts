@@ -1,4 +1,4 @@
-// @ts-nocheck
+//@ts-nocheck
 import { FastifyInstance } from "fastify";
 import { users } from "../models/schema";
 import { and, eq } from "drizzle-orm";
@@ -6,7 +6,7 @@ import { v4 as uuidv4 } from "uuid";
 import admin from "../config/firebase/firebase";
 import { UserRole, UserStatus } from "../types/common";
 import { ConflictError, NotFoundError } from "../types/errors";
-import { hotelUsers } from "../models/Hotel";
+import { hotels, hotelUsers } from "../models/Hotel";
 import { NotFound } from "@aws-sdk/client-s3/dist-types";
 
 interface TokenResponse {
@@ -112,11 +112,11 @@ export class AuthService {
     // Get hotel ID if user is hotel admin
     let hotelId = null;
     if (user.role === UserRole.HOTEL_ADMIN) {
-      const hotelUser = await db.query.hotelUsers.findFirst({
-        where: eq(hotelUsers.userId, user.id),
+      const hotelUser = await db.query.hotels.findFirst({
+        where: eq(hotels.ownerId, user.id),
       });
       console.log('hotelUser ', hotelUser)
-      hotelId = hotelUser?.hotelId || null;
+      hotelId = hotelUser?.id || null;
     }
     let email = '';
     let gender = ''
@@ -171,7 +171,7 @@ export class AuthService {
         role: user.role
       },
       {
-        expiresIn: "30m",
+        expiresIn: "7d",
       }
     );
 
@@ -182,7 +182,7 @@ export class AuthService {
         role: user.role
       },
       {
-        expiresIn: "7d",
+        expiresIn: "14d",
       }
     );
 

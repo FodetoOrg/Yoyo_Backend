@@ -38,7 +38,8 @@ export class HotelController {
 
   async getHotels(request: FastifyRequest, reply: FastifyReply) {
     console.log("getHotels ", request.user);
-    const hotels = await this.hotelService.getHotels();
+    const {type } = request.query
+    const hotels = await this.hotelService.getHotels(type);
     return reply.code(200).send({
       success: true,
       data: hotels,

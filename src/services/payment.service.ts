@@ -1,7 +1,7 @@
-// @ts-nocheck
+//@ts-nocheck
 import { FastifyInstance } from 'fastify';
 import { paymentOrders, paymentWebhooks, payments, bookings, adminPayments, hotels } from '../models/schema';
-import { eq, and, desc } from 'drizzle-orm';
+import { eq, and, desc, inArray ,count} from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
@@ -548,117 +548,151 @@ export class PaymentService {
       }
     });
   }
+// Get payment history
+async getPaymentHistory(filters: PaymentHistoryFilters) {
+  const db = this.fastify.db;
+  const { userId, bookingId, status, paymentMode, page = 1, limit = 10, hotelId } = filters;
 
-  // Get payment history
-  async getPaymentHistory(filters: PaymentHistoryFilters) {
-    const db = this.fastify.db;
-    const { userId, bookingId, status, paymentMode, page = 1, limit = 10, hotelId } = filters;
+  console.log('userid ', userId)
+  console.log(bookingId)
+  console.log(paymentMode)
+  console.log('status ', status)
+  console.log(hotelId)
 
-    console.log('userid ', userId)
-    console.log(bookingId)
-    console.log(paymentMode)
-    console.log('sttaus ', status)
-    console.log(hotelId)
+  let whereConditions: any[] = [];
 
-    let whereConditions: any[] = [];
+  if (userId) {
+    whereConditions.push(eq(payments.userId, userId));
+  }
 
-    if (userId) {
-      whereConditions.push(eq(payments.userId, userId));
-    }
+  if (bookingId) {
+    whereConditions.push(eq(payments.bookingId, bookingId));
+  }
 
-    if (bookingId) {
-      whereConditions.push(eq(payments.bookingId, bookingId));
-    }
+  if (status) {
+    whereConditions.push(eq(payments.status, status));
+  }
 
-    if (status) {
-      whereConditions.push(eq(payments.status, status));
-    }
+  if (paymentMode) {
+    whereConditions.push(eq(payments.paymentMode, paymentMode));
+  }
 
-    if (paymentMode) {
-      whereConditions.push(eq(payments.paymentMode, paymentMode));
-    }
-    // if(hotelId){
-    //   whereConditions.push(eq(hotels.id, hotelId));
-    // }
+  console.log('hotelId is ', hotelId)
 
-    const paymentHistory = await db.query.payments.findMany({
-      where: whereConditions.length > 0 ? and(...whereConditions) : undefined,
-      with: {
-        user: {
-          columns: {
-            id: true,
-            name: true,
-            phone: true
-          }
-        },
-        booking: {
-          with: {
-            hotel: {
-              columns: {
-                id: true,
-                name: true,
-              },
-              where: hotelId ? eq(hotels.id, hotelId) : eq(1, 1)
-            },
-            room: {
-              columns: {
-                id: true,
-                name: true,
-                roomNumber: true,
-              }
+  // For hotel filtering, we need to join with bookings table
+  let query = db
+    .select()
+    .from(payments)
+    .leftJoin(bookings, eq(payments.bookingId, bookings.id));
+
+  // Add hotel filter if provided
+  if (hotelId) {
+    query = query.where(and(
+      whereConditions.length > 0 ? and(...whereConditions) : undefined,
+      eq(bookings.hotelId, hotelId)
+    ));
+  } else if (whereConditions.length > 0) {
+    query = query.where(and(...whereConditions));
+  }
+
+  // Apply pagination and ordering
+  const rawPayments = await query
+    .orderBy(desc(payments.createdAt))
+    .limit(limit)
+    .offset((page - 1) * limit);
+
+  // Now get the full payment data with relations for the filtered results
+  const paymentIds = rawPayments.map(row => row.payments.id);
+  
+  const paymentHistory = await db.query.payments.findMany({
+    where: inArray(payments.id, paymentIds),
+    with: {
+      user: {
+        columns: {
+          id: true,
+          name: true,
+          phone: true
+        }
+      },
+      booking: {
+        with: {
+          hotel: {
+            columns: {
+              id: true,
+              name: true,
+            }
+          },
+          room: {
+            columns: {
+              id: true,
+              name: true,
+              roomNumber: true,
             }
           }
         }
-      },
-      orderBy: [desc(payments.createdAt)],
-      limit,
-      offset: (page - 1) * limit,
-    });
+      }
+    },
+    orderBy: [desc(payments.createdAt)],
+  });
 
-    // Get total count
-    const totalPayments = await db.query.payments.findMany({
-      where: whereConditions.length > 0 ? and(...whereConditions) : undefined,
-    });
+  // Get total count with the same filtering logic
+  let countQuery = db
+    .select({ count: count() })
+    .from(payments)
+    .leftJoin(bookings, eq(payments.bookingId, bookings.id));
 
-    return {
-      payments: paymentHistory.map(payment => ({
-        id: payment.id,
-        user: {
-          id: payment.user.id,
-          name: payment.user.name,
-          phone: payment.user.phone
-        },
-
-        bookingId: payment.bookingId,
-        amount: payment.amount,
-        currency: payment.currency,
-        paymentType: payment.paymentType,
-        paymentMethod: payment.paymentMethod,
-        paymentMode: payment.paymentMode,
-        status: payment.status,
-        receiptNumber: payment.receiptNumber,
-        transactionDate: payment.transactionDate,
-        createdAt: payment.createdAt,
-        razorpayOrderId: payment.razorpayOrderId || null,
-        razorpayPaymentId: payment.razorpayPaymentId || null,
-        razorpaySignature: payment.razorpaySignature || null,
-        hotelId: payment.booking.hotel.id,
-        booking: {
-          id: payment.booking.id,
-          checkInDate: payment.booking.checkInDate,
-          checkOutDate: payment.booking.checkOutDate,
-          totalAmount: payment.booking.totalAmount,
-          hotel: payment.booking.hotel,
-          room: payment.booking.room,
-        },
-        offlinePaymentDetails: payment.offlinePaymentDetails ? JSON.parse(payment.offlinePaymentDetails) : null,
-      })),
-      total: totalPayments.length,
-      page,
-      limit,
-      totalPages: Math.ceil(totalPayments.length / limit),
-    };
+  if (hotelId) {
+    countQuery = countQuery.where(and(
+      whereConditions.length > 0 ? and(...whereConditions) : undefined,
+      eq(bookings.hotelId, hotelId)
+    ));
+  } else if (whereConditions.length > 0) {
+    countQuery = countQuery.where(and(...whereConditions));
   }
+
+  const totalResult = await countQuery;
+  const totalPayments = totalResult[0]?.count || 0;
+
+  console.log('paymentHistory ', paymentHistory.slice(0, 3))
+  
+  return {
+    payments: paymentHistory.map(payment => ({
+      id: payment.id,
+      user: {
+        id: payment.user.id,
+        name: payment.user.name,
+        phone: payment.user.phone
+      },
+      bookingId: payment.bookingId,
+      amount: payment.amount,
+      currency: payment.currency,
+      paymentType: payment.paymentType,
+      paymentMethod: payment.paymentMethod,
+      paymentMode: payment.paymentMode,
+      status: payment.status,
+      receiptNumber: payment.receiptNumber,
+      transactionDate: payment.transactionDate,
+      createdAt: payment.createdAt,
+      razorpayOrderId: payment.razorpayOrderId || null,
+      razorpayPaymentId: payment.razorpayPaymentId || null,
+      razorpaySignature: payment.razorpaySignature || null,
+      hotelId: payment.booking.hotel?.id || null,
+      booking: {
+        id: payment.booking.id,
+        checkInDate: payment.booking.checkInDate,
+        checkOutDate: payment.booking.checkOutDate,
+        totalAmount: payment.booking.totalAmount,
+        hotel: payment.booking.hotel,
+        room: payment.booking.room,
+      },
+      offlinePaymentDetails: payment.offlinePaymentDetails ? JSON.parse(payment.offlinePaymentDetails) : null,
+    })),
+    total: totalPayments,
+    page,
+    limit,
+    totalPages: Math.ceil(totalPayments / limit),
+  };
+}
 
   // Handle Razorpay webhooks
   async handleWebhook(signature: string, payload: string) {

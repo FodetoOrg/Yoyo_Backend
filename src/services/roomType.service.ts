@@ -1,7 +1,7 @@
-// @ts-nocheck
+
 import { FastifyInstance } from "fastify";
 import { roomTypes, RoomType } from "../models/schema";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { NotFoundError, ConflictError } from "../types/errors";
 
@@ -19,10 +19,17 @@ export class RoomTypeService {
   }
 
   // Get all room types
-  async getRoomTypes() {
+  async getRoomTypes(type) {
     const db = this.fastify.db;
+    let whereConditions: any[] = [];
+
+    if (type && (type === 'active' || type === 'inactive')) {
+      whereConditions.push(eq(roomTypes.status, type));
+    }
+
     return await db.query.roomTypes.findMany({
-      orderBy: (roomTypes, { asc }) => [asc(roomTypes.name)]
+      where: and(...whereConditions),
+      orderBy: (roomTypes, { asc }) => [asc(roomTypes.name)],
     });
   }
 
@@ -43,7 +50,7 @@ export class RoomTypeService {
   // Create room type
   async createRoomType(data: RoomTypeCreateParams) {
     const db = this.fastify.db;
-    
+
     // Check if room type with same name exists
     const existing = await db.query.roomTypes.findFirst({
       where: eq(roomTypes.name, data.name)
@@ -54,7 +61,7 @@ export class RoomTypeService {
     }
 
     const roomTypeId = uuidv4();
-    
+
     await db.insert(roomTypes).values({
       id: roomTypeId,
       name: data.name,
@@ -68,7 +75,7 @@ export class RoomTypeService {
   // Update room type
   async updateRoomType(id: string, data: Partial<RoomTypeCreateParams>) {
     const db = this.fastify.db;
-    
+
     // Check if room type exists
     await this.getRoomTypeById(id);
 
@@ -97,7 +104,7 @@ export class RoomTypeService {
   // Delete room type
   async deleteRoomType(id: string) {
     const db = this.fastify.db;
-    
+
     // Check if room type exists
     await this.getRoomTypeById(id);
 

@@ -7,24 +7,24 @@ export async function partnerContactRoutes(fastify: FastifyInstance) {
   partnerContactController.setFastify(fastify);
 
   // Create partner contact (public endpoint)
-  fastify.post('/partner-contacts', {}, partnerContactController.createPartnerContact.bind(partnerContactController));
+  fastify.post('/', {}, partnerContactController.createPartnerContact.bind(partnerContactController));
 
   // Get partner contacts (admin only)
-  fastify.get('/partner-contacts', {
+  fastify.get('/', {
     onRequest: [fastify.authenticate, 
       // fastify.rbacGuard(['admin'])
     ],
   }, partnerContactController.getPartnerContacts.bind(partnerContactController));
 
   // Get partner contact by ID (admin only)
-  fastify.get('/partner-contacts/:id', {
+  fastify.get('/:id', {
     onRequest: [fastify.authenticate, 
       // fastify.rbacGuard(['admin'])
     ],
   }, partnerContactController.getPartnerContactById.bind(partnerContactController));
 
   // Update partner contact (admin only)
-  fastify.put('/partner-contacts/:id', {
+  fastify.put('/:id', {
     onRequest: [fastify.authenticate, 
       // fastify.rbacGuard(['admin'])
     ],

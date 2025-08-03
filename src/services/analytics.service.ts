@@ -464,7 +464,7 @@ export class AnalyticsService {
         year: monthStart.getFullYear(),
         bookings: Number(monthData[0]?.bookings || 0),
         revenue: Number(monthData[0]?.revenue || 0),
-        occupancy: Number(monthOccupancy),
+        // occupancy: Number(monthOccupancy),
       });
     }
 

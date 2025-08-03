@@ -602,7 +602,6 @@ export class HotelSearchService {
         sql`${coupons.validTo} >= datetime('now')`
       ))
       .where(eq(couponMappings.hotelId, hotelId))
-      .limit(3);
 
     return offers.map(offer => ({
       title: offer.coupon.description || `${offer.coupon.discountValue}% OFF`,
