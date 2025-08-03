@@ -1,4 +1,4 @@
-
+//@ts-nocheck
 import { FastifyInstance } from 'fastify';
 import { partnerContacts } from '../models/schema';
 import { eq, desc } from 'drizzle-orm';

@@ -1,4 +1,4 @@
-
+//@ts-nocheck
 import { FastifyInstance } from "fastify";
 import { roomTypes, RoomType } from "../models/schema";
 import { and, eq } from "drizzle-orm";

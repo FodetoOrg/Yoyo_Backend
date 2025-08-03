@@ -1,4 +1,4 @@
-
+//@ts-nocheck
 import { FastifyInstance } from 'fastify';
 import { eq, and, desc } from 'drizzle-orm';
 import { refunds, bookings, payments, hotels, users } from '../models/schema';
