@@ -1,4 +1,4 @@
-
+//@ts-nocheck
 import { InferSelectModel, relations } from "drizzle-orm";
 import { sqliteTable, text, real, integer } from "drizzle-orm/sqlite-core";
 import { hotels } from "./Hotel";

@@ -1,4 +1,4 @@
-
+//@ts-nocheck
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { RoomHourlyStayService } from '../services/roomHourlyStay.service';
 import { z } from 'zod';

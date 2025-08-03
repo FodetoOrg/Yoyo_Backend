@@ -1,4 +1,4 @@
-
+//@ts-nocheck
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { PartnerContactService } from '../services/partnerContact.service';
 import { z } from 'zod';

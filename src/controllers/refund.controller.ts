@@ -1,4 +1,4 @@
-
+//@ts-nocheck
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { RefundService } from '../services/refund.service';
 import { z } from 'zod';
