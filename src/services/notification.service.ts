@@ -442,6 +442,77 @@ export class NotificationService {
       };
     }
   }
+  // Send notification to hotel staff/management
+  async sendHotelNotification(hotelId: string, options: {
+    title: string;
+    message: string;
+    data?: any;
+  }) {
+    const db = this.fastify.db;
+
+    try {
+      // Get hotel staff/managers (assuming they have role 'hotel_admin' or similar)
+      const hotelStaff = await db.select({
+        id: users.id,
+        name: users.name,
+        email: users.email,
+        role: users.role
+      })
+      .from(users)
+      .where(and(
+        eq(users.role, 'hotel_admin'),
+        // Add hotel association logic here if you have it
+        eq(users.isActive, true)
+      ));
+
+      const notifications = [];
+
+      for (const staff of hotelStaff) {
+        // Send push notification
+        notifications.push(
+          this.sendRealTimeNotification({
+            userId: staff.id,
+            title: options.title,
+            message: options.message,
+            type: 'info',
+            data: { ...options.data, hotelId }
+          })
+        );
+
+        // Send email notification
+        if (staff.email) {
+          notifications.push(
+            this.sendEmailNotification({
+              to: staff.email,
+              subject: options.title,
+              html: `
+                <h2>${options.title}</h2>
+                <p>Dear ${staff.name},</p>
+                <p>${options.message}</p>
+                <p>Please check your dashboard for more details.</p>
+              `
+            })
+          );
+        }
+      }
+
+      await Promise.all(notifications);
+
+      return {
+        success: true,
+        notificationsSent: notifications.length,
+        timestamp: new Date()
+      };
+
+    } catch (error) {
+      console.error('Failed to send hotel notification:', error);
+      return {
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
   // Queue notification with priority and fail-safe delivery
   async queueNotification(data: {
     userId: string;

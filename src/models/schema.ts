@@ -45,3 +45,4 @@ export { bookingCoupons, bookingCouponsRelations, type BookingCoupon } from "./B
 export { invoices, invoicesRelations, type Invoice } from './Invoice';
 export { hotelReviews, hotelReviewsRelations, type HotelReview } from './HotelReview';
 export { wallets, walletsRelations, walletTransactions, walletTransactionsRelations, type Wallet, type WalletTransaction } from './Wallet';
+export { configurations, type Configuration, type ConfigurationInsert } from './Configuration';

@@ -107,6 +107,10 @@ app.register(detailsRoutes, { prefix: '/api/v1/details' });
 // Register wallet routes
 app.register(walletRoutes, { prefix: '/api/v1' });
 
+// Register configuration routes
+const configurationRoutes = require('./routes/configuration.route').default;
+app.register(configurationRoutes, { prefix: '/api/v1' });
+
 // Default route
 app.get('/', async () => {
   return { message: 'Hotel Booking API' };
