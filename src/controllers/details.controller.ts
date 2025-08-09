@@ -58,7 +58,7 @@ export class DetailsController {
       const userRole = request.user.role;
 
       // Check if user has permission to view payment details
-      if (!['admin', 'hotel_admin', 'superadmin'].includes(userRole)) {
+      if (![UserRole.SUPER_ADMIN,UserRole.HOTEL_ADMIN].includes(userRole)) {
         return reply.code(403).send({
           success: false,
           message: 'Access denied. Insufficient permissions.'
@@ -86,7 +86,7 @@ export class DetailsController {
       const userRole = request.user.role;
 
       // Check if user has permission to view refund details
-      if (!['admin', 'hotel_admin', 'superadmin'].includes(userRole)) {
+      if (![UserRole.SUPER_ADMIN,UserRole.HOTEL_ADMIN].includes(userRole))  {
         return reply.code(403).send({
           success: false,
           message: 'Access denied. Insufficient permissions.'
@@ -114,7 +114,7 @@ export class DetailsController {
       const userRole = request.user.role;
 
       // Check if user has admin permission
-      if (!['admin', 'superadmin'].includes(userRole)) {
+      if (![UserRole.SUPER_ADMIN].includes(userRole))  {
         return reply.code(403).send({
           success: false,
           message: 'Access denied. Admin permissions required.'
@@ -142,7 +142,7 @@ export class DetailsController {
       const userRole = request.user.role;
 
       // Check if user has permission to view customer details or is requesting their own details
-      if (!['admin', 'hotel_admin', 'superadmin'].includes(userRole) && request.user.id !== customerId) {
+      if (![UserRole.SUPER_ADMIN].includes(userRole)  && request.user.id !== customerId) {
         return reply.code(403).send({
           success: false,
           message: 'Access denied. Insufficient permissions.'
@@ -170,7 +170,7 @@ export class DetailsController {
       const userRole = request.user.role;
 
       // Check if user has permission to view addon details
-      if (!['admin', 'hotel_admin', 'superadmin'].includes(userRole)) {
+      if (![UserRole.HOTEL_ADMIN,UserRole.SUPER_ADMIN].includes(userRole)) {
         return reply.code(403).send({
           success: false,
           message: 'Access denied. Insufficient permissions.'
@@ -178,6 +178,7 @@ export class DetailsController {
       }
 
       const addonDetails = await this.detailsService.getAddonDetails(addonId);
+      console.log('addonDetails response ',addonDetails)
 
       return reply.code(200).send({
         success: true,

@@ -17,7 +17,12 @@ export class DetailsService {
     const room = await db.query.rooms.findFirst({
       where: eq(rooms.id, roomId),
       with: {
-        hotel: true
+        hotel: true,
+        roomAddons: {
+          with: {
+            addon: true
+          }
+        }
       }
     });
 
@@ -97,6 +102,7 @@ export class DetailsService {
       bookings: roomBookings,
       payments: roomPayments,
       refunds: roomRefunds,
+      addons: room.roomAddons.map(rA => rA.addon) || [],
       statistics: {
         totalBookings,
         totalRevenue,
@@ -135,11 +141,7 @@ export class DetailsService {
       }
     });
 
-    // Get payment order details if exists
-    const order = await db.query.paymentOrders.findFirst({
-      where: eq(paymentOrders.razorpayOrderId, payment.razorpayOrderId || '')
-    });
-
+ 
     return {
       payment: {
         id: payment.id,
@@ -178,7 +180,7 @@ export class DetailsService {
         address: payment.booking.hotel.address,
         city: payment.booking.hotel.city
       },
-      order: order || null
+    
     };
   }
 

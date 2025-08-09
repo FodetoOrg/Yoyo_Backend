@@ -42,7 +42,7 @@ export default async function detailsRoutes(fastify: FastifyInstance) {
     },
     preHandler: [fastify.authenticate]
   }, (request: FastifyRequest, reply: FastifyReply) => 
-    detailsController.getPaymentDetails(request, reply)
+    detailsController.getPaymentDetails(request as any, reply)
   );
 
  
