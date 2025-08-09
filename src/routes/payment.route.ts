@@ -71,4 +71,29 @@ export default async function paymentRoutes(fastify: FastifyInstance) {
     schema: recordOfflinePaymentSchema,
     preHandler: [fastify.authenticate]
   }, (request, reply) => paymentController.recordOfflinePayment(request, reply));
+
+  // Process wallet payment
+  fastify.post('/wallet-payment', {
+    schema: {
+      tags: ['payments'],
+      summary: 'Process payment using wallet + online payment',
+      body: {
+        type: 'object',
+        required: ['bookingId'],
+        properties: {
+          bookingId: { type: 'string' },
+          walletAmount: { type: 'number', minimum: 0 },
+          razorpayPaymentDetails: {
+            type: 'object',
+            properties: {
+              paymentId: { type: 'string' },
+              orderId: { type: 'string' },
+              signature: { type: 'string' }
+            }
+          }
+        }
+      }
+    },
+    preHandler: [fastify.authenticate]
+  }, (request, reply) => paymentController.processWalletPayment(request, reply));
 }

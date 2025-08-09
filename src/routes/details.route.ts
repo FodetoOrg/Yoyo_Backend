@@ -1,4 +1,3 @@
-
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { DetailsController } from '../controllers/details.controller';
 import { z } from 'zod';
@@ -83,4 +82,52 @@ export default async function detailsRoutes(fastify: FastifyInstance) {
   }, (request: FastifyRequest, reply: FastifyReply) => 
     detailsController.getHotelDetails(request, reply)
   );
+
+  // Refund details
+  fastify.get('/refunds/:refundId', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      tags: ['details'],
+      summary: 'Get refund details',
+      params: {
+        type: 'object',
+        required: ['refundId'],
+        properties: {
+          refundId: { type: 'string' }
+        }
+      }
+    }
+  }, detailsController.getRefundDetails.bind(detailsController));
+
+  // Customer details
+  fastify.get('/customers/:customerId', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      tags: ['details'],
+      summary: 'Get customer details with bookings, payments, refunds, and wallet transactions',
+      params: {
+        type: 'object',
+        required: ['customerId'],
+        properties: {
+          customerId: { type: 'string' }
+        }
+      }
+    }
+  }, detailsController.getCustomerDetails.bind(detailsController));
+
+  // Addon details
+  fastify.get('/addons/:addonId', {
+    onRequest: [fastify.authenticate],
+    schema: {
+      tags: ['details'],
+      summary: 'Get addon details with usage statistics and booking history',
+      params: {
+        type: 'object',
+        required: ['addonId'],
+        properties: {
+          addonId: { type: 'string' }
+        }
+      }
+    }
+  }, detailsController.getAddonDetails.bind(detailsController));
 }

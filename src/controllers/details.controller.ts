@@ -1,4 +1,3 @@
-
 // @ts-nocheck
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { DetailsService } from '../services/details.service';
@@ -132,6 +131,62 @@ export class DetailsController {
       return reply.code(500).send({
         success: false,
         message: error.message || 'Failed to fetch hotel details'
+      });
+    }
+  }
+
+  async getCustomerDetails(request: AuthenticatedRequest, reply: FastifyReply) {
+    try {
+      const { customerId } = request.params as { customerId: string };
+      const userRole = request.user.role;
+
+      // Check if user has permission to view customer details or is requesting their own details
+      if (!['admin', 'hotel_admin', 'superadmin'].includes(userRole) && request.user.id !== customerId) {
+        return reply.code(403).send({
+          success: false,
+          message: 'Access denied. Insufficient permissions.'
+        });
+      }
+
+      const customerDetails = await this.detailsService.getCustomerDetails(customerId);
+
+      return reply.code(200).send({
+        success: true,
+        data: customerDetails
+      });
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send({
+        success: false,
+        message: error.message || 'Failed to fetch customer details'
+      });
+    }
+  }
+
+  async getAddonDetails(request: AuthenticatedRequest, reply: FastifyReply) {
+    try {
+      const { addonId } = request.params as { addonId: string };
+      const userRole = request.user.role;
+
+      // Check if user has permission to view addon details
+      if (!['admin', 'hotel_admin', 'superadmin'].includes(userRole)) {
+        return reply.code(403).send({
+          success: false,
+          message: 'Access denied. Insufficient permissions.'
+        });
+      }
+
+      const addonDetails = await this.detailsService.getAddonDetails(addonId);
+
+      return reply.code(200).send({
+        success: true,
+        data: addonDetails
+      });
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send({
+        success: false,
+        message: error.message || 'Failed to fetch addon details'
       });
     }
   }

@@ -37,6 +37,7 @@ import hourlyStayRoutes from "./routes/roomHourlyStay.route";
 import { partnerContactRoutes } from './routes/partnerContact.route';
 import { refundRoutes } from './routes/refund.route';
 import detailsRoutes from './routes/details.route'; // Assuming detailsRoutes is in './routes/details.route'
+import { walletRoutes } from './routes/wallet.route';
 
 // Create Fastify instance
 export const app: FastifyInstance = fastify({
@@ -103,6 +104,9 @@ app.register(partnerContactRoutes, { prefix: '/api/v1/partner-contacts' });
   // Register details routes
   await app.register(detailsRoutes, { prefix: '/api/v1/details' });
 
+// Register wallet routes
+  await app.register(walletRoutes, { prefix: '/api/v1' });
+
 // Default route
 app.get('/', async () => {
   return { message: 'Hotel Booking API' };
@@ -115,7 +119,7 @@ app.get('/health', async () => {
 
 // 404 handler
 app.setNotFoundHandler((request, reply) => {
-  reply.code(404).send({ 
+  reply.code(404).send({
     error: 'Not Found',
     message: `Route ${request.method}:${request.url} not found`,
     statusCode: 404
@@ -129,7 +133,7 @@ app.setErrorHandler((error, request, reply) => {
   const statusCode = error.statusCode || 500;
   const message = error.message || 'Internal Server Error';
 
-  reply.code(statusCode).send({ 
+  reply.code(statusCode).send({
     error: statusCode >= 500 ? 'Internal Server Error' : error.name || 'Error',
     message,
     statusCode

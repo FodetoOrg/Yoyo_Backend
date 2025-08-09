@@ -40,3 +40,6 @@ bookingAddonsRelations,
 export * from './HotelReview';
 export { bookings, bookingsRelations, type Booking } from "./Booking";
 export { bookingCoupons, bookingCouponsRelations, type BookingCoupon } from "./BookingCoupons";
+export { invoices, invoicesRelations, type Invoice } from './Invoice';
+export { hotelReviews, hotelReviewsRelations, type HotelReview } from './HotelReview';
+export { wallets, walletsRelations, walletTransactions, walletTransactionsRelations, type Wallet, type WalletTransaction } from './Wallet';

@@ -267,6 +267,193 @@ export class DetailsService {
     };
   }
 
+  async getCustomerDetails(userId: string) {
+    const db = this.fastify.db;
+
+    // Get customer basic information
+    const customerQuery = `
+      SELECT 
+        u.id, u.name, u.phone, u.email, u.created_at,
+        w.balance as wallet_balance, w.total_earned, w.total_spent
+      FROM users u
+      LEFT JOIN wallets w ON u.id = w.user_id
+      WHERE u.id = $1
+    `;
+    const customerResult = await db.query(customerQuery, [userId]);
+    
+    if (customerResult.rows.length === 0) {
+      throw new Error('Customer not found');
+    }
+
+    const customer = customerResult.rows[0];
+
+    // Get all bookings
+    const bookingsQuery = `
+      SELECT 
+        b.id, b.check_in_date, b.check_out_date, b.total_amount, 
+        b.status, b.payment_status, b.created_at,
+        h.name as hotel_name, h.city as hotel_city,
+        r.name as room_name, r.room_number
+      FROM bookings b
+      JOIN hotels h ON b.hotel_id = h.id
+      JOIN rooms r ON b.room_id = r.id
+      WHERE b.user_id = $1
+      ORDER BY b.created_at DESC
+    `;
+    const bookingsResult = await db.query(bookingsQuery, [userId]);
+
+    // Get all payments
+    const paymentsQuery = `
+      SELECT 
+        p.id, p.amount, p.payment_method, p.payment_mode, 
+        p.status, p.transaction_date, p.created_at,
+        b.id as booking_id
+      FROM payments p
+      JOIN bookings b ON p.booking_id = b.id
+      WHERE p.user_id = $1
+      ORDER BY p.created_at DESC
+    `;
+    const paymentsResult = await db.query(paymentsQuery, [userId]);
+
+    // Get all refunds
+    const refundsQuery = `
+      SELECT 
+        r.id, r.refund_amount, r.refund_reason, r.refund_type,
+        r.status, r.created_at, r.processed_at,
+        b.id as booking_id
+      FROM refunds r
+      JOIN bookings b ON r.booking_id = b.id
+      WHERE r.user_id = $1
+      ORDER BY r.created_at DESC
+    `;
+    const refundsResult = await db.query(refundsQuery, [userId]);
+
+    // Get wallet transactions
+    const walletTransactionsQuery = `
+      SELECT 
+        wt.id, wt.type, wt.source, wt.amount, wt.balance_after,
+        wt.description, wt.reference_type, wt.created_at
+      FROM wallet_transactions wt
+      WHERE wt.user_id = $1
+      ORDER BY wt.created_at DESC
+      LIMIT 20
+    `;
+    const walletTransactionsResult = await db.query(walletTransactionsQuery, [userId]);
+
+    // Calculate statistics
+    const totalBookings = bookingsResult.rows.length;
+    const totalSpent = paymentsResult.rows
+      .filter(p => p.status === 'completed')
+      .reduce((sum, p) => sum + p.amount, 0);
+    const totalRefunds = refundsResult.rows
+      .filter(r => r.status === 'processed')
+      .reduce((sum, r) => sum + r.refund_amount, 0);
+
+    return {
+      customer: {
+        id: customer.id,
+        name: customer.name,
+        phone: customer.phone,
+        email: customer.email,
+        joined_date: customer.created_at,
+        wallet_balance: customer.wallet_balance || 0,
+        total_wallet_earned: customer.total_earned || 0,
+        total_wallet_spent: customer.total_spent || 0
+      },
+      statistics: {
+        total_bookings: totalBookings,
+        total_spent: totalSpent,
+        total_refunds: totalRefunds,
+        wallet_balance: customer.wallet_balance || 0
+      },
+      bookings: bookingsResult.rows,
+      payments: paymentsResult.rows,
+      refunds: refundsResult.rows,
+      wallet_transactions: walletTransactionsResult.rows
+    };
+  }
+
+  async getAddonDetails(addonId: string) {
+    const db = this.fastify.db;
+
+    // Get addon basic information
+    const addonQuery = `
+      SELECT 
+        a.id, a.name, a.description, a.price, a.category,
+        a.status, a.created_at, a.updated_at,
+        h.name as hotel_name, h.id as hotel_id
+      FROM addons a
+      JOIN hotels h ON a.hotel_id = h.id
+      WHERE a.id = $1
+    `;
+    const addonResult = await db.query(addonQuery, [addonId]);
+    
+    if (addonResult.rows.length === 0) {
+      throw new Error('Addon not found');
+    }
+
+    const addon = addonResult.rows[0];
+
+    // Get bookings where this addon was used
+    const bookingAddonsQuery = `
+      SELECT 
+        ba.quantity, ba.total_price, ba.created_at,
+        b.id as booking_id, b.check_in_date, b.check_out_date,
+        b.total_amount as booking_total,
+        u.name as customer_name, u.phone as customer_phone,
+        r.name as room_name, r.room_number
+      FROM booking_addons ba
+      JOIN bookings b ON ba.booking_id = b.id
+      JOIN users u ON b.user_id = u.id
+      JOIN rooms r ON b.room_id = r.id
+      WHERE ba.addon_id = $1
+      ORDER BY ba.created_at DESC
+    `;
+    const bookingAddonsResult = await db.query(bookingAddonsQuery, [addonId]);
+
+    // Calculate statistics
+    const totalUsageCount = bookingAddonsResult.rows.length;
+    const totalQuantitySold = bookingAddonsResult.rows.reduce((sum, ba) => sum + ba.quantity, 0);
+    const totalRevenue = bookingAddonsResult.rows.reduce((sum, ba) => sum + ba.total_price, 0);
+    
+    // Usage by month (last 12 months)
+    const monthlyUsageQuery = `
+      SELECT 
+        strftime('%Y-%m', ba.created_at) as month,
+        COUNT(*) as usage_count,
+        SUM(ba.quantity) as total_quantity,
+        SUM(ba.total_price) as revenue
+      FROM booking_addons ba
+      WHERE ba.addon_id = $1 
+        AND ba.created_at >= date('now', '-12 months')
+      GROUP BY strftime('%Y-%m', ba.created_at)
+      ORDER BY month DESC
+    `;
+    const monthlyUsageResult = await db.query(monthlyUsageQuery, [addonId]);
+
+    return {
+      addon: {
+        id: addon.id,
+        name: addon.name,
+        description: addon.description,
+        price: addon.price,
+        category: addon.category,
+        status: addon.status,
+        hotel_name: addon.hotel_name,
+        hotel_id: addon.hotel_id,
+        created_at: addon.created_at
+      },
+      statistics: {
+        total_usage_count: totalUsageCount,
+        total_quantity_sold: totalQuantitySold,
+        total_revenue: totalRevenue,
+        average_quantity_per_booking: totalUsageCount > 0 ? totalQuantitySold / totalUsageCount : 0
+      },
+      usage_history: bookingAddonsResult.rows,
+      monthly_usage: monthlyUsageResult.rows
+    };
+  }
+
   async getHotelDetails(hotelId: string) {
     const db = this.fastify.db;
 

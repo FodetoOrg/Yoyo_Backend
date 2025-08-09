@@ -6,12 +6,15 @@ import { v4 as uuidv4 } from 'uuid';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import { NotificationService } from './notification.service';
+import { WalletService } from './wallet.service';
 
 interface CreatePaymentOrderParams {
   bookingId: string;
   userId: string;
   amount: number;
   currency?: string;
+  useWallet?: boolean;
+  walletAmount?: number;
 }
 
 interface VerifyPaymentParams {
@@ -44,9 +47,123 @@ interface PaymentHistoryFilters {
 }
 
 export class PaymentService {
+
+  // Process wallet + online payment
+  async processWalletPayment(params: {
+    bookingId: string;
+    userId: string;
+    walletAmount: number;
+    remainingAmount: number;
+    razorpayPaymentDetails?: any;
+  }) {
+    const db = this.fastify.db;
+    
+    return await db.transaction(async (tx) => {
+      try {
+        // Get booking details
+        const booking = await tx.query.bookings.findFirst({
+          where: eq(bookings.id, params.bookingId),
+          with: { user: true, hotel: true, room: true }
+        });
+
+        if (!booking) {
+          throw new Error('Booking not found');
+        }
+
+        // Deduct from wallet if wallet amount > 0
+        if (params.walletAmount > 0) {
+          await this.walletService.debitWallet({
+            userId: params.userId,
+            amount: params.walletAmount,
+            source: 'booking_payment',
+            description: `Payment for booking ${params.bookingId}`,
+            referenceId: params.bookingId,
+            referenceType: 'booking',
+            metadata: {
+              bookingId: params.bookingId,
+              hotelName: booking.hotel.name
+            }
+          });
+        }
+
+        // Create payment records
+        const paymentId = uuidv4();
+        const walletPaymentId = params.walletAmount > 0 ? uuidv4() : null;
+
+        // Create wallet payment record if applicable
+        if (params.walletAmount > 0) {
+          await tx.insert(payments).values({
+            id: walletPaymentId,
+            bookingId: params.bookingId,
+            userId: params.userId,
+            amount: params.walletAmount,
+            currency: 'INR',
+            paymentType: params.remainingAmount > 0 ? 'partial' : 'full',
+            paymentMethod: 'wallet',
+            paymentMode: 'online',
+            status: 'completed',
+            transactionDate: new Date()
+          });
+        }
+
+        // Create online payment record if applicable
+        if (params.remainingAmount > 0 && params.razorpayPaymentDetails) {
+          await tx.insert(payments).values({
+            id: paymentId,
+            bookingId: params.bookingId,
+            userId: params.userId,
+            amount: params.remainingAmount,
+            currency: 'INR',
+            paymentType: params.walletAmount > 0 ? 'partial' : 'full',
+            paymentMethod: 'online',
+            paymentMode: 'online',
+            razorpayPaymentId: params.razorpayPaymentDetails.paymentId,
+            razorpayOrderId: params.razorpayPaymentDetails.orderId,
+            razorpaySignature: params.razorpayPaymentDetails.signature,
+            status: 'completed',
+            transactionDate: new Date()
+          });
+        }
+
+        // Update booking status
+        await tx.update(bookings)
+          .set({
+            status: 'confirmed',
+            paymentStatus: 'completed',
+            paymentMode: params.remainingAmount > 0 ? 'online' : 'wallet',
+            updatedAt: new Date()
+          })
+          .where(eq(bookings.id, params.bookingId));
+
+        // Send notifications
+        await this.notificationService.sendNotificationFromTemplate('payment_success', params.userId, {
+          bookingId: params.bookingId,
+          totalAmount: booking.totalAmount,
+          walletAmount: params.walletAmount,
+          onlineAmount: params.remainingAmount,
+          hotelName: booking.hotel.name
+        });
+
+        return {
+          success: true,
+          bookingId: params.bookingId,
+          totalAmount: booking.totalAmount,
+          walletAmount: params.walletAmount,
+          onlineAmount: params.remainingAmount
+        };
+
+      } catch (error) {
+        console.error('Wallet payment processing failed:', error);
+        throw error;
+      }
+    });
+  }
+
+
   private fastify!: FastifyInstance;
   private razorpay: Razorpay;
   private notificationService: NotificationService;
+  private walletService: WalletService;
 
   constructor() {
     this.razorpay = new Razorpay({
@@ -54,11 +171,13 @@ export class PaymentService {
       key_secret: process.env.RAZORPAY_KEY_SECRET
     });
     this.notificationService = new NotificationService();
+    this.walletService = new WalletService();
   }
 
   setFastify(fastify: FastifyInstance) {
     this.fastify = fastify;
     this.notificationService.setFastify(fastify);
+    this.walletService.setFastify(fastify);
   }
 
   // Create Razorpay order with fail-safe mechanism
