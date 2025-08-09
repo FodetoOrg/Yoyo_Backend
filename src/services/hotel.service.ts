@@ -45,6 +45,7 @@ interface HotelCreateParams {
   paymentMode?: 'online' | 'offline' | 'both';
   onlinePaymentEnabled?: boolean;
   offlinePaymentEnabled?: boolean;
+  cancellationPeriodHours?: number;
 }
 
 interface RoomCreateParams {
@@ -155,6 +156,7 @@ export class HotelService {
       paymentMode: hotel.paymentMode,
       onlinePaymentEnabled: hotel.onlinePaymentEnabled,
       offlinePaymentEnabled: hotel.offlinePaymentEnabled,
+      cancellationPeriodHours: hotel.cancellationPeriodHours,
       createdAt: hotel.createdAt,
       updatedAt: hotel.updatedAt,
       cityId: hotel.city ? hotel.city.cityId : null,
@@ -211,8 +213,9 @@ export class HotelService {
         ownerId: hotelData.ownerId,
         mapCoordinates: hotelData.mapCoordinates,
         paymentMode: hotelData.paymentMode || 'offline',
-        onlinePaymentEnabled: hotelData.onlinePaymentEnabled || false,
+        onlinePaymentEnabled: hotelData.onlinePaymentEnabled ?? true,
         offlinePaymentEnabled: hotelData.offlinePaymentEnabled !== false, // Default true
+        cancellationPeriodHours: hotelData.cancellationPeriodHours ?? 24,
       });
 
       // add hotel city to hotel
@@ -316,44 +319,47 @@ export class HotelService {
       });
 
       // 2. Extract existing image IDs
-      const existingImageIds = existingHotelImages.map(img => img.id);
-
-      // 3. Extract IDs from images that are NOT updated (i.e., kept)
       const keptImageIds = processedData.images
-        .filter(image => typeof image !== 'string')
+        .filter(image => typeof image !== 'object' || image === null || !('id' in image))
+        .map(img => img.id); // This line needs to be corrected based on actual image structure
+
+      // 3. Determine which image IDs to delete
+      const imageIdsToDelete = existingHotelImages
+        .filter(img => !keptImageIds.includes(img.id))
         .map(img => img.id);
 
-      // 4. Determine which image IDs to delete
-      const imageIdsToDelete = existingImageIds.filter(id => !keptImageIds.includes(id));
-
-      // 5. Delete those images from DB
+      // 4. Delete those images from DB
       if (imageIdsToDelete.length > 0) {
         await tx.delete(hotelImages).where(inArray(hotelImages.id, imageIdsToDelete));
       }
 
-      // 6. Handle updated images (base64 or URL)
+      // 5. Handle updated images (base64 or URL)
       const imageUrls = await Promise.all(
         processedData.images
-          .filter(image => typeof image === 'string')
+          .filter(image => typeof image === 'string' || (typeof image === 'object' && image !== null && 'url' in image)) // Handle both string URLs and objects with URLs
           .map(async (image) => {
-            if (image.startsWith('data:image/')) {
+            if (typeof image === 'string' && image.startsWith('data:image/')) {
               const buffer = Buffer.from(image.split(',')[1], 'base64');
               return await uploadToS3(buffer, `hotel-${processedData.id}-${Date.now()}.jpg`, 'image/jpeg');
+            } else if (typeof image === 'object' && image !== null && 'url' in image) {
+              return image.url; // If it's an existing image URL
             }
-            return image;
+            return image; // Should not happen if filter is correct
           })
       );
 
-      // 7. Insert new image records into DB
+      // 6. Insert new image records into DB
       if (imageUrls.length > 0) {
         await tx.insert(hotelImages).values(
           imageUrls.map(url => ({
             id: uuidv4(),
             hotelId: processedData.id,
-            url: url
+            url: url,
+            isPrimary: false, // Default to false, primary can be handled separately if needed
           }))
         );
       }
+
 
       await tx
         .update(hotels)

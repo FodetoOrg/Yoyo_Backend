@@ -1,7 +1,6 @@
-
-import { sql, eq, desc, and } from 'drizzle-orm';
+import { sql, eq, desc, and, count } from 'drizzle-orm';
 import { FastifyInstance } from 'fastify';
-import { rooms, hotels, bookings, users, payments, refunds, addons, roomAddons, bookingAddons, paymentOrders, wallets, walletTransactions, walletUsages } from '../models/schema';
+import { rooms, hotels, bookings, users, payments, refunds, addons, roomAddons, bookingAddons, paymentOrders, wallets, walletTransactions, walletUsages, hotelReviews } from '../models/schema';
 
 export class DetailsService {
   private fastify: FastifyInstance;
@@ -141,7 +140,7 @@ export class DetailsService {
       }
     });
 
- 
+
     return {
       payment: {
         id: payment.id,
@@ -180,7 +179,7 @@ export class DetailsService {
         address: payment.booking.hotel.address,
         city: payment.booking.hotel.city
       },
-    
+
     };
   }
 
@@ -464,6 +463,49 @@ export class DetailsService {
       throw new Error('Hotel not found');
     }
 
+    // Get hotel details with reviews and related information
+    const hotelDetails = await db.query.hotels.findFirst({
+      where: eq(hotels.id, hotelId),
+      with: {
+        rooms: true,
+        addons: true,
+        bookings: {
+          with: {
+            user: {
+              columns: {
+                id: true,
+                name: true
+              }
+            },
+            room: {
+              columns: {
+                id: true,
+                name: true,
+                roomNumber: true
+              }
+            }
+          },
+          orderBy: [desc(bookings.createdAt)],
+          limit: 10
+        },
+        payments: {
+          with: {
+            booking: {
+              columns: {
+                id: true
+              }
+            }
+          },
+          orderBy: [desc(payments.createdAt)],
+          limit: 10
+        }
+      }
+    });
+
+    if (!hotelDetails) {
+      throw new Error('Hotel not found');
+    }
+
     // Get all available rooms
     const hotelRooms = await db.query.rooms.findMany({
       where: eq(rooms.hotelId, hotelId),
@@ -535,6 +577,44 @@ export class DetailsService {
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
       .slice(0, 10);
 
+    // Get hotel reviews with proper validation
+    const hotelReviews = await db.select({
+      id: hotelReviews.id,
+      userId: hotelReviews.userId,
+      overallRating: hotelReviews.overallRating,
+      cleanlinessRating: hotelReviews.cleanlinessRating,
+      serviceRating: hotelReviews.serviceRating,
+      locationRating: hotelReviews.locationRating,
+      valueForMoneyRating: hotelReviews.valueForMoneyRating,
+      amenitiesRating: hotelReviews.amenitiesRating,
+      title: hotelReviews.title,
+      comment: hotelReviews.comment,
+      pros: hotelReviews.pros,
+      cons: hotelReviews.cons,
+      stayDate: hotelReviews.stayDate,
+      roomType: hotelReviews.roomType,
+      tripType: hotelReviews.tripType,
+      isVerified: hotelReviews.isVerified,
+      helpfulCount: hotelReviews.helpfulCount,
+      createdAt: hotelReviews.createdAt,
+      userName: users.name,
+      userEmail: users.email,
+      bookingId: hotelReviews.bookingId
+    })
+    .from(hotelReviews)
+    .leftJoin(users, eq(hotelReviews.userId, users.id))
+    .where(and(
+      eq(hotelReviews.hotelId, hotelId),
+      eq(hotelReviews.isApproved, true)
+    ))
+    .orderBy(desc(hotelReviews.createdAt));
+
+    hotelDetails.reviews = hotelReviews.map(review => ({
+      ...review,
+      pros: review.pros ? JSON.parse(review.pros) : [],
+      cons: review.cons ? JSON.parse(review.cons) : [],
+    }));
+
     return {
       hotel: {
         ...hotel,
@@ -572,7 +652,129 @@ export class DetailsService {
       recentActivity: {
         bookings: recentBookings,
         payments: recentPayments
+      },
+      reviews: hotelDetails.reviews
+    };
+  }
+
+
+  // Get all wallet usages for admin
+  async getAllWalletUsages(page: number = 1, limit: number = 20) {
+    const db = this.fastify.db;
+    const offset = (page - 1) * limit;
+
+    const walletUsages = await db.select({
+      id: walletUsages.id,
+      userId: walletUsages.userId,
+      bookingId: walletUsages.bookingId,
+      paymentId: walletUsages.paymentId,
+      amountUsed: walletUsages.amountUsed,
+      balanceBefore: walletUsages.balanceBefore,
+      balanceAfter: walletUsages.balanceAfter,
+      createdAt: walletUsages.createdAt,
+      userName: users.name,
+      userEmail: users.email,
+      userPhone: users.phone,
+      bookingReference: bookings.bookingReference,
+      hotelName: hotels.name,
+      paymentAmount: payments.amount,
+      paymentMethod: payments.method,
+    })
+    .from(walletUsages)
+    .leftJoin(users, eq(walletUsages.userId, users.id))
+    .leftJoin(bookings, eq(walletUsages.bookingId, bookings.id))
+    .leftJoin(hotels, eq(bookings.hotelId, hotels.id))
+    .leftJoin(payments, eq(walletUsages.paymentId, payments.id))
+    .orderBy(desc(walletUsages.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+    const totalCount = await db.select({ count: count() })
+      .from(walletUsages);
+
+    return {
+      walletUsages,
+      pagination: {
+        page,
+        limit,
+        total: totalCount[0].count,
+        pages: Math.ceil(totalCount[0].count / limit)
       }
     };
+  }
+
+  // Get all refunds for admin
+  async getAllRefunds(page: number = 1, limit: number = 20) {
+    const db = this.fastify.db;
+    const offset = (page - 1) * limit;
+
+    const refunds = await db.select({
+      id: refunds.id,
+      bookingId: refunds.bookingId,
+      paymentId: refunds.paymentId,
+      amount: refunds.amount,
+      reason: refunds.reason,
+      status: refunds.status,
+      processedAt: refunds.processedAt,
+      refundMethod: refunds.refundMethod,
+      createdAt: refunds.createdAt,
+      bookingReference: bookings.bookingReference,
+      userName: users.name,
+      userEmail: users.email,
+      userPhone: users.phone,
+      hotelName: hotels.name,
+      originalPaymentAmount: payments.amount,
+      originalPaymentMethod: payments.method,
+    })
+    .from(refunds)
+    .leftJoin(bookings, eq(refunds.bookingId, bookings.id))
+    .leftJoin(users, eq(bookings.userId, users.id))
+    .leftJoin(hotels, eq(bookings.hotelId, hotels.id))
+    .leftJoin(payments, eq(refunds.paymentId, payments.id))
+    .orderBy(desc(refunds.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+    const totalCount = await db.select({ count: count() })
+      .from(refunds);
+
+    return {
+      refunds,
+      pagination: {
+        page,
+        limit,
+        total: totalCount[0].count,
+        pages: Math.ceil(totalCount[0].count / limit)
+      }
+    };
+  }
+
+  // Get wallet transaction details
+  async getWalletTransactionDetails(transactionId: string, userId?: string) {
+    const db = this.fastify.db;
+
+    const transaction = await db.query.walletTransactions.findFirst({
+      where: eq(walletTransactions.id, transactionId),
+      with: {
+        user: true,
+        booking: {
+          with: {
+            hotel: true,
+            room: true
+          }
+        },
+        payment: true
+      }
+    });
+
+    if (!transaction) {
+      throw new Error('Wallet transaction not found');
+    }
+
+    if (userId && transaction.userId !== userId) {
+      throw new Error('Unauthorized access');
+    }
+
+    return transaction;
   }
 }

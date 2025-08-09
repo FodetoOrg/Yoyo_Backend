@@ -13,6 +13,9 @@ interface AuthenticatedRequest extends FastifyRequest {
   };
 }
 
+// Initialize detailsService outside the class to be accessible by controller functions
+const detailsService = new DetailsService();
+
 export class DetailsController {
   private detailsService: DetailsService;
 
@@ -22,6 +25,7 @@ export class DetailsController {
 
   setFastify(fastify: any) {
     this.detailsService.setFastify(fastify);
+    detailsService.setFastify(fastify); // Ensure the standalone service is also set
   }
 
   async getRoomDetails(request: AuthenticatedRequest, reply: FastifyReply) {
@@ -193,3 +197,51 @@ export class DetailsController {
     }
   }
 }
+
+// Get all wallet usages (admin only)
+export const getAllWalletUsages = async (request: FastifyRequest<{
+  Querystring: { page?: number; limit?: number }
+}>, reply: FastifyReply) => {
+  try {
+    detailsService.setFastify(request.server);
+
+    const { page = 1, limit = 20 } = request.query;
+    const result = await detailsService.getAllWalletUsages(Number(page), Number(limit));
+
+    reply.send({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    const statusCode = error.statusCode || 500;
+    reply.code(statusCode).send({
+      success: false,
+      message: error.message || 'Failed to fetch wallet usages'
+    });
+  }
+};
+
+// Get all refunds (admin only)
+export const getAllRefunds = async (request: FastifyRequest<{
+  Querystring: { page?: number; limit?: number }
+}>, reply: FastifyReply) => {
+  try {
+    detailsService.setFastify(request.server);
+
+    const { page = 1, limit = 20 } = request.query;
+    const result = await detailsService.getAllRefunds(Number(page), Number(limit));
+
+    reply.send({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    const statusCode = error.statusCode || 500;
+    reply.code(statusCode).send({
+      success: false,
+      message: error.message || 'Failed to fetch refunds'
+    });
+  }
+};
+
+export const getWalletTransactionDetails = async (request: FastifyRequest<{
