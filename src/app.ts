@@ -16,7 +16,7 @@ import registerErrorHandler from './plugins/error-handler';
 import authRoutes from './routes/auth.route';
 import hotelRoutes from './routes/hotel.route';
 import bookingRoutes from './routes/booking.route';
-import  staffRoutes  from './routes/staff.route';
+import staffRoutes from './routes/staff.route';
 import citiesRoutes from './routes/cities.route';
 import roomTypeRoutes from './routes/roomType.route';
 import invoiceRoutes from './routes/invoice.route';
@@ -45,12 +45,12 @@ export const app: FastifyInstance = fastify({
     level: process.env.NODE_ENV === 'development' ? 'debug' : 'info',
     transport: process.env.NODE_ENV === 'development'
       ? {
-          target: 'pino-pretty',
-          options: {
-            translateTime: 'HH:MM:ss Z',
-            ignore: 'pid,hostname',
-          },
-        }
+        target: 'pino-pretty',
+        options: {
+          translateTime: 'HH:MM:ss Z',
+          ignore: 'pid,hostname',
+        },
+      }
       : undefined,
   },
   bodyLimit: 30 * 1024 * 1024, // 30MB limit for request body
@@ -99,13 +99,13 @@ app.register(hourlyStayRoutes, { prefix: '/api/v1/hourlyStays' });
 app.register(partnerContactRoutes, { prefix: '/api/v1/partner-contacts' });
 
 // Register refund routes
-  await app.register(refundRoutes, { prefix: '/api/v1' });
+app.register(refundRoutes, { prefix: '/api/v1' });
 
-  // Register details routes
-  await app.register(detailsRoutes, { prefix: '/api/v1/details' });
+// Register details routes
+app.register(detailsRoutes, { prefix: '/api/v1/details' });
 
 // Register wallet routes
-  await app.register(walletRoutes, { prefix: '/api/v1' });
+app.register(walletRoutes, { prefix: '/api/v1' });
 
 // Default route
 app.get('/', async () => {

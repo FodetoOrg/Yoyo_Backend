@@ -1,5 +1,7 @@
-// @ts-nocheck
+
+import { sql } from 'drizzle-orm';
 import { FastifyInstance } from 'fastify';
+
 
 export class DetailsService {
   private fastify: FastifyInstance;
@@ -37,7 +39,7 @@ export class DetailsService {
     const bookingsResult = await db.query(bookingsQuery, [roomId]);
 
     // Get all payments related to this room's bookings
-    const paymentsQuery = `
+    const paymentsQuery = sql`
       SELECT p.*, b.booking_id, u.name as user_name
       FROM payments p
       JOIN bookings b ON p.booking_id = b.id
@@ -45,7 +47,7 @@ export class DetailsService {
       WHERE b.room_id = $1
       ORDER BY p.created_at DESC
     `;
-    const paymentsResult = await db.query(paymentsQuery, [roomId]);
+    const paymentsResult = await db.execute(paymentsQuery, [roomId]);
 
     // Get room addons
     const addonsQuery = `

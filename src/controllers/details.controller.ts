@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { DetailsService } from '../services/details.service';
+import { UserRole } from '../types/common';
 
 interface AuthenticatedRequest extends FastifyRequest {
   user: {
@@ -29,7 +30,7 @@ export class DetailsController {
       const userRole = request.user.role;
 
       // Check if user has permission to view room details
-      if (!['admin', 'hotel_admin', 'superadmin'].includes(userRole)) {
+      if (![UserRole.SUPER_ADMIN,UserRole.HOTEL_ADMIN].includes(userRole)) {
         return reply.code(403).send({
           success: false,
           message: 'Access denied. Insufficient permissions.'

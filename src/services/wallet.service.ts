@@ -252,156 +252,156 @@ export class WalletService {
     };
   }
 }
-import { FastifyInstance } from "fastify";
-import { eq, and, desc, sum } from "drizzle-orm";
-import { v4 as uuidv4 } from "uuid";
-import { wallets, walletUsages, users, payments, bookings } from "../models/schema";
+// import { FastifyInstance } from "fastify";
+// import { eq, and, desc, sum } from "drizzle-orm";
+// import { v4 as uuidv4 } from "uuid";
+// import { wallets, walletUsages, users, payments, bookings } from "../models/schema";
 
-export class WalletService {
-  constructor(private fastify: FastifyInstance) {}
+// export class WalletService {
+//   constructor(private fastify: FastifyInstance) {}
 
-  // Create wallet for user
-  async createWallet(userId: string) {
-    const db = this.fastify.db;
+//   // Create wallet for user
+//   async createWallet(userId: string) {
+//     const db = this.fastify.db;
     
-    const walletId = uuidv4();
-    await db.insert(wallets).values({
-      id: walletId,
-      userId,
-      balance: 0,
-      totalEarned: 0,
-      totalUsed: 0,
-    });
+//     const walletId = uuidv4();
+//     await db.insert(wallets).values({
+//       id: walletId,
+//       userId,
+//       balance: 0,
+//       totalEarned: 0,
+//       totalUsed: 0,
+//     });
 
-    return walletId;
-  }
+//     return walletId;
+//   }
 
-  // Get user wallet
-  async getUserWallet(userId: string) {
-    const db = this.fastify.db;
+//   // Get user wallet
+//   async getUserWallet(userId: string) {
+//     const db = this.fastify.db;
     
-    let wallet = await db.query.wallets.findFirst({
-      where: eq(wallets.userId, userId),
-    });
+//     let wallet = await db.query.wallets.findFirst({
+//       where: eq(wallets.userId, userId),
+//     });
 
-    // Create wallet if doesn't exist
-    if (!wallet) {
-      const walletId = await this.createWallet(userId);
-      wallet = await db.query.wallets.findFirst({
-        where: eq(wallets.id, walletId),
-      });
-    }
+//     // Create wallet if doesn't exist
+//     if (!wallet) {
+//       const walletId = await this.createWallet(userId);
+//       wallet = await db.query.wallets.findFirst({
+//         where: eq(wallets.id, walletId),
+//       });
+//     }
 
-    return wallet;
-  }
+//     return wallet;
+//   }
 
-  // Add money to wallet (from refunds)
-  async addToWallet(userId: string, amount: number, source: string, refundId?: string) {
-    const db = this.fastify.db;
+//   // Add money to wallet (from refunds)
+//   async addToWallet(userId: string, amount: number, source: string, refundId?: string) {
+//     const db = this.fastify.db;
     
-    const wallet = await this.getUserWallet(userId);
-    if (!wallet) throw new Error('Wallet not found');
+//     const wallet = await this.getUserWallet(userId);
+//     if (!wallet) throw new Error('Wallet not found');
 
-    await db.update(wallets)
-      .set({
-        balance: wallet.balance + amount,
-        totalEarned: wallet.totalEarned + amount,
-        updatedAt: new Date(),
-      })
-      .where(eq(wallets.id, wallet.id));
+//     await db.update(wallets)
+//       .set({
+//         balance: wallet.balance + amount,
+//         totalEarned: wallet.totalEarned + amount,
+//         updatedAt: new Date(),
+//       })
+//       .where(eq(wallets.id, wallet.id));
 
-    return { success: true, newBalance: wallet.balance + amount };
-  }
+//     return { success: true, newBalance: wallet.balance + amount };
+//   }
 
-  // Use wallet money for payment
-  async useWalletForPayment(params: {
-    userId: string;
-    bookingId: string;
-    paymentId: string;
-    amountToUse: number;
-    description?: string;
-  }) {
-    const db = this.fastify.db;
+//   // Use wallet money for payment
+//   async useWalletForPayment(params: {
+//     userId: string;
+//     bookingId: string;
+//     paymentId: string;
+//     amountToUse: number;
+//     description?: string;
+//   }) {
+//     const db = this.fastify.db;
     
-    return await db.transaction(async (tx) => {
-      // Get wallet
-      const wallet = await tx.query.wallets.findFirst({
-        where: eq(wallets.userId, params.userId),
-      });
+//     return await db.transaction(async (tx) => {
+//       // Get wallet
+//       const wallet = await tx.query.wallets.findFirst({
+//         where: eq(wallets.userId, params.userId),
+//       });
 
-      if (!wallet) {
-        throw new Error('Wallet not found');
-      }
+//       if (!wallet) {
+//         throw new Error('Wallet not found');
+//       }
 
-      if (wallet.balance < params.amountToUse) {
-        throw new Error(`Insufficient wallet balance. Available: ₹${wallet.balance}`);
-      }
+//       if (wallet.balance < params.amountToUse) {
+//         throw new Error(`Insufficient wallet balance. Available: ₹${wallet.balance}`);
+//       }
 
-      // Update wallet balance
-      const newBalance = wallet.balance - params.amountToUse;
-      await tx.update(wallets)
-        .set({
-          balance: newBalance,
-          totalUsed: wallet.totalUsed + params.amountToUse,
-          updatedAt: new Date(),
-        })
-        .where(eq(wallets.id, wallet.id));
+//       // Update wallet balance
+//       const newBalance = wallet.balance - params.amountToUse;
+//       await tx.update(wallets)
+//         .set({
+//           balance: newBalance,
+//           totalUsed: wallet.totalUsed + params.amountToUse,
+//           updatedAt: new Date(),
+//         })
+//         .where(eq(wallets.id, wallet.id));
 
-      // Create wallet usage record
-      const usageId = uuidv4();
-      await tx.insert(walletUsages).values({
-        id: usageId,
-        userId: params.userId,
-        walletId: wallet.id,
-        bookingId: params.bookingId,
-        paymentId: params.paymentId,
-        amountUsed: params.amountToUse,
-        remainingWalletBalance: newBalance,
-        usageType: 'payment',
-        description: params.description || `Used for booking payment`,
-      });
+//       // Create wallet usage record
+//       const usageId = uuidv4();
+//       await tx.insert(walletUsages).values({
+//         id: usageId,
+//         userId: params.userId,
+//         walletId: wallet.id,
+//         bookingId: params.bookingId,
+//         paymentId: params.paymentId,
+//         amountUsed: params.amountToUse,
+//         remainingWalletBalance: newBalance,
+//         usageType: 'payment',
+//         description: params.description || `Used for booking payment`,
+//       });
 
-      return {
-        success: true,
-        amountUsed: params.amountToUse,
-        remainingBalance: newBalance,
-        usageId,
-      };
-    });
-  }
+//       return {
+//         success: true,
+//         amountUsed: params.amountToUse,
+//         remainingBalance: newBalance,
+//         usageId,
+//       };
+//     });
+//   }
 
-  // Get wallet usage history
-  async getWalletUsageHistory(userId: string, page: number = 1, limit: number = 10) {
-    const db = this.fastify.db;
-    const offset = (page - 1) * limit;
+//   // Get wallet usage history
+//   async getWalletUsageHistory(userId: string, page: number = 1, limit: number = 10) {
+//     const db = this.fastify.db;
+//     const offset = (page - 1) * limit;
 
-    const usages = await db.query.walletUsages.findMany({
-      where: eq(walletUsages.userId, userId),
-      orderBy: [desc(walletUsages.createdAt)],
-      limit,
-      offset,
-      with: {
-        booking: {
-          with: {
-            hotel: true,
-            room: true,
-          },
-        },
-        payment: true,
-      },
-    });
+//     const usages = await db.query.walletUsages.findMany({
+//       where: eq(walletUsages.userId, userId),
+//       orderBy: [desc(walletUsages.createdAt)],
+//       limit,
+//       offset,
+//       with: {
+//         booking: {
+//           with: {
+//             hotel: true,
+//             room: true,
+//           },
+//         },
+//         payment: true,
+//       },
+//     });
 
-    const total = await db
-      .select({ count: sum(walletUsages.id) })
-      .from(walletUsages)
-      .where(eq(walletUsages.userId, userId));
+//     const total = await db
+//       .select({ count: sum(walletUsages.id) })
+//       .from(walletUsages)
+//       .where(eq(walletUsages.userId, userId));
 
-    return {
-      usages,
-      total: Number(total[0]?.count || 0),
-      page,
-      limit,
-      totalPages: Math.ceil(Number(total[0]?.count || 0) / limit),
-    };
-  }
-}
+//     return {
+//       usages,
+//       total: Number(total[0]?.count || 0),
+//       page,
+//       limit,
+//       totalPages: Math.ceil(Number(total[0]?.count || 0) / limit),
+//     };
+//   }
+// }

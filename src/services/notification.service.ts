@@ -763,19 +763,19 @@ export class NotificationService {
     try {
       // AWS SNS implementation
       if (process.env.AWS_SNS_REGION) {
-        const AWS = require('aws-sdk');
-        const sns = new AWS.SNS({ region: process.env.AWS_SNS_REGION });
+        // const AWS = require('aws-sdk');
+        // const sns = new AWS.SNS({ region: process.env.AWS_SNS_REGION });
 
-        const params = {
-          PhoneNumber: data.to,
-          Message: data.message,
-          MessageAttributes: {
-            'AWS.SNS.SMS.SMSType': {
-              DataType: 'String',
-              StringValue: 'Transactional'
-            }
-          }
-        };
+        // const params = {
+        //   PhoneNumber: data.to,
+        //   Message: data.message,
+        //   MessageAttributes: {
+        //     'AWS.SNS.SMS.SMSType': {
+        //       DataType: 'String',
+        //       StringValue: 'Transactional'
+        //     }
+        //   }
+        // };
 
         const result = await sns.publish(params).promise();
         return { messageId: result.MessageId, provider: 'sns' };

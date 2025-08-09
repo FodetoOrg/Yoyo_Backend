@@ -55,30 +55,7 @@ export const walletTransactionsRelations = relations(walletTransactions, ({ one 
 // Export types
 export type Wallet = InferSelectModel<typeof wallets>;
 export type WalletTransaction = InferSelectModel<typeof walletTransactions>;
-import { InferSelectModel, relations } from "drizzle-orm";
-import { integer, sqliteTable, text, real } from "drizzle-orm/sqlite-core";
-import { users } from "./User";
-import { walletUsages } from "./WalletUsage";
 
-// Wallet table
-export const wallets = sqliteTable('wallets', {
-  id: text('id').primaryKey(),
-  userId: text('user_id').references(() => users.id).notNull().unique(),
-  balance: real('balance').notNull().default(0),
-  totalEarned: real('total_earned').notNull().default(0), // Total money added to wallet
-  totalUsed: real('total_used').notNull().default(0), // Total money used from wallet
-  createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(new Date()),
-  updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(new Date()),
-});
 
-// Define relationships
-export const walletsRelations = relations(wallets, ({ one, many }) => ({
-  user: one(users, {
-    fields: [wallets.userId],
-    references: [users.id],
-  }),
-  walletUsages: many(walletUsages),
-}));
 
-// Export type
-export type Wallet = InferSelectModel<typeof wallets>;
+
