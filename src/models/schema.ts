@@ -32,7 +32,7 @@ export {
   bookingAddons, 
   addonsRelations, 
   roomAddonsRelations, 
-  bookingAddonsRelations,
+bookingAddonsRelations,
   Addon,
   RoomAddon,
   BookingAddon 

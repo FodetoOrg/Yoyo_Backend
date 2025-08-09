@@ -46,15 +46,14 @@ export class RefundService {
     };
   }
 
-  // Create refund request
   async createRefundRequest(params: {
     bookingId: string;
-    userId: string;
+    user: any; // Changed from userId to user object
     refundReason: string;
-    refundType: 'cancellation' | 'no_show' | 'admin_refund';
+    refundType: 'cancellation' | 'hotel_cancellation' | 'no_show' | 'admin_refund';
   }) {
     const db = this.fastify.db;
-    console.log('cma ein refund ')
+    console.log('came in refund');
 
     return await db.transaction(async (tx) => {
       // Get booking with hotel and payment details
@@ -71,8 +70,19 @@ export class RefundService {
         throw new Error('Booking not found');
       }
 
-      if (booking.userId !== params.userId && params.refundType !== 'admin_refund') {
-        throw new Error('Unauthorized to request refund for this booking');
+      // Authorization check based on user role
+      if (params.user.role === 'hotel') {
+        // Hotel can cancel bookings at their property
+        if (booking.hotelId !== params.user.id) {
+          throw new Error('Unauthorized to cancel booking for this hotel');
+        }
+      } else if (params.user.role === 'user') {
+        // Regular user can only cancel their own bookings
+        if (booking.userId !== params.user.id && params.refundType !== 'admin_refund') {
+          throw new Error('Unauthorized to request refund for this booking');
+        }
+      } else if (params.refundType !== 'admin_refund') {
+        throw new Error('Invalid user role for cancellation');
       }
 
       if (booking.status === 'cancelled') {
@@ -88,13 +98,24 @@ export class RefundService {
         throw new Error('Refund request already exists for this booking');
       }
 
-      // Calculate refund amount
-      const refundCalculation = this.calculateRefundAmount(
-        booking.totalAmount,
-        booking.hotel.cancellationFeePercentage,
-        booking.checkInDate,
-        booking.hotel.cancellationTimeHours
-      );
+      // Calculate refund amount - hotels might have different policies
+      let refundCalculation;
+      if (params.refundType === 'hotel_cancellation') {
+        // Hotel cancellation - typically full refund regardless of timing
+        refundCalculation = {
+          refundAmount: booking.totalAmount,
+          cancellationFeeAmount: 0,
+          hoursUntilCheckIn: this.calculateHoursUntilCheckIn(booking.checkInDate)
+        };
+      } else {
+        // User cancellation - apply normal cancellation policy
+        refundCalculation = this.calculateRefundAmount(
+          booking.totalAmount,
+          booking.hotel.cancellationFeePercentage,
+          booking.checkInDate,
+          booking.hotel.cancellationTimeHours
+        );
+      }
 
       // Create refund record
       const refundId = uuidv4();
@@ -102,19 +123,19 @@ export class RefundService {
         id: refundId,
         bookingId: params.bookingId,
         originalPaymentId: booking.payment?.id,
-        userId: params.userId,
+        userId: booking.userId, // Always the guest's user ID
         refundType: params.refundType,
         originalAmount: booking.totalAmount,
         cancellationFeeAmount: refundCalculation.cancellationFeeAmount,
         refundAmount: refundCalculation.refundAmount,
-        cancellationFeePercentage: booking.hotel.cancellationFeePercentage,
+        cancellationFeePercentage: params.refundType === 'hotel_cancellation' ? 0 : booking.hotel.cancellationFeePercentage,
         refundReason: params.refundReason,
         status: 'pending',
         refundMethod: booking.payment?.paymentMode === 'online' ? 'razorpay' : 'bank_transfer',
         expectedProcessingDays: booking.payment?.paymentMode === 'online' ? 7 : 10,
       });
 
-      // Update booking status to cancelled
+
       await tx.update(bookings)
         .set({
           status: 'cancelled',
@@ -171,7 +192,7 @@ export class RefundService {
     const db = this.fastify.db;
 
     const refund = await db.query.refunds.findFirst({
-      where: userId ? 
+      where: userId ?
         and(eq(refunds.id, refundId), eq(refunds.userId, userId)) :
         eq(refunds.id, refundId),
       with: {

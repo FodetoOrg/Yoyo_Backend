@@ -46,7 +46,7 @@ export default async function bookingRoutes(fastify: FastifyInstance) {
   // Get detailed booking information
   fastify.get('/:id/details', {
     schema: {
-      ...getBookingDetailsSchema,
+      // ...getBookingDetailsSchema,
       tags: ['bookings'],
       summary: 'Get detailed booking information',
       security: [{ bearerAuth: [] }]
@@ -78,7 +78,7 @@ export default async function bookingRoutes(fastify: FastifyInstance) {
   // Get hotel bookings
   fastify.get('/hotel/:id', {
     schema: {
-      ...getHotelBookingsSchema,
+      // ...getHotelBookingsSchema,
       querystring: {
         type: 'object',
         properties: {

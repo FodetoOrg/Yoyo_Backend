@@ -8,9 +8,10 @@ import { CouponService } from './coupon.service';
 import { NotificationService } from './notification.service';
 import Razorpay from 'razorpay';
 import { generateBookingConfirmationEmail } from '../utils/email';
-import { RefundService }  from './refund.service'
+import { RefundService } from './refund.service'
 import { AddonService } from './addon.service';
 import { RefundService } from './refund.service';
+import { UserRole } from '../types/common';
 
 interface BookingCreateParams {
   userId: string;
@@ -33,7 +34,7 @@ export class BookingService {
   private notificationService: NotificationService;
   private razorpay: Razorpay;
   private addonService: AddonService;
-  private refundService:RefundService;
+  private refundService: RefundService;
 
   constructor() {
     this.couponService = new CouponService();
@@ -54,7 +55,7 @@ export class BookingService {
     this.notificationService.setFastify(fastify);
     this.addonService.setFastify(fastify);
     this.refundService.setFastify(fastify);
-    
+
   }
 
   // Check if a room is available for the given dates and guest count
@@ -311,6 +312,7 @@ export class BookingService {
     // Price validation based on booking type
     let expectedPrice = 0;
     let duration = 0;
+    let basePrice = 0;
 
     if (bookingData.bookingType === 'hourly') {
       duration = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60));
@@ -517,7 +519,11 @@ export class BookingService {
       where: and(...whereConditions),
       with: {
         hotel: true,
-        room: true
+        room: {
+          with: {
+            images: true
+          }
+        }
       },
       orderBy: (bookings, { desc }) => [desc(bookings.createdAt)],
       limit,
@@ -543,11 +549,14 @@ export class BookingService {
         room: {
           id: booking.room.id,
           name: booking.room.name,
-          roomType: booking.room.roomType
+          roomType: booking.room.roomType,
+          image: booking.room.images[0].url || null
         },
         addons: await this.addonService.getBookingAddons(booking.id)
       }))
     );
+
+    console.log('formattedBookings ', formattedBookings)
 
     return {
       bookings: formattedBookings,
@@ -634,6 +643,7 @@ export class BookingService {
     const { status, page = 1, limit = 10 } = options;
     const offset = (page - 1) * limit;
 
+    console.log('limit 2', limit)
     // Build where conditions
     let whereConditions = [];
     if (status) {
@@ -698,6 +708,8 @@ export class BookingService {
       })
     );
 
+    console.log('bookings length is ', formattedBookings.length)
+
     return {
       bookings: formattedBookings,
       total,
@@ -705,24 +717,54 @@ export class BookingService {
       limit
     };
   }
-
-  // Cancel a booking
-  async cancelBooking(bookingId: string, userId: string, cancelReason: string) {
+  async cancelBooking(bookingId: string, user: any, cancelReason: string) {
     const db = this.fastify.db;
+
+    // Build query based on user role
+    let whereCondition;
+    if (user.role === 'hotel') {
+      // Hotel can cancel bookings at their property
+      // Assuming the hotel user object has the hotel ID or we need to find it
+      whereCondition = eq(bookings.id, bookingId);
+    } else {
+      // Regular user can only cancel their own bookings
+      whereCondition = and(
+        eq(bookings.id, bookingId),
+        eq(bookings.userId, user.id)
+      );
+    }
 
     // Find the booking first to validate
     const booking = await db.query.bookings.findFirst({
-      where: and(eq(bookings.id, bookingId), eq(bookings.userId, userId)),
+      where: whereCondition,
       with: {
         payment: true,
-        hotel: true
+        hotel: true,
+        user: true
       },
     });
 
-    console.log('came in booking ',booking)
+    console.log('came in booking ', booking);
 
     if (!booking) {
       throw new NotFoundError('Booking not found');
+    }
+
+    // Additional authorization check for hotels
+    if (user.role === 'hotel') {
+      // For hotel users, verify they own this hotel
+      // You might need to adjust this based on how hotel users are linked to hotels
+      // Option 1: If user.id is the hotel ID
+      // if (booking.hotelId !== user.id) {
+      //   throw new NotFoundError('Unauthorized to cancel this booking');
+      // }
+      // Option 2: If you need to query hotel ownership differently
+      const hotelOwnership = await db.query.hotels.findFirst({
+        where: and(eq(hotels.id, booking.hotelId), eq(hotels.ownerId, user.id))
+      });
+      if (!hotelOwnership) {
+        throw new NotFoundError('Unauthorized to cancel this booking');
+      }
     }
 
     if (booking.status === 'cancelled') {
@@ -731,19 +773,17 @@ export class BookingService {
 
     // Check if payment was made - if yes, create refund request
     if (booking.payment && booking.payment.status === 'completed') {
-      // Import RefundService here to avoid circular dependency
-
-
       const refundResult = await this.refundService.createRefundRequest({
         bookingId,
-        userId,
+        user, // Pass the entire user object
         refundReason: cancelReason,
-        refundType: 'cancellation'
+        refundType: user.role === 'hotel' ? 'hotel_cancellation' : 'cancellation'
       });
 
       return {
         message: 'Booking cancelled successfully. Refund request created.',
-        refundInfo: refundResult
+        refundInfo: refundResult,
+        cancelledBy: user.role === 'hotel' ? 'hotel' : 'user'
       };
     } else {
       // No payment made, just cancel the booking
@@ -751,7 +791,7 @@ export class BookingService {
         .set({
           status: 'cancelled',
           cancellationReason: cancelReason,
-          cancelledBy: 'user',
+          cancelledBy: user.role === 'hotel' ? 'hotel' : 'user',
           cancelledAt: new Date(),
           updatedAt: new Date(),
         })
@@ -759,10 +799,12 @@ export class BookingService {
 
       return {
         message: 'Booking cancelled successfully. No refund required as payment was not completed.',
-        refundInfo: null
+        refundInfo: null,
+        cancelledBy: user.role === 'hotel' ? 'hotel' : 'user'
       };
     }
   }
+
 
   // Update booking status
   async updateBookingStatus(bookingId: string, status: string, updatedBy: string, reason?: string) {
@@ -952,7 +994,8 @@ export class BookingService {
     const room = await db.query.rooms.findFirst({
       where: eq(rooms.id, roomId),
       with: {
-        hotel: true      }
+        hotel: true
+      }
     });
 
     if (!room) {
@@ -1048,7 +1091,7 @@ export class BookingService {
   }
 
   // Get detailed booking information for user
-  async getBookingDetails(bookingId: string, userId: string) {
+  async getBookingDetails(bookingId: string, user: any) {
     const db = this.fastify.db;
 
     const booking = await db.query.bookings.findFirst({
@@ -1062,7 +1105,8 @@ export class BookingService {
         },
         room: {
           with: {
-            roomType: true
+            roomType: true,
+            images: true
           }
         },
         payment: true
@@ -1073,8 +1117,11 @@ export class BookingService {
       return null;
     }
 
+    console.log('booking is ', booking)
+    console.log('user is ', user)
+
     // Check if user is authorized to view this booking
-    if (booking.userId !== userId) {
+    if (booking.userId !== user.id && booking.hotel.ownerId !== user.id && user.role !== UserRole.SUPER_ADMIN) {
       throw new Error('Unauthorized. You do not have permission to view this booking');
     }
 
@@ -1151,15 +1198,15 @@ export class BookingService {
       hotelPhone: booking.hotel.contactNumber || '+91 9876543210',
       hotelEmail: booking.hotel.contactEmail || 'info@hotel.com',
       address: `${booking.hotel.address}, ${booking.hotel.city}, ${booking.hotel.state}`,
-      image: booking.hotel.images?.[0]?.url || 'https://example.com/hotel.jpg',
+      images: booking.room.images.map(image => image.url) || 'https://example.com/hotel.jpg',
       roomType: booking.room.roomType?.name || booking.room.name,
       checkIn: checkInDate,
       checkOut: checkOutDate,
       guests: booking.guestCount,
       onlinePaymentEnabled: booking.hotel.onlinePaymentEnabled,
-      guestName:booking.guestName,
-      guestEmail:booking.guestEmail,
-      guestPhone:booking.guestPhone,
+      guestName: booking.guestName,
+      guestEmail: booking.guestEmail,
+      guestPhone: booking.guestPhone,
       nights,
       paymentStaus: booking.payment.status,
       paymentAmount: booking.payment.amount,

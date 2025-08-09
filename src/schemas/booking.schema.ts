@@ -105,7 +105,7 @@ export const GetUserBookingsQuerySchema = z.object({
 export const GetAllBookingsQuerySchema = z.object({
   status: z.enum(['pending', 'confirmed', 'cancelled', 'completed']).optional(),
   page: z.number().int().min(1).default(1),
-  limit: z.number().int().min(1).max(100).default(10)
+  limit: z.number().int().optional()
 });
 
 export const GetUserBookingsResponseSchema = z.object({
@@ -128,7 +128,8 @@ export const GetUserBookingsResponseSchema = z.object({
       room: z.object({
         id: z.string(),
         name: z.string(),
-        roomType: z.string().optional()
+        roomType: z.string().optional(),
+        iamge :z.string().optional()
       })
     })),
     total: z.number().int(),
@@ -360,7 +361,7 @@ export const getBookingByIdSchema = {
 export const getUserBookingsSchema = {
   querystring: zodToJsonSchema(GetUserBookingsQuerySchema),
   response: {
-    200: zodToJsonSchema(GetUserBookingsResponseSchema)
+    // 200: zodToJsonSchema(GetUserBookingsResponseSchema)
   }
 };
 

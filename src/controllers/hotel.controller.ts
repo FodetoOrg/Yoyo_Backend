@@ -183,7 +183,7 @@ export class HotelController {
         currentRoom: roomsWithAddons.length > 0 ? {
           id: roomsWithAddons[0].id,
           name: roomsWithAddons[0].name,
-          image: roomsWithAddons[0].images.length > 0 ? roomsWithAddons[0].images[0].url : null,
+          images: roomsWithAddons[0].images.length > 0 ? roomsWithAddons[0].images : null,
           features: roomsWithAddons[0].description || roomsWithAddons[0].amenities.join(', '),
           pricePerNight: roomsWithAddons[0].pricePerNight,
           pricePerHour: roomsWithAddons[0].pricePerHour,
@@ -191,19 +191,25 @@ export class HotelController {
           addons: roomsWithAddons[0].addons,
           isCurrent: true,
           bookingType: bookingType,
-          displayPrice: bookingType === "hourly" ? (roomsWithAddons[0].pricePerHour || roomsWithAddons[0].pricePerNight) : roomsWithAddons[0].pricePerNight
+          displayPrice: bookingType === "hourly" ? (roomsWithAddons[0].pricePerHour || roomsWithAddons[0].pricePerNight) : roomsWithAddons[0].pricePerNight,
+          bedType:roomsWithAddons[0].bedType,
+          capacity:roomsWithAddons[0].capacity
+
+
         } : null,
         upgradeOptions: roomsWithAddons.slice(1).map(room => ({
           id: room.id,
           name: room.name,
-          image: room.images.length > 0 ? room.images[0].url : null,
+          images: room.images.length > 0 ? room.images : null,
           features: room.description || room.amenities.join(', '),
           pricePerNight: room.pricePerNight,
           pricePerHour: room.pricePerHour,
           capacity: room.capacity,
           addons: room.addons,
           bookingType: bookingType,
-          displayPrice: bookingType === "hourly" ? (room.pricePerHour) : room.pricePerNight
+          displayPrice: bookingType === "hourly" ? (room.pricePerHour) : room.pricePerNight,
+          bedType:room.bedType,
+          capacity:room.capacity
         })),
         totalAvailableRooms: roomsWithAddons.length
       };

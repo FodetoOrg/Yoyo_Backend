@@ -23,7 +23,7 @@ export const bookings = sqliteTable('bookings', {
   paymentMode: text('payment_mode').notNull().default('offline'), // 'online', 'offline'
   requiresOnlinePayment: integer('requires_online_payment', { mode: 'boolean' }).notNull().default(false),
   status: text('status').notNull().default('pending'), // confirmed, cancelled, checked_in, completed
-  paymentStatus: text('payment_status').notNull().default('pending'), // pending, completed, failed, refunded
+  paymentStatus: text('payment_status').notNull().default('pending'), // pending, completed, failed, refunded,refund_requested
   cancellationReason: text('cancellation_reason'),
   cancelledBy: text('cancelled_by'), // 'user' or 'hotel'
   cancelledAt: integer('cancelled_at', { mode: 'timestamp' }),

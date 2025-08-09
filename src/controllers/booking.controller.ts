@@ -235,7 +235,7 @@ export class BookingController {
       const { id } = GetBookingParamsSchema.parse(request.params);
       const userId = request.user.id as string;
 
-      const bookingDetails = await this.bookingService.getBookingDetails(id, userId);
+      const bookingDetails = await this.bookingService.getBookingDetails(id, request.user);
 
       if (!bookingDetails) {
         return reply.code(404).send({
@@ -299,7 +299,7 @@ export class BookingController {
   // Get all bookings (admin)
   async getAllBookings(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const { status, page = 1, limit = 10 } = request.query as any;
+      const { status, page = 1, limit = 1000 } = request.query as any;
       const role = request.user.role;
 
       console.log('user is ', request.user)
@@ -310,6 +310,7 @@ export class BookingController {
           message: 'Unauthorized. Only admin can view all bookings',
         });
       }
+      console.log('limit 1',limit)
 
       const result = await this.bookingService.getAllBookings({ status, page, limit });
 
@@ -418,7 +419,7 @@ export class BookingController {
         });
       }
 
-      const cancelledBooking = await this.bookingService.cancelBooking(id, request.user.id ,reason);
+      const cancelledBooking = await this.bookingService.cancelBooking(id, request.user ,reason);
 
       return reply.code(200).send({
         success: true,
@@ -455,6 +456,7 @@ export class BookingController {
 
       const hotel = await this.hotelService.getHotelById(id);
 
+      console.log('hotel presemt ',hotel)
 
       if (!hotel) {
         return reply.code(404).send({
