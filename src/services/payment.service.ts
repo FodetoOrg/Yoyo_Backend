@@ -57,7 +57,7 @@ export class PaymentService {
     razorpayPaymentDetails?: any;
   }) {
     const db = this.fastify.db;
-    
+
     return await db.transaction(async (tx) => {
       try {
         // Get booking details
@@ -371,9 +371,9 @@ export class PaymentService {
           razorpaySignature,
         }).where(eq(payments.bookingId, paymentOrder.bookingId)).returning();
 
-       
+
         console.log('came here 2')
-       
+
         // Update booking status
         await tx.update(bookings)
           .set({
@@ -722,7 +722,7 @@ async getPaymentHistory(filters: PaymentHistoryFilters) {
 
   // Now get the full payment data with relations for the filtered results
   const paymentIds = rawPayments.map(row => row.payments.id);
-  
+
   const paymentHistory = await db.query.payments.findMany({
     where: inArray(payments.id, paymentIds),
     with: {
@@ -773,7 +773,7 @@ async getPaymentHistory(filters: PaymentHistoryFilters) {
   const totalPayments = totalResult[0]?.count || 0;
 
   console.log('paymentHistory ', paymentHistory.slice(0, 3))
-  
+
   return {
     payments: paymentHistory.map(payment => ({
       id: payment.id,

@@ -11,9 +11,10 @@ export class RefundService {
   private notificationService: NotificationService;
   private walletService: WalletService;
 
-  constructor() {
-    this.notificationService = new NotificationService();
-    this.walletService = new WalletService(); // Initialize WalletService
+  constructor(fastify: FastifyInstance) {
+    this.fastify = fastify;
+    this.notificationService = new NotificationService(fastify);
+    this.walletService = new WalletService(fastify);
   }
 
   setFastify(fastify: FastifyInstance) {

@@ -20,6 +20,8 @@ export * from './PushToken';
 export * from './PaymentOrder';
 export * from './CustomerProfile';
 export * from './Wishlist';
+export * from './Wallet';
+export * from './WalletUsage';
 export * from './RoomHourlyStay';
 export * from './PartnerContact';
 export * from './Refund';

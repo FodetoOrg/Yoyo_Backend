@@ -50,3 +50,21 @@ export async function walletRoutes(fastify: FastifyInstance) {
     }
   }, walletController.creditUserWallet.bind(walletController));
 }
+import { FastifyInstance } from 'fastify';
+import { WalletController } from '../controllers/wallet.controller';
+
+export default async function walletRoutes(fastify: FastifyInstance) {
+  const walletController = new WalletController(fastify);
+
+  // Get user wallet
+  fastify.get('/wallet', {
+    preHandler: [fastify.authenticate],
+    handler: walletController.getUserWallet.bind(walletController),
+  });
+
+  // Get wallet usage history
+  fastify.get('/wallet/usage-history', {
+    preHandler: [fastify.authenticate],
+    handler: walletController.getWalletUsageHistory.bind(walletController),
+  });
+}

@@ -1,4 +1,3 @@
-
 // @ts-nocheck
 import { FastifyInstance } from 'fastify';
 
@@ -20,7 +19,7 @@ export class DetailsService {
       WHERE r.id = $1
     `;
     const roomResult = await db.query(roomQuery, [roomId]);
-    
+
     if (roomResult.rows.length === 0) {
       throw new Error('Room not found');
     }
@@ -267,7 +266,7 @@ export class DetailsService {
     };
   }
 
-  async getCustomerDetails(userId: string) {
+  async getCustomerDetails(customerId: string) {
     const db = this.fastify.db;
 
     // Get customer basic information
@@ -279,8 +278,8 @@ export class DetailsService {
       LEFT JOIN wallets w ON u.id = w.user_id
       WHERE u.id = $1
     `;
-    const customerResult = await db.query(customerQuery, [userId]);
-    
+    const customerResult = await db.query(customerQuery, [customerId]);
+
     if (customerResult.rows.length === 0) {
       throw new Error('Customer not found');
     }
@@ -300,7 +299,7 @@ export class DetailsService {
       WHERE b.user_id = $1
       ORDER BY b.created_at DESC
     `;
-    const bookingsResult = await db.query(bookingsQuery, [userId]);
+    const bookingsResult = await db.query(bookingsQuery, [customerId]);
 
     // Get all payments
     const paymentsQuery = `
@@ -313,7 +312,7 @@ export class DetailsService {
       WHERE p.user_id = $1
       ORDER BY p.created_at DESC
     `;
-    const paymentsResult = await db.query(paymentsQuery, [userId]);
+    const paymentsResult = await db.query(paymentsQuery, [customerId]);
 
     // Get all refunds
     const refundsQuery = `
@@ -326,7 +325,7 @@ export class DetailsService {
       WHERE r.user_id = $1
       ORDER BY r.created_at DESC
     `;
-    const refundsResult = await db.query(refundsQuery, [userId]);
+    const refundsResult = await db.query(refundsQuery, [customerId]);
 
     // Get wallet transactions
     const walletTransactionsQuery = `
@@ -338,7 +337,7 @@ export class DetailsService {
       ORDER BY wt.created_at DESC
       LIMIT 20
     `;
-    const walletTransactionsResult = await db.query(walletTransactionsQuery, [userId]);
+    const walletTransactionsResult = await db.query(walletTransactionsQuery, [customerId]);
 
     // Calculate statistics
     const totalBookings = bookingsResult.rows.length;
@@ -348,6 +347,21 @@ export class DetailsService {
     const totalRefunds = refundsResult.rows
       .filter(r => r.status === 'processed')
       .reduce((sum, r) => sum + r.refund_amount, 0);
+
+    // Get wallet usage history
+    const walletUsages = await db.query.walletUsages.findMany({
+      where: eq(walletUsages.userId, customerId),
+      orderBy: [desc(walletUsages.createdAt)],
+      with: {
+        booking: {
+          with: {
+            hotel: true,
+            room: true,
+          }
+        },
+        payment: true,
+      }
+    });
 
     return {
       customer: {
@@ -360,11 +374,17 @@ export class DetailsService {
         total_wallet_earned: customer.total_earned || 0,
         total_wallet_spent: customer.total_spent || 0
       },
+      wallet: customer.wallet_balance,
+      walletUsages,
       statistics: {
         total_bookings: totalBookings,
         total_spent: totalSpent,
         total_refunds: totalRefunds,
-        wallet_balance: customer.wallet_balance || 0
+        totalWalletUsages: walletUsages.length,
+        totalAmountPaid: paymentsResult.rows.reduce((sum, payment) => sum + payment.amount, 0),
+        totalRefundAmount: refundsResult.rows.reduce((sum, refund) => sum + refund.refund_amount, 0),
+        totalWalletUsed: walletUsages.reduce((sum, usage) => sum + usage.amount, 0),
+        currentWalletBalance: customer.wallet_balance || 0,
       },
       bookings: bookingsResult.rows,
       payments: paymentsResult.rows,
@@ -387,7 +407,7 @@ export class DetailsService {
       WHERE a.id = $1
     `;
     const addonResult = await db.query(addonQuery, [addonId]);
-    
+
     if (addonResult.rows.length === 0) {
       throw new Error('Addon not found');
     }
@@ -415,7 +435,7 @@ export class DetailsService {
     const totalUsageCount = bookingAddonsResult.rows.length;
     const totalQuantitySold = bookingAddonsResult.rows.reduce((sum, ba) => sum + ba.quantity, 0);
     const totalRevenue = bookingAddonsResult.rows.reduce((sum, ba) => sum + ba.total_price, 0);
-    
+
     // Usage by month (last 12 months)
     const monthlyUsageQuery = `
       SELECT 
