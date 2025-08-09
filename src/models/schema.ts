@@ -20,6 +20,8 @@ export * from './PushToken';
 export * from './PaymentOrder';
 export * from './CustomerProfile';
 export * from './Wishlist';
+export * from './Wallet';
+export * from './WalletUsage';
 export * from './RoomHourlyStay';
 export * from './PartnerContact';
 export * from './Refund';
@@ -40,3 +42,6 @@ bookingAddonsRelations,
 export * from './HotelReview';
 export { bookings, bookingsRelations, type Booking } from "./Booking";
 export { bookingCoupons, bookingCouponsRelations, type BookingCoupon } from "./BookingCoupons";
+export { invoices, invoicesRelations, type Invoice } from './Invoice';
+export { hotelReviews, hotelReviewsRelations, type HotelReview } from './HotelReview';
+export { wallets, walletsRelations, walletTransactions, walletTransactionsRelations, type Wallet, type WalletTransaction } from './Wallet';

@@ -47,6 +47,64 @@ export class PaymentController {
   private paymentService: PaymentService;
 
   constructor() {
+
+  // Process wallet + online payment
+  async processWalletPayment(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { 
+        bookingId, 
+        walletAmount = 0, 
+        razorpayPaymentDetails 
+      } = request.body as any;
+      
+      const userId = (request as any).user.id;
+
+      // Get booking details to calculate remaining amount
+      const booking = await this.paymentService.fastify.db.query.bookings.findFirst({
+        where: eq(bookings.id, bookingId)
+      });
+
+      if (!booking) {
+        return reply.code(404).send({
+          success: false,
+          message: 'Booking not found'
+        });
+      }
+
+      const totalAmount = booking.totalAmount;
+      const remainingAmount = totalAmount - walletAmount;
+
+      if (remainingAmount < 0) {
+        return reply.code(400).send({
+          success: false,
+          message: 'Wallet amount cannot exceed total booking amount'
+        });
+      }
+
+      const result = await this.paymentService.processWalletPayment({
+        bookingId,
+        userId,
+        walletAmount,
+        remainingAmount,
+        razorpayPaymentDetails
+      });
+
+      return reply.code(200).send({
+        success: true,
+        message: 'Payment processed successfully',
+        data: result
+      });
+
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send({
+        success: false,
+        message: error.message || 'Failed to process wallet payment'
+      });
+    }
+  }
+
+
     this.paymentService = new PaymentService();
   }
 

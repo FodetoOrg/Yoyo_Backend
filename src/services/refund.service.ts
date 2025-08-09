@@ -4,19 +4,23 @@ import { eq, and, desc } from 'drizzle-orm';
 import { refunds, bookings, payments, hotels, users } from '../models/schema';
 import { v4 as uuidv4 } from 'uuid';
 import { NotificationService } from './notification.service';
+import { WalletService } from './wallet.service'; // Assuming WalletService is in './wallet.service'
 
 export class RefundService {
   private fastify: FastifyInstance;
   private notificationService: NotificationService;
+  private walletService: WalletService;
 
-  constructor() {
-
-    this.notificationService = new NotificationService();
+  constructor(fastify: FastifyInstance) {
+    this.fastify = fastify;
+    this.notificationService = new NotificationService(fastify);
+    this.walletService = new WalletService(fastify);
   }
 
   setFastify(fastify: FastifyInstance) {
     this.fastify = fastify;
-    this.notificationService.setFastify(fastify)
+    this.notificationService.setFastify(fastify);
+    this.walletService.setFastify(fastify); // Set fastify instance for walletService
   }
 
   // Calculate cancellation fee and refund amount
@@ -147,7 +151,7 @@ export class RefundService {
         .where(eq(bookings.id, params.bookingId));
 
       // Send notifications
-      await this.notificationService.sendNotificationFromTemplate('refund_request_created', params.userId, {
+      await this.notificationService.sendNotificationFromTemplate('refund_request_created', params.user.id, {
         bookingId: params.bookingId,
         refundAmount: refundCalculation.refundAmount,
         cancellationFeeAmount: refundCalculation.cancellationFeeAmount,
@@ -248,26 +252,36 @@ export class RefundService {
         }
       }
 
+      // Credit wallet with refund amount
+      await this.walletService.creditWallet({
+        userId: refund.userId,
+        amount: refund.refundAmount,
+        source: 'refund',
+        description: `Refund for booking ${refund.bookingId}`,
+        referenceId: refund.bookingId,
+        referenceType: 'refund',
+        metadata: {
+          refundId: refund.id,
+          originalAmount: refund.originalAmount,
+          cancellationFeeAmount: refund.cancellationFeeAmount,
+          processedBy
+        }
+      });
+
       // Update refund status
       await tx.update(refunds)
         .set({
           status: 'processed',
           processedBy,
           processedAt: new Date(),
+          refundMethod: 'wallet',
           razorpayRefundId,
           bankDetails: bankDetails ? JSON.stringify(bankDetails) : null,
           updatedAt: new Date()
         })
         .where(eq(refunds.id, refundId));
 
-      // Send notification
-      await this.notificationService.sendNotificationFromTemplate('refund_processed', refund.userId, {
-        refundAmount: refund.refundAmount,
-        refundMethod: refund.refundMethod,
-        expectedDays: refund.expectedProcessingDays
-      });
-
-      return { success: true, refundId, status: 'processed' };
+      return { refundId, status: 'processed', amount: refund.refundAmount };
     });
   }
 

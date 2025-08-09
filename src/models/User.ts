@@ -12,6 +12,7 @@ import { payments } from "./Payment";
 import { reviews } from "./Review";
 import { UserRole, UserStatus } from "../types/common";
 import { customerProfiles } from "./CustomerProfile";
+import { wallets } from "./Wallet";
 
 // User table
 export const users = sqliteTable("users", {
@@ -53,8 +54,11 @@ export const usersRelations = relations(users, ({ many, one }) => ({
   customerProfile: one(customerProfiles,{
     fields: [users.id],
     references: [customerProfiles.userId],
-  }
-  )
+  }),
+  wallet: one(wallets, {
+    fields: [users.id],
+    references: [wallets.userId],
+  })
 }));
 
 export type User = InferSelectModel<typeof users>;
