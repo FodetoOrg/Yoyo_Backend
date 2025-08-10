@@ -2,7 +2,7 @@
 // @ts-nocheck
 import { FastifyInstance } from "fastify";
 import { hotelReviews, bookings, users, hotels } from "../models/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { NotFoundError, ValidationError } from "../types/errors";
 import { NotificationService } from "./notification.service";
@@ -134,5 +134,50 @@ export class ReviewService {
     .limit(1);
 
     return review[0] || null;
+  }
+
+  // Get all reviews for a hotel
+  async getReviewsByHotelId(hotelId: string) {
+    const db = this.fastify.db;
+
+    const reviews = await db.select({
+      id: hotelReviews.id,
+      userId: hotelReviews.userId,
+      rating: hotelReviews.rating,
+      comment: hotelReviews.comment,
+      bookingId: hotelReviews.bookingId,
+      isVerified: hotelReviews.isVerified,
+      isApproved: hotelReviews.isApproved,
+      createdAt: hotelReviews.createdAt,
+      userName: users.name,
+    })
+    .from(hotelReviews)
+    .leftJoin(users, eq(hotelReviews.userId, users.id))
+    .where(and(
+      eq(hotelReviews.hotelId, hotelId),
+      eq(hotelReviews.isApproved, true)
+    ))
+    .orderBy(desc(hotelReviews.createdAt));
+
+    // Calculate rating statistics
+    const totalReviews = reviews.length;
+    const overallRating = totalReviews > 0 ? 
+      reviews.reduce((sum, review) => sum + review.rating, 0) / totalReviews : 0;
+
+    // Rating breakdown (count of each star rating)
+    const ratingBreakdown = {
+      5: reviews.filter(r => r.rating === 5).length,
+      4: reviews.filter(r => r.rating === 4).length,
+      3: reviews.filter(r => r.rating === 3).length,
+      2: reviews.filter(r => r.rating === 2).length,
+      1: reviews.filter(r => r.rating === 1).length,
+    };
+
+    return {
+      reviews,
+      overallRating: Math.round(overallRating * 10) / 10, // Round to 1 decimal place
+      totalReviews,
+      ratingBreakdown
+    };
   }
 }
