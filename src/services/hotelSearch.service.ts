@@ -24,7 +24,7 @@ interface SearchFilters {
   priceRange?: { min?: number; max?: number };
   starRating?: number; // minimum star rating
   amenities?: string[];
-  sortBy?: 'recommended' | 'price_low' | 'price_high' | 'rating' | 'distance';
+  sortBy?: 'recommended' | 'price_low' | 'price_high' | 'rating' | 'distance' ;
 
   // Pagination
   page?: number;
@@ -35,6 +35,7 @@ interface HomeTabFilters {
   userId?: string;
   coordinates?: { lat: number; lng: number };
   limit?: number;
+  sortBy?:string;
 }
 
 export class HotelSearchService {
@@ -115,6 +116,8 @@ export class HotelSearchService {
           this.parseCoordinates(hotel.hotel.mapCoordinates)
         )
       }));
+
+      console.log('after calluctaing distance ',hotelsData)
 
       // Sort by distance first to get nearest hotels
       hotelsData = hotelsData.sort((a, b) => (a.distance || 0) - (b.distance || 0));
@@ -232,9 +235,10 @@ export class HotelSearchService {
   }
   // Home page tabs
   async getNearbyHotels(filters: HomeTabFilters) {
-    const { coordinates, limit = 10 } = filters;
+    const { coordinates, limit = 10,sortBy } = filters;
 
-    console.log('coordinates ', coordinates)
+    
+    console.log('filters in nearby ', filters)
 
     if (!coordinates) {
       return [];
@@ -246,7 +250,7 @@ export class HotelSearchService {
       adults: 2,
       children: 0,
       infants: 0,
-      sortBy: 'distance',
+      sortBy: sortBy || 'distance',
       limit,
       isNearby:true
     };

@@ -85,7 +85,7 @@ export class HotelSearchController {
   // Home page - Nearby hotels
   async getNearbyHotels(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const { lat, lng, limit } = HomeTabQuerySchema.parse(request.query);
+      const { lat, lng, limit ,sortBy} = HomeTabQuerySchema.parse(request.query);
       const userId = (request as any).user?.id;
 
       const coordinates = {
@@ -98,6 +98,7 @@ export class HotelSearchController {
         userId,
         coordinates,
         limit,
+        sortBy
       });
 
 

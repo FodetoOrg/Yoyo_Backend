@@ -43,6 +43,7 @@ export const HomeTabQuerySchema = z.object({
   lat: z.number(),
   lng: z.number(),
   limit: z.number().int().min(1).max(20).default(10),
+  sortBy : z.string().optional()
 });
 
 // Response schemas
