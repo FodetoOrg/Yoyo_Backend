@@ -119,7 +119,7 @@ export class HotelSearchService {
 
       // Sort by distance first to get nearest hotels
       hotelsData = hotelsData.sort((a, b) => (a.distance || 0) - (b.distance || 0));
-    
+
 
       // Filter by radius after calculating distance
       hotelsData = hotelsData.filter(hotel => hotel.distance <= radius);
@@ -467,8 +467,8 @@ export class HotelSearchService {
 
     // Convert dates to ensure proper comparison (remove milliseconds for consistency)
 
-    const requestCheckIn = dayjs(checkIn).toDate(); 
-    const requestCheckOut = dayjs(checkOut).toDate(); 
+    const requestCheckIn = dayjs(checkIn).toDate();
+    const requestCheckOut = dayjs(checkOut).toDate();
 
     requestCheckIn.setMilliseconds(0);
     requestCheckOut.setMilliseconds(0);

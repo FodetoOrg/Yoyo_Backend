@@ -6,7 +6,6 @@ export * from './RoomType';
 export * from './Booking';
 export * from './Payment';
 export * from './Invoice';
-export * from './Review';
 export * from './HotelImage';
 export * from './RoomImage';
 export * from './cities';

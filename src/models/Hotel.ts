@@ -3,7 +3,7 @@ import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 import { users } from "./User";
 import { rooms } from "./Room";
 import { bookings } from "./Booking";
-import { reviews } from "./Review";
+import { hotelReviews } from "./HotelReview";
 import { hotelImages } from "./HotelImage";
 import { cities } from "./cities";
 
@@ -57,7 +57,7 @@ export const hotelsRelations = relations(hotels, ({ one, many }) => ({
   }),
   rooms: many(rooms),
   bookings: many(bookings),
-  reviews: many(reviews),
+  reviews: many(hotelReviews),
   images: many(hotelImages),
   city: one(hotelCities, {
     fields: [hotels.id],
