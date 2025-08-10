@@ -235,9 +235,8 @@ export class HotelSearchService {
   }
   // Home page tabs
   async getNearbyHotels(filters: HomeTabFilters) {
-    const { coordinates, limit = 10,sortBy } = filters;
+    const { coordinates, limit = 10, sortBy } = filters;
 
-    
     console.log('filters in nearby ', filters)
 
     if (!coordinates) {
@@ -252,11 +251,23 @@ export class HotelSearchService {
       infants: 0,
       sortBy: sortBy || 'distance',
       limit,
-      isNearby:true
+      isNearby: true
     };
 
     const result = await this.searchHotels(searchFilters);
     return result.hotels;
+  }
+
+  // Enhanced nearby hotels with full filtering support
+  async searchNearbyHotels(filters: SearchFilters & { coordinates: { lat: number; lng: number } }) {
+    // Set default radius for nearby if not provided
+    const nearbyFilters = {
+      ...filters,
+      radius: filters.radius || 25, // Default 25km for nearby
+      isNearby: true
+    };
+
+    return this.searchHotels(nearbyFilters);
   }
 
   async getLatestHotels(filters: HomeTabFilters) {
