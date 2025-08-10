@@ -82,10 +82,10 @@ export class HotelSearchController {
     }
   }
 
-  // Home page - Nearby hotels
+  // Home page - Nearby hotels (simple version for home page tabs)
   async getNearbyHotels(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const { lat, lng, limit ,sortBy} = HomeTabQuerySchema.parse(request.query);
+      const { lat, lng, limit, sortBy } = HomeTabQuerySchema.parse(request.query);
       const userId = (request as any).user?.id;
 
       const coordinates = {
@@ -93,14 +93,12 @@ export class HotelSearchController {
         lng
       }
 
-
       const hotels = await this.hotelSearchService.getNearbyHotels({
         userId,
         coordinates,
         limit,
         sortBy
       });
-
 
       return reply.code(200).send({
         success: true,
@@ -123,6 +121,61 @@ export class HotelSearchController {
       return reply.code(500).send({
         success: false,
         message: error.message || 'Failed to get nearby hotels',
+      });
+    }
+  }
+
+  // Enhanced nearby search with full filtering support
+  async searchNearbyHotels(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const searchData = SearchHotelsRequestSchema.parse(request.body);
+
+      // Ensure coordinates are provided for nearby search
+      if (!searchData.coordinates) {
+        return reply.code(400).send({
+          success: false,
+          message: 'Coordinates are required for nearby search',
+        });
+      }
+
+      const searchFilters = {
+        coordinates: searchData.coordinates,
+        radius: searchData.radius || 25, // Default 25km for nearby
+        checkIn: searchData.dateRange ? new Date(searchData.dateRange.startDate + 'Z') : undefined,
+        checkOut: searchData.dateRange ? new Date(searchData.dateRange.endDate + 'Z') : undefined,
+        adults: searchData.guests.adults,
+        children: searchData.guests.children,
+        infants: searchData.guests.infants,
+        bookingType: searchData.bookingType,
+        priceRange: searchData.priceRange,
+        starRating: searchData.starRating,
+        amenities: searchData.amenities,
+        sortBy: searchData.sortBy || 'distance',
+        page: searchData.page,
+        limit: searchData.limit,
+        isNearby: false // Allow full availability checking
+      };
+
+      const result = await this.hotelSearchService.searchNearbyHotels(searchFilters);
+
+      return reply.code(200).send({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      request.log.error(error);
+
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({
+          success: false,
+          message: 'Validation error',
+          errors: error.errors,
+        });
+      }
+
+      return reply.code(500).send({
+        success: false,
+        message: error.message || 'Failed to search nearby hotels',
       });
     }
   }
