@@ -22,20 +22,16 @@ export const hotelReviews = sqliteTable('hotel_reviews', {
   // Review content
   title: text('title'),
   comment: text('comment'),
-  pros: text('pros'), // JSON array
-  cons: text('cons'), // JSON array
+
   
   // Review metadata
   stayDate: integer('stay_date', { mode: 'timestamp' }),
   roomType: text('room_type'),
-  tripType: text('trip_type'), // business, leisure, family, couple, solo
   
   // Moderation
   isVerified: integer('is_verified', { mode: 'boolean' }).notNull().default(false),
   isApproved: integer('is_approved', { mode: 'boolean' }).notNull().default(true),
-  
-  // Engagement
-  helpfulCount: integer('helpful_count').notNull().default(0),
+ 
   
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(new Date()),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(new Date()),

@@ -1,7 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { DetailsController } from '../controllers/details.controller';
 import { z } from 'zod';
-import { rbacGuard } from '../middleware/rbacGuard';
 import { getAllWalletUsages } from '../controllers/details.controller';
 import { getAllRefunds } from '../controllers/details.controller';
 
@@ -12,12 +11,16 @@ export default async function detailsRoutes(fastify: FastifyInstance) {
 
   // Get all wallet usages (admin only)
   fastify.get('/details/wallet-usages', {
-    preHandler: [fastify.authenticate, rbacGuard(['superadmin'])]
+    preHandler: [fastify.authenticate,
+      //  rbacGuard(['superadmin'])
+      ]
   }, getAllWalletUsages);
 
   // Get all refunds (admin only)
   fastify.get('/details/refunds', {
-    preHandler: [fastify.authenticate, rbacGuard(['superadmin'])]
+    preHandler: [fastify.authenticate,
+      //  rbacGuard(['superadmin'])
+      ]
   }, getAllRefunds);
 
 

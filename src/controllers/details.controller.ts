@@ -244,4 +244,3 @@ export const getAllRefunds = async (request: FastifyRequest<{
   }
 };
 
-export const getWalletTransactionDetails = async (request: FastifyRequest<{

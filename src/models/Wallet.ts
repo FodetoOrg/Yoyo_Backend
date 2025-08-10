@@ -1,6 +1,6 @@
 
 import { InferSelectModel, relations } from "drizzle-orm";
-import { integer, sqliteTable, text, real } from "drizzle-orm/sqlite-core";
+import { integer, sqliteTable, text, real, uniqueIndex } from "drizzle-orm/sqlite-core";
 import { users } from "./User";
 
 // Wallet table
@@ -13,7 +13,10 @@ export const wallets = sqliteTable('wallets', {
   status: text('status').notNull().default('active'), // active, inactive, blocked
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(new Date()),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(new Date()),
-});
+},
+  (t) => ({
+    userIdUnique: uniqueIndex("wallets_user_id_unique").on(t.userId), // keep name stable
+  }));
 
 // Define relationships
 export const walletsRelations = relations(wallets, ({ one, many }) => ({

@@ -463,48 +463,48 @@ export class DetailsService {
       throw new Error('Hotel not found');
     }
 
-    // Get hotel details with reviews and related information
-    const hotelDetails = await db.query.hotels.findFirst({
-      where: eq(hotels.id, hotelId),
-      with: {
-        rooms: true,
-        addons: true,
-        bookings: {
-          with: {
-            user: {
-              columns: {
-                id: true,
-                name: true
-              }
-            },
-            room: {
-              columns: {
-                id: true,
-                name: true,
-                roomNumber: true
-              }
-            }
-          },
-          orderBy: [desc(bookings.createdAt)],
-          limit: 10
-        },
-        payments: {
-          with: {
-            booking: {
-              columns: {
-                id: true
-              }
-            }
-          },
-          orderBy: [desc(payments.createdAt)],
-          limit: 10
-        }
-      }
-    });
+    // // Get hotel details with reviews and related information
+    // const hotelDetails = await db.query.hotels.findFirst({
+    //   where: eq(hotels.id, hotelId),
+    //   with: {
+    //     rooms: true,
+    //     addons: true,
+    //     bookings: {
+    //       with: {
+    //         user: {
+    //           columns: {
+    //             id: true,
+    //             name: true
+    //           }
+    //         },
+    //         room: {
+    //           columns: {
+    //             id: true,
+    //             name: true,
+    //             roomNumber: true
+    //           }
+    //         }
+    //       },
+    //       orderBy: [desc(bookings.createdAt)],
+    //       limit: 10
+    //     },
+    //     payments: {
+    //       with: {
+    //         booking: {
+    //           columns: {
+    //             id: true
+    //           }
+    //         }
+    //       },
+    //       orderBy: [desc(payments.createdAt)],
+    //       limit: 10
+    //     }
+    //   }
+    // });
 
-    if (!hotelDetails) {
-      throw new Error('Hotel not found');
-    }
+    // if (!hotelDetails) {
+    //   throw new Error('Hotel not found');
+    // }
 
     // Get all available rooms
     const hotelRooms = await db.query.rooms.findMany({
@@ -578,7 +578,7 @@ export class DetailsService {
       .slice(0, 10);
 
     // Get hotel reviews with proper validation
-    const hotelReviews = await db.select({
+    const hotelReviewsDB = await db.select({
       id: hotelReviews.id,
       userId: hotelReviews.userId,
       overallRating: hotelReviews.overallRating,
@@ -589,13 +589,12 @@ export class DetailsService {
       amenitiesRating: hotelReviews.amenitiesRating,
       title: hotelReviews.title,
       comment: hotelReviews.comment,
-      pros: hotelReviews.pros,
-      cons: hotelReviews.cons,
+     
       stayDate: hotelReviews.stayDate,
       roomType: hotelReviews.roomType,
-      tripType: hotelReviews.tripType,
+  
       isVerified: hotelReviews.isVerified,
-      helpfulCount: hotelReviews.helpfulCount,
+   
       createdAt: hotelReviews.createdAt,
       userName: users.name,
       userEmail: users.email,
@@ -609,11 +608,7 @@ export class DetailsService {
     ))
     .orderBy(desc(hotelReviews.createdAt));
 
-    hotelDetails.reviews = hotelReviews.map(review => ({
-      ...review,
-      pros: review.pros ? JSON.parse(review.pros) : [],
-      cons: review.cons ? JSON.parse(review.cons) : [],
-    }));
+ 
 
     return {
       hotel: {
@@ -653,7 +648,10 @@ export class DetailsService {
         bookings: recentBookings,
         payments: recentPayments
       },
-      reviews: hotelDetails.reviews
+      reviews: hotelReviewsDB.map(review => ({
+        ...review,
+      
+      }))
     };
   }
 
