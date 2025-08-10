@@ -1,6 +1,5 @@
-// @ts-nocheck
 import { FastifyInstance } from 'fastify';
-import { bookings, hotels, rooms, users, customerProfiles, coupons, payments, bookingCoupons, bookingAddons, couponUsages, refunds, reviews } from '../models/schema';
+import { bookings, hotels, rooms, users, customerProfiles, coupons, payments, bookingCoupons, bookingAddons, couponUsages, refunds, hotelReviews } from '../models/schema';
 import { eq, and, desc, asc, count, not, lt, gt, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { NotFoundError, ConflictError } from '../types/errors';
@@ -10,7 +9,6 @@ import Razorpay from 'razorpay';
 import { generateBookingConfirmationEmail } from '../utils/email';
 import { RefundService } from './refund.service'
 import { AddonService } from './addon.service';
-import { RefundService } from './refund.service';
 import { UserRole } from '../types/common';
 
 interface BookingCreateParams {
@@ -1101,7 +1099,7 @@ export class BookingService {
         hotel: {
           with: {
             images: true,
-            amenities: true // Assuming amenities are stored as JSON in the hotel table
+            // amenities: true // Assuming amenities are stored as JSON in the hotel table
           }
         },
         room: {
@@ -1127,8 +1125,8 @@ export class BookingService {
     }
 
     // Get review information if exists
-    const reviewData = await db.query.reviews.findFirst({
-      where: eq(reviews.bookingId, bookingId),
+    const reviewData = await db.query.hotelReviews.findFirst({
+      where: eq(hotelReviews.bookingId, bookingId),
       with: {
         user: true // Include user data for review
       }

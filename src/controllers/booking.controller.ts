@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { BookingService } from '../services/booking.service';

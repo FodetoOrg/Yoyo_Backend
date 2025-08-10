@@ -32,9 +32,8 @@ export default async function detailsRoutes(fastify: FastifyInstance) {
       security: [{ bearerAuth: [] }],
       body: {
         type: 'object',
-        required: ['hotelId', 'bookingId', 'rating'],
+        required: [ 'bookingId', 'rating'],
         properties: {
-          hotelId: { type: 'string' },
           bookingId: { type: 'string' },
           rating: { type: 'number', minimum: 1, maximum: 5 },
           comment: { type: 'string', maxLength: 1000 }

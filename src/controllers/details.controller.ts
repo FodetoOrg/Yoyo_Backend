@@ -117,10 +117,10 @@ export class DetailsController {
   async getHotelDetails(request: AuthenticatedRequest, reply: FastifyReply) {
     try {
       const { hotelId } = request.params as { hotelId: string };
-      const userRole = request.user.role;
+      const role = request.user.role;
 
       // Check if user has admin permission
-      if (![UserRole.SUPER_ADMIN].includes(userRole))  {
+      if (![UserRole.SUPER_ADMIN].includes(role))  {
         return reply.code(403).send({
           success: false,
           message: 'Access denied. Admin permissions required.'
@@ -134,6 +134,8 @@ export class DetailsController {
         const reviews = await reviewService.getReviewsByHotelId(hotelId);
         hotelDetails.reviews = reviews;
       }
+
+      console.log('hotelDetails ',hotelDetails)
 
       return reply.code(200).send({
         success: true,
@@ -261,7 +263,6 @@ export const getAllRefunds = async (request: FastifyRequest<{
 // Create review
 export const createReview = async (request: FastifyRequest<{
   Body: {
-    hotelId: string;
     bookingId: string;
     rating: number;
     comment?: string;
@@ -281,6 +282,7 @@ export const createReview = async (request: FastifyRequest<{
       message: 'Review created successfully'
     });
   } catch (error) {
+    console.log('error ',error)
     const statusCode = error.statusCode || 500;
     reply.code(statusCode).send({
       success: false,

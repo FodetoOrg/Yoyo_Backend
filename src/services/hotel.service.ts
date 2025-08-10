@@ -1,4 +1,3 @@
-//@ts-nocheck
 import { FastifyInstance } from "fastify";
 import {
   hotels,
@@ -20,6 +19,7 @@ import { eq, and, like, inArray, exists, not, isNull, desc, or, sql, lt, gt } fr
 import { UserRole } from "../types/common";
 import { ForbiddenError } from "../types/errors";
 import { uploadToS3 } from "../config/aws";
+import { formatTimeAgo } from "../utils/helpers";
 
 
 interface HotelSearchParams {
@@ -550,65 +550,72 @@ export class HotelService {
 
     return formattedRooms;
   }
+  
 
   // Get hotel reviews with rating breakdown
   async getHotelReviews(hotelId: string) {
     const db = this.fastify.db;
 
-    // Get all reviews for this hotel
-    const reviews = await db.query.hotelReviews.findMany({
-      where: and(
+    const reviews = await db.select({
+      id: hotelReviews.id,
+      userId: hotelReviews.userId,
+      rating: hotelReviews.rating,
+      comment: hotelReviews.comment,
+      bookingId: hotelReviews.bookingId,
+      isVerified: hotelReviews.isVerified,
+      isApproved: hotelReviews.isApproved,
+      createdAt: hotelReviews.createdAt,
+      updatedAt: hotelReviews.updatedAt,
+      // Guest information from booking
+      guestName: bookings.guestName,
+      guestEmail: bookings.guestEmail,
+      guestPhone: bookings.guestPhone,
+    })
+      .from(hotelReviews)
+      .leftJoin(bookings, eq(hotelReviews.bookingId, bookings.id))
+      .where(and(
         eq(hotelReviews.hotelId, hotelId),
         eq(hotelReviews.isApproved, true)
-      ),
-      with: {
-        user: {
-          columns: {
-            id: true,
-            name: true,
-          }
-        }
-      },
-      orderBy: [desc(hotelReviews.createdAt)],
-      limit: 10, // Limit to most recent 10 reviews
-    });
+      ))
+      .orderBy(desc(hotelReviews.createdAt));
 
-    // Calculate overall rating
+    // Calculate rating statistics
     const totalReviews = reviews.length;
-    const overallRating = totalReviews > 0
-      ? reviews.reduce((sum, review) => sum + review.overallRating, 0) / totalReviews
-      : 0;
+    const overallRating = totalReviews > 0 ?
+      reviews.reduce((sum, review) => sum + (review.rating || 0), 0) / totalReviews : null;
 
-    // Calculate rating breakdown
+    // Rating breakdown (count of each star rating)
     const ratingBreakdown = {
-      '5': 0,
-      '4': 0,
-      '3': 0,
-      '2': 0,
-      '1': 0
+      5: reviews.filter(r => r.rating === 5).length,
+      4: reviews.filter(r => r.rating === 4).length,
+      3: reviews.filter(r => r.rating === 3).length,
+      2: reviews.filter(r => r.rating === 2).length,
+      1: reviews.filter(r => r.rating === 1).length,
     };
 
-    reviews.forEach(review => {
-      const rating = Math.round(review.overallRating);
-      if (rating >= 1 && rating <= 5) {
-        ratingBreakdown[rating.toString()]++;
-      }
-    });
-
-    // Format reviews for response
-    const formattedReviews = reviews.map(review => ({
+    // Transform reviews to match frontend expected format
+    const transformedReviews = reviews.map(review => ({
       id: review.id,
-      user: review.user.name || 'Anonymous',
+      userId: review.userId,
+      userName: review.guestName || 'Anonymous Guest',
+      userImage: null, // No profile images for booking guests
+      rating: review.rating,
       comment: review.comment || '',
-      rating: review.overallRating,
-      date: new Date(review.createdAt).toISOString().split('T')[0]
+      date: review.createdAt.toISOString().split('T')[0], // Format as YYYY-MM-DD
+      timeAgo: formatTimeAgo(review.createdAt),
+      isVerified: review.isVerified,
+      bookingId: review.bookingId,
+      guestEmail: review.guestEmail,
+      guestPhone: review.guestPhone,
+      createdAt: review.createdAt,
+      updatedAt: review.updatedAt,
     }));
 
     return {
-      overallRating: Math.round(overallRating * 10) / 10,
+      overallRating: overallRating ? Math.round(overallRating * 10) / 10 : null,
       totalReviews,
       ratingBreakdown,
-      reviews: formattedReviews
+      reviews: transformedReviews
     };
   }
 
