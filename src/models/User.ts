@@ -9,7 +9,7 @@ import { integer, sqliteTable, text, unique } from "drizzle-orm/sqlite-core";
 import { bookings } from "./Booking";
 import { hotels } from "./Hotel";
 import { payments } from "./Payment";
-import { reviews } from "./Review";
+import { hotelReviews } from "./HotelReview";
 import { UserRole, UserStatus } from "../types/common";
 import { customerProfiles } from "./CustomerProfile";
 import { wallets } from "./Wallet";
@@ -49,7 +49,7 @@ export const users = sqliteTable("users", {
 export const usersRelations = relations(users, ({ many, one }) => ({
   bookings: many(bookings),
   hotels: many(hotels, { relationName: "hotelOwner" }),
-  reviews: many(reviews),
+  reviews: many(hotelReviews),
   payments: many(payments),
   customerProfile: one(customerProfiles,{
     fields: [users.id],

@@ -4,7 +4,7 @@ import { users } from "./User";
 import { hotels } from "./Hotel";
 import { rooms } from "./Room";
 import { payments } from "./Payment";
-import { reviews } from "./Review";
+import { hotelReviews } from "./HotelReview";
 import { coupons } from "./Coupon";
 import { bookingCoupons } from "./BookingCoupons";
 
@@ -57,9 +57,9 @@ export const bookingsRelations = relations(bookings, ({ one, many }) => ({
     fields: [bookings.id],
     references: [payments.bookingId],
   }),
-  review: one(reviews, {
+  review: one(hotelReviews, {
     fields: [bookings.id],
-    references: [reviews.bookingId],
+    references: [hotelReviews.bookingId],
   }),
   bookingCoupons: many(bookingCoupons),
 
