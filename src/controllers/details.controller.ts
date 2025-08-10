@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { DetailsService } from '../services/details.service';
 import { UserRole } from '../types/common';

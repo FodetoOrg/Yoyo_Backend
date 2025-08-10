@@ -1,4 +1,3 @@
-//@ts-nocheck
 import { FastifyInstance } from "fastify";
 import { hotels, hotelImages, rooms, hotelReviews, wishlists, coupons, couponMappings, bookings, roomHourlyStays } from "../models/schema";
 import { eq, and, like, between, sql, desc, asc, inArray, exists, avg, count, not, or, lt, gt } from "drizzle-orm";
@@ -86,7 +85,7 @@ export class HotelSearchService {
     const baseQuery = db
       .select({
         hotel: hotels,
-        avgRating: avg(hotelReviews.overallRating),
+        avgRating: avg(hotelReviews.rating),
         reviewCount: count(hotelReviews.id),
         primaryImage: hotelImages.url,
       })

@@ -1,5 +1,5 @@
 
-import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 // Configuration table for storing app-level settings
 export const configurations = sqliteTable('configurations', {
@@ -12,7 +12,9 @@ export const configurations = sqliteTable('configurations', {
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(new Date()),
   updatedAt: integer('updated_at', { mode: 'timestamp' }).notNull().default(new Date()),
-});
+}, (t) => ({
+  keyUnique: uniqueIndex('configurations_key_unique').on(t.key),
+}));
 
 export type Configuration = typeof configurations.$inferSelect;
 export type ConfigurationInsert = typeof configurations.$inferInsert;
