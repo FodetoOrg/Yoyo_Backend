@@ -2,6 +2,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { DetailsService } from '../services/details.service';
 import { UserRole } from '../types/common';
+import { ReviewService } from '../services/review.service'; // Assuming ReviewService is in review.service
 
 interface AuthenticatedRequest extends FastifyRequest {
   user: {
@@ -15,6 +16,7 @@ interface AuthenticatedRequest extends FastifyRequest {
 
 // Initialize detailsService outside the class to be accessible by controller functions
 const detailsService = new DetailsService();
+const reviewService = new ReviewService(); // Initialize ReviewService
 
 export class DetailsController {
   private detailsService: DetailsService;
@@ -26,6 +28,7 @@ export class DetailsController {
   setFastify(fastify: any) {
     this.detailsService.setFastify(fastify);
     detailsService.setFastify(fastify); // Ensure the standalone service is also set
+    reviewService.setFastify(fastify); // Ensure the standalone review service is also set
   }
 
   async getRoomDetails(request: AuthenticatedRequest, reply: FastifyReply) {
@@ -127,6 +130,12 @@ export class DetailsController {
 
       const hotelDetails = await this.detailsService.getHotelDetails(hotelId);
 
+      // Add reviews data to hotel details
+      if (hotelDetails) {
+        const reviews = await reviewService.getReviewsByHotelId(hotelId);
+        hotelDetails.reviews = reviews;
+      }
+
       return reply.code(200).send({
         success: true,
         data: hotelDetails
@@ -154,6 +163,12 @@ export class DetailsController {
       }
 
       const customerDetails = await this.detailsService.getCustomerDetails(customerId);
+
+      // Add review data for the customer
+      if (customerDetails) {
+        const reviews = await reviewService.getReviewsByUserId(customerId);
+        customerDetails.reviews = reviews;
+      }
 
       return reply.code(200).send({
         success: true,
@@ -244,3 +259,78 @@ export const getAllRefunds = async (request: FastifyRequest<{
   }
 };
 
+// Create review
+export const createReview = async (request: FastifyRequest<{
+  Body: {
+    hotelId: string;
+    bookingId: string;
+    rating: number;
+    comment?: string;
+  }
+}>, reply: FastifyReply) => {
+  try {
+    reviewService.setFastify(request.server);
+
+    const userId = (request as any).user.id;
+    const reviewData = request.body;
+
+    const review = await reviewService.createReview(userId, reviewData);
+
+    reply.send({
+      success: true,
+      data: review,
+      message: 'Review created successfully'
+    });
+  } catch (error) {
+    const statusCode = error.statusCode || 500;
+    reply.code(statusCode).send({
+      success: false,
+      message: error.message || 'Failed to create review'
+    });
+  }
+};
+
+// Get eligible bookings for review
+export const getEligibleBookingsForReview = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    reviewService.setFastify(request.server);
+
+    const userId = (request as any).user.id;
+    const bookings = await reviewService.getUserEligibleBookingsForReview(userId);
+
+    reply.send({
+      success: true,
+      data: bookings
+    });
+  } catch (error) {
+    const statusCode = error.statusCode || 500;
+    reply.code(statusCode).send({
+      success: false,
+      message: error.message || 'Failed to fetch eligible bookings'
+    });
+  }
+};
+
+// Get booking details including review status
+export const getBookingDetailsWithReviewStatus = async (request: FastifyRequest<{
+  Params: { bookingId: string }
+}>, reply: FastifyReply) => {
+  try {
+    reviewService.setFastify(request.server);
+    const { bookingId } = request.params;
+    const userId = (request as any).user.id;
+
+    const bookingDetails = await reviewService.getBookingDetailsForUser(userId, bookingId);
+
+    reply.send({
+      success: true,
+      data: bookingDetails
+    });
+  } catch (error) {
+    const statusCode = error.statusCode || 500;
+    reply.code(statusCode).send({
+      success: false,
+      message: error.message || 'Failed to fetch booking details with review status'
+    });
+  }
+};

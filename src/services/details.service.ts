@@ -581,20 +581,9 @@ export class DetailsService {
     const hotelReviewsDB = await db.select({
       id: hotelReviews.id,
       userId: hotelReviews.userId,
-      overallRating: hotelReviews.overallRating,
-      cleanlinessRating: hotelReviews.cleanlinessRating,
-      serviceRating: hotelReviews.serviceRating,
-      locationRating: hotelReviews.locationRating,
-      valueForMoneyRating: hotelReviews.valueForMoneyRating,
-      amenitiesRating: hotelReviews.amenitiesRating,
-      title: hotelReviews.title,
+      rating: hotelReviews.rating,
       comment: hotelReviews.comment,
-     
-      stayDate: hotelReviews.stayDate,
-      roomType: hotelReviews.roomType,
-  
       isVerified: hotelReviews.isVerified,
-   
       createdAt: hotelReviews.createdAt,
       userName: users.name,
       userEmail: users.email,
@@ -774,5 +763,36 @@ export class DetailsService {
     }
 
     return transaction;
+  }
+
+  // Get booking details with review data
+  async getBookingWithReview(bookingId: string) {
+    const db = this.fastify.db;
+
+    const booking = await db.select({
+      booking: bookings,
+      user: users,
+      hotel: hotels,
+      room: rooms,
+      review: {
+        id: hotelReviews.id,
+        rating: hotelReviews.rating,
+        comment: hotelReviews.comment,
+        createdAt: hotelReviews.createdAt
+      }
+    })
+    .from(bookings)
+    .leftJoin(users, eq(bookings.userId, users.id))
+    .leftJoin(hotels, eq(bookings.hotelId, hotels.id))
+    .leftJoin(rooms, eq(bookings.roomId, rooms.id))
+    .leftJoin(hotelReviews, eq(bookings.id, hotelReviews.bookingId))
+    .where(eq(bookings.id, bookingId))
+    .limit(1);
+
+    if (booking.length === 0) {
+      throw new NotFoundError('Booking not found');
+    }
+
+    return booking[0];
   }
 }

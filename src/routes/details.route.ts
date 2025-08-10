@@ -3,6 +3,7 @@ import { DetailsController } from '../controllers/details.controller';
 import { z } from 'zod';
 import { getAllWalletUsages } from '../controllers/details.controller';
 import { getAllRefunds } from '../controllers/details.controller';
+import { createReview, getEligibleBookingsForReview } from '../controllers/details.controller';
 
 const detailsController = new DetailsController();
 
@@ -22,6 +23,36 @@ export default async function detailsRoutes(fastify: FastifyInstance) {
       //  rbacGuard(['superadmin'])
       ]
   }, getAllRefunds);
+
+  // Create review
+  fastify.post('/reviews', {
+    schema: {
+      tags: ['reviews'],
+      summary: 'Create a review for a completed booking',
+      security: [{ bearerAuth: [] }],
+      body: {
+        type: 'object',
+        required: ['hotelId', 'bookingId', 'rating'],
+        properties: {
+          hotelId: { type: 'string' },
+          bookingId: { type: 'string' },
+          rating: { type: 'number', minimum: 1, maximum: 5 },
+          comment: { type: 'string', maxLength: 1000 }
+        }
+      }
+    },
+    preHandler: [fastify.authenticate]
+  }, createReview);
+
+  // Get eligible bookings for review
+  fastify.get('/reviews/eligible-bookings', {
+    schema: {
+      tags: ['reviews'],
+      summary: 'Get user bookings eligible for review',
+      security: [{ bearerAuth: [] }]
+    },
+    preHandler: [fastify.authenticate]
+  }, getEligibleBookingsForReview);
 
 
   // Room details with bookings, payments, addons, and refunds

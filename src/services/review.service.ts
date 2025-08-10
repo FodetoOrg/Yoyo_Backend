@@ -20,18 +20,8 @@ export class ReviewService {
   async createReview(userId: string, reviewData: {
     hotelId: string;
     bookingId: string;
-    overallRating: number;
-    cleanlinessRating?: number;
-    serviceRating?: number;
-    locationRating?: number;
-    valueForMoneyRating?: number;
-    amenitiesRating?: number;
-    title?: string;
+    rating: number;
     comment?: string;
-    pros?: string[];
-    cons?: string[];
-    roomType?: string;
-    tripType?: string;
   }) {
     const db = this.fastify.db;
 
@@ -69,6 +59,11 @@ export class ReviewService {
       throw new ValidationError('You have already reviewed this booking.');
     }
 
+    // Validate rating
+    if (reviewData.rating < 1 || reviewData.rating > 5) {
+      throw new ValidationError('Rating must be between 1 and 5.');
+    }
+
     // Create review
     const reviewId = uuidv4();
     const review = await db.insert(hotelReviews)
@@ -77,19 +72,8 @@ export class ReviewService {
         userId,
         hotelId: reviewData.hotelId,
         bookingId: reviewData.bookingId,
-        overallRating: reviewData.overallRating,
-        cleanlinessRating: reviewData.cleanlinessRating,
-        serviceRating: reviewData.serviceRating,
-        locationRating: reviewData.locationRating,
-        valueForMoneyRating: reviewData.valueForMoneyRating,
-        amenitiesRating: reviewData.amenitiesRating,
-        title: reviewData.title,
+        rating: reviewData.rating,
         comment: reviewData.comment,
-        pros: reviewData.pros ? JSON.stringify(reviewData.pros) : null,
-        cons: reviewData.cons ? JSON.stringify(reviewData.cons) : null,
-        stayDate: bookingData.checkInDate,
-        roomType: reviewData.roomType,
-        tripType: reviewData.tripType,
         isVerified: true, // Since it's validated against booking
         isApproved: true,
       })
@@ -99,7 +83,7 @@ export class ReviewService {
     try {
       await this.notificationService.sendHotelNotification(reviewData.hotelId, {
         title: 'New Review Received',
-        message: `New ${reviewData.overallRating}-star review from a guest`,
+        message: `New ${reviewData.rating}-star review from a guest`,
         data: { reviewId, bookingId: reviewData.bookingId }
       });
     } catch (error) {
@@ -131,5 +115,24 @@ export class ReviewService {
     ));
 
     return eligibleBookings;
+  }
+
+  // Get review by booking ID
+  async getReviewByBookingId(bookingId: string) {
+    const db = this.fastify.db;
+
+    const review = await db.select({
+      id: hotelReviews.id,
+      rating: hotelReviews.rating,
+      comment: hotelReviews.comment,
+      createdAt: hotelReviews.createdAt,
+      userName: users.name,
+    })
+    .from(hotelReviews)
+    .leftJoin(users, eq(hotelReviews.userId, users.id))
+    .where(eq(hotelReviews.bookingId, bookingId))
+    .limit(1);
+
+    return review[0] || null;
   }
 }
