@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { FastifyInstance } from 'fastify';
-import { bookings, hotels, rooms, users, customerProfiles, coupons, payments, bookingCoupons, bookingAddons, couponUsages, refunds } from '../models/schema';
+import { bookings, hotels, rooms, users, customerProfiles, coupons, payments, bookingCoupons, bookingAddons, couponUsages, refunds, reviews } from '../models/schema';
 import { eq, and, desc, asc, count, not, lt, gt, sql } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { NotFoundError, ConflictError } from '../types/errors';
@@ -1100,7 +1100,8 @@ export class BookingService {
         user: true,
         hotel: {
           with: {
-            images: true
+            images: true,
+            amenities: true // Assuming amenities are stored as JSON in the hotel table
           }
         },
         room: {
@@ -1124,6 +1125,14 @@ export class BookingService {
     if (booking.userId !== user.id && booking.hotel.ownerId !== user.id && user.role !== UserRole.SUPER_ADMIN) {
       throw new Error('Unauthorized. You do not have permission to view this booking');
     }
+
+    // Get review information if exists
+    const reviewData = await db.query.reviews.findFirst({
+      where: eq(reviews.bookingId, bookingId),
+      with: {
+        user: true // Include user data for review
+      }
+    });
 
     // Get refund information if exists
     const refundInfo = await db.query.refunds.findFirst({
@@ -1245,7 +1254,15 @@ export class BookingService {
         quantity: ba.quantity,
         unitPrice: ba.unitPrice,
         totalPrice: ba.totalPrice
-      }))
+      })),
+      reviewData: reviewData ? {
+        id: reviewData.id,
+        rating: reviewData.rating,
+        comment: reviewData.comment,
+        isVerified: reviewData.isVerified,
+        createdAt: reviewData.createdAt,
+        userName: reviewData.user?.name || 'Anonymous'
+      } : null
     };
   }
 }
