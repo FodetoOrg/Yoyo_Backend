@@ -212,7 +212,9 @@ export const deleteCouponSchema = {
 };
 
 export const getUserCouponsSchema = {
-  querystring: zodToJsonSchema(CouponFiltersSchema),
+  querystring: zodToJsonSchema(CouponFiltersSchema.extend({
+    hotelId: z.string()
+  })),
   response: {
     200: zodToJsonSchema(UserCouponListResponseSchema),
   },

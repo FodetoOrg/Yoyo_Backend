@@ -376,10 +376,17 @@ export class CouponService {
     if (hotelId) {
       const hotel = await db.query.hotels.findFirst({
         where: eq(hotels.id, hotelId),
+        with: {
+          rooms: {
+            columns: {
+              roomTypeId: true
+            }
+          }
+        }
       });
 
       if (hotel) {
-        couponList = await this.filterCouponsByHotelMapping(couponList, hotel);
+        couponList = await this.filterCouponsByHotelMapping(couponList, { ...hotel, roomTypes: hotel.rooms.map(room => room.roomTypeId) });
       }
     }
 
@@ -441,7 +448,7 @@ export class CouponService {
   // Helper method to filter coupons based on booking mapping
   private async filterCouponsByBookingMapping(couponList: any[], booking: any) {
     const db = this.fastify.db;
-    
+
     const filteredCoupons = [];
 
     for (const coupon of couponList) {
@@ -486,10 +493,12 @@ export class CouponService {
   private async filterCouponsByHotelMapping(couponList: any[], hotel: any) {
     const filteredCoupons = [];
 
+    console.log('couponList ', couponList)
+    console.log('hotel ', hotel)
     for (const coupon of couponList) {
       // If no mappings exist, coupon is valid for all
       if (!coupon.mappings || coupon.mappings.length === 0) {
-        filteredCoupons.push(coupon);
+        // filteredCoupons.push(coupon);
         continue;
       }
 
@@ -505,6 +514,10 @@ export class CouponService {
 
         // City mapping - check hotel's city
         if (mapping.cityId && hotel.cityId === mapping.cityId) {
+          isValidForHotel = true;
+          break;
+        }
+        if (mapping.roomTypeId && hotel.roomTypes.includes(mapping.roomTypeId)) {
           isValidForHotel = true;
           break;
         }
@@ -657,7 +670,7 @@ export class CouponService {
         if (mapping.cityId) {
           try {
             let cityIdToCheck = actualCityId;
-            
+
             // If we don't have cityId from booking, fetch it from hotel
             if (!cityIdToCheck) {
               const hotel = await db.query.hotels.findFirst({

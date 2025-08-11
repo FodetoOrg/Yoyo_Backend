@@ -7,6 +7,7 @@ const couponFiltersSchema = z.object({
   status: z.enum(['active', 'inactive', 'expired']).optional(),
   page: z.number().int().min(1).default(1),
   limit: z.number().int().min(1).max(100).default(10),
+
 });
 
 const createCouponSchema = z.object({
@@ -57,14 +58,14 @@ export class CouponController {
     try {
       const filters = couponFiltersSchema.parse(request.query);
       const result = await this.couponService.getCoupons(filters);
-      
+
       return reply.code(200).send({
         success: true,
         data: result,
       });
     } catch (error) {
       request.log.error(error);
-      
+
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
           success: false,
@@ -72,7 +73,7 @@ export class CouponController {
           errors: error.errors,
         });
       }
-      
+
       return reply.code(500).send({
         success: false,
         message: error.message || 'Failed to fetch coupons',
@@ -85,14 +86,14 @@ export class CouponController {
     try {
       const { id } = couponParamsSchema.parse(request.params);
       const coupon = await this.couponService.getCouponById(id);
-      
+
       return reply.code(200).send({
         success: true,
         data: coupon,
       });
     } catch (error) {
       request.log.error(error);
-      
+
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
           success: false,
@@ -100,7 +101,7 @@ export class CouponController {
           errors: error.errors,
         });
       }
-      
+
       const statusCode = error.statusCode || 500;
       return reply.code(statusCode).send({
         success: false,
@@ -113,16 +114,16 @@ export class CouponController {
   async createCoupon(request: FastifyRequest, reply: FastifyReply) {
     try {
       const couponData = createCouponSchema.parse(request.body);
-      
+
       const processedData = {
         ...couponData,
         validFrom: new Date(couponData.validFrom),
         validTo: new Date(couponData.validTo),
       };
-      
+
       const couponId = await this.couponService.createCoupon(processedData);
       const coupon = await this.couponService.getCouponById(couponId);
-      
+
       return reply.code(201).send({
         success: true,
         message: 'Coupon created successfully',
@@ -130,7 +131,7 @@ export class CouponController {
       });
     } catch (error) {
       request.log.error(error);
-      
+
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
           success: false,
@@ -138,7 +139,7 @@ export class CouponController {
           errors: error.errors,
         });
       }
-      
+
       const statusCode = error.statusCode || 500;
       return reply.code(statusCode).send({
         success: false,
@@ -152,7 +153,7 @@ export class CouponController {
     try {
       const { id } = couponParamsSchema.parse(request.params);
       const couponData = updateCouponSchema.parse(request.body);
-      
+
       const processedData: any = { ...couponData };
       if (couponData.validFrom) {
         processedData.validFrom = new Date(couponData.validFrom);
@@ -160,10 +161,10 @@ export class CouponController {
       if (couponData.validTo) {
         processedData.validTo = new Date(couponData.validTo);
       }
-      
+
       await this.couponService.updateCoupon(id, processedData);
       const coupon = await this.couponService.getCouponById(id);
-      
+
       return reply.code(200).send({
         success: true,
         message: 'Coupon updated successfully',
@@ -171,7 +172,7 @@ export class CouponController {
       });
     } catch (error) {
       request.log.error(error);
-      
+
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
           success: false,
@@ -179,7 +180,7 @@ export class CouponController {
           errors: error.errors,
         });
       }
-      
+
       const statusCode = error.statusCode || 500;
       return reply.code(statusCode).send({
         success: false,
@@ -193,14 +194,14 @@ export class CouponController {
     try {
       const { id } = couponParamsSchema.parse(request.params);
       await this.couponService.deleteCoupon(id);
-      
+
       return reply.code(200).send({
         success: true,
         message: 'Coupon deleted successfully',
       });
     } catch (error) {
       request.log.error(error);
-      
+
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
           success: false,
@@ -208,7 +209,7 @@ export class CouponController {
           errors: error.errors,
         });
       }
-      
+
       const statusCode = error.statusCode || 500;
       return reply.code(statusCode).send({
         success: false,
@@ -221,9 +222,9 @@ export class CouponController {
   async validateCoupon(request: FastifyRequest, reply: FastifyReply) {
     try {
       const { code, hotelId, roomTypeId, orderAmount, bookingId } = validateCouponSchema.parse(request.body);
-      console.log('user is in coupn validate ',request.user)
+      console.log('user is in coupn validate ', request.user)
       const result = await this.couponService.validateCoupon(code, hotelId, roomTypeId, orderAmount, request.user.id, 'daily', bookingId);
-      
+
       return reply.code(200).send({
         success: true,
         message: 'Coupon is valid',
@@ -231,7 +232,7 @@ export class CouponController {
       });
     } catch (error) {
       request.log.error(error);
-      
+
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
           success: false,
@@ -239,7 +240,7 @@ export class CouponController {
           errors: error.errors,
         });
       }
-      
+
       return reply.code(400).send({
         success: false,
         message: error.message || 'Coupon validation failed',
@@ -250,17 +251,18 @@ export class CouponController {
   // Get all coupons for users (including expired, active, etc.)
   async getUserCoupons(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const filters = couponFiltersSchema.parse(request.query);
-      const hotelId = (request.body as any)?.hotelId;
-      const result = await this.couponService.getUserCoupons(filters, request.user.id, hotelId);
-      
+      const filters = couponFiltersSchema.extend({
+        hotelId: z.string()
+      }).parse(request.query);
+      const result = await this.couponService.getUserCoupons(filters, request.user.id, filters.hotelId);
+
       return reply.code(200).send({
         success: true,
         data: result,
       });
     } catch (error) {
       request.log.error(error);
-      
+
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
           success: false,
@@ -268,7 +270,7 @@ export class CouponController {
           errors: error.errors,
         });
       }
-      
+
       return reply.code(500).send({
         success: false,
         message: error.message || 'Failed to fetch coupons',
