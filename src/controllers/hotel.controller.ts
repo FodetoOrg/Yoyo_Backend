@@ -120,7 +120,7 @@ export class HotelController {
       // Get all rooms for the hotel
       let rooms = await this.hotelService.getRoomsByHotelIdEnhanced(id);
 
-      console.log('rooms avialble in detils are ', rooms)
+
       // Filter rooms by booking type
       if (bookingType === "daily") {
         rooms = rooms.filter(room => room.isDailyBooking === true);
@@ -128,25 +128,20 @@ export class HotelController {
         rooms = rooms.filter(room => room.isHourlyBooking === true);
       }
 
-      console.log('guests ', guests)
+
       // Filter rooms by guest capacity if provided
       if (guests && guests > 0) {
         rooms = rooms.filter(room => room.capacity >= guests);
       }
-      console.log('checkin and checkout ', checkIn)
-      console.log('checkout ', checkOut)
-      console.log('rooms ', rooms)
+   
 
       // If dates are provided, filter by availability
       if (checkIn && checkOut && rooms.length > 0) {
-        console.log('checkOut ', checkOut)
-        console.log('checkin ', checkIn)
+       
         const checkInDate = new Date(checkIn.endsWith('Z') || checkIn.includes('+') ? checkIn : checkIn + 'Z');
         const checkOutDate = new Date(checkOut.endsWith('Z') || checkOut.includes('+') ? checkOut : checkOut + 'Z');
 
 
-        console.log('checkInDate', checkInDate);
-        console.log('checkOutDate', checkOutDate);
 
         const availableRooms = [];
         for (const room of rooms) {

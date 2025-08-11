@@ -31,11 +31,11 @@ export default fp(async function (fastify: FastifyInstance) {
   // Decorator to authenticate requests
   fastify.decorate('authenticate', async (request: FastifyRequest) => {
     try {
-      console.log("Authorization header:", request.headers.authorization);
+
       const decoded = await request.jwtVerify();
-      console.log('here in jwt decoded ',decoded);
+  
       request.user = decoded;
-      console.log("request.user ",request.user);
+
       
 
     } catch (err) {

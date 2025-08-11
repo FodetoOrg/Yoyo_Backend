@@ -357,10 +357,11 @@ export class BookingService {
       return bookingId;
     });
 
+    console.log('calling notifications')
     // 3. POST-TRANSACTION: Send notifications (async, don't block response)
     this.sendBookingNotifications(bookingId, bookingData, hotel, room, couponValidation)
       .catch(error => {
-        this.fastify.log.error('Failed to send booking notifications:', error);
+        console.log('Failed to send booking notifications:', error);
       });
 
     // 4. Return the booking details
@@ -482,6 +483,7 @@ export class BookingService {
   ) {
     const nights = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60 * 24));
 
+    console.log('in notifications ')
     try {
       // Send push notification
       await this.notificationService.sendInstantBookingSuccessNotification(bookingData.userId, {

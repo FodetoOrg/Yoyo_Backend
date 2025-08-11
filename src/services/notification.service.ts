@@ -53,11 +53,8 @@ export class NotificationService {
 
     try {
       // Check if token already exists for this device
-      const existingToken = await db.query.pushTokens.findFirst({
-        where: eq(pushTokens.pushToken, token)
-      });
 
-      console.log('existingToken ', existingToken)
+
       const tokenData = {
         userId,
         pushToken: token,
@@ -72,20 +69,19 @@ export class NotificationService {
       console.log('tokenData ', tokenData)
 
       return await db.transaction(async (tx) => {
-        if (existingToken) {
-          // Update existing token
-          await tx.delete(pushTokens)
-            .where(eq(pushTokens.id, existingToken.id))
+
+        await tx.delete(pushTokens)
+          .where(eq(pushTokens.userId, userId))
 
 
 
 
-        }
+
         const newToken = await tx.insert(pushTokens).values({
           id: uuidv4(),
           ...tokenData,
         }).returning();
-        console.log('newToken ',newToken)
+        console.log('newToken ', newToken)
         return newToken[0];
       })
     } catch (error) {
@@ -137,10 +133,10 @@ export class NotificationService {
     const db = this.fastify.db;
 
     const tokens = await db.query.pushTokens.findFirst({
-      where:eq(pushTokens.userId,userId)
-    }) 
-    console.log('tokens ',tokens)
-    if(!tokens){
+      where: eq(pushTokens.userId, userId)
+    })
+    console.log('tokens ', tokens)
+    if (!tokens) {
       throw new NotFoundError('Expo Token NotFound')
     }
     return await this.sendImmediateNotification({
@@ -149,7 +145,7 @@ export class NotificationService {
       title: 'Test Notification',
       message,
       source: 'test',
-      pushToken:tokens.pushToken
+      pushToken: tokens.pushToken
     });
   }
   // Send immediate notification (bypasses queue for urgent notifications)
@@ -166,6 +162,8 @@ export class NotificationService {
     sourceId?: string;
   }) {
     try {
+
+      console.log('in email sender')
       // Check user preferences first
       const preferences = await this.getUserPreferences(data.userId);
 
@@ -196,6 +194,7 @@ export class NotificationService {
           const user = await db.query.users.findFirst({
             where: eq(users.id, data.userId)
           });
+          console.log('notifications in email ')
           result = await this.sendEmailNotification({
             to: data.email || user?.email || '',
             subject: data.title,
@@ -304,6 +303,8 @@ export class NotificationService {
 
       // Get user's active push tokens
       const userTokens = await this.getUserPushTokens(userId);
+
+      console.log('got usertokens ', userTokens)
 
       if (userTokens.length === 0) {
         console.log(`No push tokens found for user ${userId}`);
@@ -458,12 +459,12 @@ export class NotificationService {
         email: users.email,
         role: users.role
       })
-      .from(users)
-      .where(and(
-        eq(users.role, 'hotel_admin'),
-        // Add hotel association logic here if you have it
-        eq(users.isActive, true)
-      ));
+        .from(users)
+        .where(and(
+          eq(users.role, 'hotel_admin'),
+          // Add hotel association logic here if you have it
+          eq(users.isActive, true)
+        ));
 
       const notifications = [];
 
@@ -538,7 +539,6 @@ export class NotificationService {
 
       // Check if user has enabled this type of notification
       if (!this.isNotificationAllowed(data.type, preferences)) {
-        console.log(`Notification blocked by user preferences: ${data.type} for user ${data.userId}`);
         return null;
       }
 
@@ -593,7 +593,7 @@ export class NotificationService {
       });
 
       if (!template || !template.enabled) {
-        console.log(`Template not found or disabled: ${templateKey}`);
+
         return;
       }
 
@@ -603,7 +603,6 @@ export class NotificationService {
       });
 
       if (!user) {
-        console.log(`User not found: ${userId}`);
         return;
       }
 
@@ -816,6 +815,8 @@ export class NotificationService {
       };
 
       const result = await transport.sendMail(mailOptions);
+
+
 
       return {
         messageId: result.messageId,

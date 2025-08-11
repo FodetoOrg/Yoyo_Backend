@@ -32,7 +32,7 @@ export function generateBookingConfirmationEmail(bookingData) {
   
     // Format currency
     const formatCurrency = (amount) => {
-      return `₹${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      return `₹${amount?.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     };
   
     // Determine status badge

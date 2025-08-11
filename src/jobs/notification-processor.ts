@@ -17,12 +17,12 @@ export class NotificationProcessor {
   // Start the notification processor
   start(intervalMs: number = 30000) { // 30 seconds default
     if (this.isRunning) {
-      console.log('Notification processor is already running');
+    
       return;
     }
 
     this.isRunning = true;
-    console.log('Starting notification processor...');
+
 
     this.intervalId = setInterval(async () => {
       try {

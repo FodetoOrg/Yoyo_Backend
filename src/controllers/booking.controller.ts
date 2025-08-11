@@ -29,7 +29,7 @@ export class BookingController {
 
       const response = await this.bookingService.cancelNoShowBookings(60)
 
-      console.log('response in no cancel is ', response)
+
 
       return reply.code(200).send({
         success: true,
@@ -65,7 +65,7 @@ export class BookingController {
 
       // Check if room exists and is available
       const room = await this.hotelService.getRoomById(bookingData.roomId);
-      console.log('room is in booking ', room)
+
       if (!room) {
         return reply.code(404).send({
           success: false,
@@ -92,7 +92,7 @@ export class BookingController {
         bookingData.bookingType
       );
 
-      console.log('availabilityCheck ', availabilityCheck)
+
 
       if (!availabilityCheck.available) {
         return reply.code(400).send({
@@ -167,7 +167,7 @@ export class BookingController {
         addons: processedAddons.length > 0 ? processedAddons : undefined
       });
 
-      console.log('booking final  is ', booking)
+
       return reply.code(201).send({
         success: true,
         message: 'Booking created successfully',
@@ -334,7 +334,7 @@ export class BookingController {
       const { status, page = 1, limit = 1000 } = request.query as any;
       const role = request.user.role;
 
-      console.log('user is ', request.user)
+
       // Only admin can access all bookings
       if (role !== UserRole.SUPER_ADMIN) {
         return reply.code(403).send({
@@ -342,7 +342,7 @@ export class BookingController {
           message: 'Unauthorized. Only admin can view all bookings',
         });
       }
-      console.log('limit 1', limit)
+ 
 
       const result = await this.bookingService.getAllBookings({ status, page, limit });
 
@@ -488,7 +488,7 @@ export class BookingController {
 
       const hotel = await this.hotelService.getHotelById(id);
 
-      console.log('hotel presemt ', hotel)
+
 
       if (!hotel) {
         return reply.code(404).send({
@@ -508,7 +508,7 @@ export class BookingController {
 
       const result = await this.bookingService.getBookingsByHotelId(id, { status, page, limit });
 
-      console.log('bookings ', result.bookings)
+ 
 
       return reply.code(200).send({
         success: true,
@@ -556,7 +556,7 @@ export class BookingController {
       const booking = await this.bookingService.getBookingById(bookingId);
 
       if (!booking) {
-        console.log('nno booking')
+  
         return reply.code(404).send({
           success: false,
           message: 'Booking not found',
