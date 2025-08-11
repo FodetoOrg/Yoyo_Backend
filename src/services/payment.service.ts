@@ -492,7 +492,7 @@ export class PaymentService {
           walletAmountUsed: walletAmount || 0,
           currency,
           receipt,
-          razorpayID: process.env.RAZORPAY_KEY_ID
+          razorpayId: process.env.RAZORPAY_KEY_ID
         };
       });
 
