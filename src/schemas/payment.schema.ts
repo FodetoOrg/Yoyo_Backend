@@ -101,6 +101,7 @@ export const PaymentOrderResponseSchema = z.object({
     amount: z.number(),
     currency: z.string(),
     receipt: z.string(),
+    razorpayId:z.string()
   }),
 });
 

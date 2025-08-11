@@ -491,7 +491,8 @@ export class PaymentService {
           originalAmount: amount,
           walletAmountUsed: walletAmount || 0,
           currency,
-          receipt
+          receipt,
+          razorpayID: process.env.RAZORPAY_KEY_ID
         };
       });
 
