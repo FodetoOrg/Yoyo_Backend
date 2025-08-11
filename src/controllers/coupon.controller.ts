@@ -251,8 +251,8 @@ export class CouponController {
   async getUserCoupons(request: FastifyRequest, reply: FastifyReply) {
     try {
       const filters = couponFiltersSchema.parse(request.query);
-      const bookingId = (request.body as any)?.bookingId;
-      const result = await this.couponService.getUserCoupons(filters, request.user.id, bookingId);
+      const hotelId = (request.body as any)?.hotelId;
+      const result = await this.couponService.getUserCoupons(filters, request.user.id, hotelId);
       
       return reply.code(200).send({
         success: true,

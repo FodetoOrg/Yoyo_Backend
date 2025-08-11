@@ -331,7 +331,7 @@ export class CouponService {
 
   // Get all coupons for users (no permission restrictions)
   // Get all coupons for users (no permission restrictions)
-  async getUserCoupons(filters: CouponFilters = {}, userId, bookingId?: string) {
+  async getUserCoupons(filters: CouponFilters = {}, userId, hotelId?: string) {
     const db = this.fastify.db;
     const { status, page = 1, limit = 10 } = filters;
 
@@ -372,18 +372,14 @@ export class CouponService {
       offset: (page - 1) * limit,
     });
 
-    // If bookingId is provided, filter coupons based on booking details
-    if (bookingId) {
-      const booking = await db.query.bookings.findFirst({
-        where: eq(bookings.id, bookingId),
-        with: {
-          hotel: true,
-          room: true,
-        },
+    // If hotelId is provided, filter coupons based on hotel mappings
+    if (hotelId) {
+      const hotel = await db.query.hotels.findFirst({
+        where: eq(hotels.id, hotelId),
       });
 
-      if (booking) {
-        couponList = await this.filterCouponsByBookingMapping(couponList, booking);
+      if (hotel) {
+        couponList = await this.filterCouponsByHotelMapping(couponList, hotel);
       }
     }
 
@@ -479,6 +475,42 @@ export class CouponService {
       }
 
       if (isValidForBooking) {
+        filteredCoupons.push(coupon);
+      }
+    }
+
+    return filteredCoupons;
+  }
+
+  // Helper method to filter coupons based on hotel mapping
+  private async filterCouponsByHotelMapping(couponList: any[], hotel: any) {
+    const filteredCoupons = [];
+
+    for (const coupon of couponList) {
+      // If no mappings exist, coupon is valid for all
+      if (!coupon.mappings || coupon.mappings.length === 0) {
+        filteredCoupons.push(coupon);
+        continue;
+      }
+
+      let isValidForHotel = false;
+
+      // Check each mapping
+      for (const mapping of coupon.mappings) {
+        // Direct hotel match
+        if (mapping.hotelId && mapping.hotelId === hotel.id) {
+          isValidForHotel = true;
+          break;
+        }
+
+        // City mapping - check hotel's city
+        if (mapping.cityId && hotel.cityId === mapping.cityId) {
+          isValidForHotel = true;
+          break;
+        }
+      }
+
+      if (isValidForHotel) {
         filteredCoupons.push(coupon);
       }
     }
