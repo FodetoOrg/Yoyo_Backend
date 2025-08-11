@@ -1,12 +1,13 @@
-//@ts-nocheck
+
 import { FastifyInstance } from 'fastify';
-import { paymentOrders, paymentWebhooks, payments, bookings, adminPayments, hotels } from '../models/schema';
-import { eq, and, desc, inArray ,count} from 'drizzle-orm';
+import { paymentOrders, paymentWebhooks, payments, bookings, adminPayments, hotels, wallets, walletTransactions } from '../models/schema';
+import { eq, and, desc, inArray, count } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import Razorpay from 'razorpay';
 import crypto from 'crypto';
 import { NotificationService } from './notification.service';
 import { WalletService } from './wallet.service';
+import { v4 as uuidv4 } from 'uuid';
 
 interface CreatePaymentOrderParams {
   bookingId: string;
@@ -15,6 +16,7 @@ interface CreatePaymentOrderParams {
   currency?: string;
   useWallet?: boolean;
   walletAmount?: number;
+
 }
 
 interface VerifyPaymentParams {
@@ -183,10 +185,12 @@ export class PaymentService {
   // Create Razorpay order with fail-safe mechanism
   async createPaymentOrder(params: CreatePaymentOrderParams) {
     const db = this.fastify.db;
-    const { bookingId, userId, amount, currency = 'INR' } = params;
+    const { bookingId, userId, amount, currency = 'INR', walletAmount } = params;
+
+    console.log('params are ', params)
 
     try {
-      // Check if booking exists and is valid
+      // Check if booking exists and is valid (outside transaction)
       const booking = await db.query.bookings.findFirst({
         where: eq(bookings.id, bookingId),
         with: { user: true, hotel: true, room: true }
@@ -202,91 +206,149 @@ export class PaymentService {
         throw new Error('Payment already completed for this booking');
       }
 
-      // Check for existing pending order
-      const existingOrder = await db.query.paymentOrders.findFirst({
-        where: and(
-          eq(paymentOrders.bookingId, bookingId),
-          eq(paymentOrders.status, 'created')
-        )
-      });
-      console.log('existingOrder ', existingOrder);
-
-      if (existingOrder && new Date() < existingOrder.expiresAt) {
-        return {
-          orderId: existingOrder.razorpayOrderId,
-          amount: existingOrder.amount,
-          currency: existingOrder.currency,
-          receipt: existingOrder.receipt
-        };
+      if (amount !== booking.totalAmount - walletAmount) {
+        throw new error('There is an issue with payment')
       }
 
-      // Create Razorpay order
-      const receipt = `receipt_${bookingId}_${Date.now()}`;
-      console.log('receipt ', receipt);
+      // // Check for existing pending order (outside transaction)
+      // const existingOrder = await db.query.paymentOrders.findFirst({
+      //   where: and(
+      //     eq(paymentOrders.bookingId, bookingId),
+      //     eq(paymentOrders.status, 'created')
+      //   )
+      // });
 
-      // Validate Razorpay configuration before making API call
+      // console.log('existingOrder ', existingOrder);
+
+      // if (existingOrder && new Date() < existingOrder.expiresAt) {
+      //   return {
+      //     orderId: existingOrder.razorpayOrderId,
+      //     amount: existingOrder.amount,
+      //     currency: existingOrder.currency,
+      //     receipt: existingOrder.receipt
+      //   };
+      // }
+
+      // Validate wallet amount
+      if (walletAmount && walletAmount < 1) {
+        throw new Error('Wallet amount should be >=1 to use');
+      }
+
+      // Validate Razorpay configuration
       if (!this.razorpay) {
         throw new Error('Razorpay client not initialized');
       }
 
-      console.log('Creating Razorpay order with amount:', Math.round(amount * 100));
+      let amountFinal = amount;
+      let walletData = null;
+
+      // Pre-validate wallet if wallet amount is provided
+      if (walletAmount && walletAmount >= 1) {
+        walletData = await db.query.wallets.findFirst({
+          where: eq(wallets.userId, userId)
+        });
+
+        console.log('wallet ', walletData);
+
+        if (!walletData || walletData.balance < walletAmount) {
+          throw new Error("You don't have enough wallet money to continue the payment. Try to avoid using wallet");
+        }
+
+        amountFinal = booking.totalAmount - walletAmount;
+
+
+      }
+
+      // Create Razorpay order (outside transaction since it's external API)
+      const receipt = `receipt_${bookingId}_${Date.now()}`;
+      console.log('Creating Razorpay order with amount:', Math.round(amountFinal * 100));
 
       const razorpayOrder = await this.razorpay.orders.create({
-        amount: Math.round(amount * 100), // Convert to paise
+        amount: Math.round(amountFinal * 100), // Convert to paise
         currency,
         receipt: receipt.slice(0, 40),
         payment_capture: 1,
         notes: {
           bookingId,
           userId,
-          hotelId: booking.hotelId
+          hotelId: booking.hotelId,
         }
       });
 
       console.log('Razorpay order created successfully:', razorpayOrder.id);
 
-      // Find existing payment record
-      const existingPayment = await db.query.payments.findFirst({
-        where: and(
-          eq(payments.bookingId, bookingId),
-          eq(payments.status, 'pending')
-        )
+      // Now perform all database operations in a single transaction
+      const result = await db.transaction(async (tx) => {
+        // 1. Process wallet deduction if applicable
+
+
+        // 2. Create payment order record
+        const paymentOrderId = uuidv4();
+        const expiresAt = new Date();
+        expiresAt.setMinutes(expiresAt.getMinutes() + 15); // 15 minutes expiry
+
+        await tx.insert(paymentOrders).values({
+          id: paymentOrderId,
+          bookingId,
+          userId,
+          razorpayOrderId: razorpayOrder.id,
+          amount: amountFinal, // Store the final amount after wallet deduction
+          originalAmount: amount, // Store original amount for reference
+          walletAmountUsed: walletAmount || 0, // Store wallet amount used
+          currency,
+          receipt,
+          expiresAt,
+        });
+
+        // 3. Find and update existing payment record
+        const existingPayment = await tx.query.payments.findFirst({
+          where: and(
+            eq(payments.bookingId, bookingId),
+            eq(payments.status, 'pending')
+          )
+        });
+
+        if (existingPayment) {
+          await tx.update(payments)
+            .set({
+              paymentOrderId: paymentOrderId,
+              paymentMode: 'online',
+              paymentMethod: walletAmount >= amount ? 'wallet' : 'razorpay', // Set method based on payment type
+              walletAmountUsed: walletAmount || 0,
+              updatedAt: new Date(),
+              amount: amountFinal,
+              actualPaymentAmount: booking.amount
+
+            })
+            .where(eq(payments.id, existingPayment.id));
+        } else {
+          const paymentId = uuidv4();
+          await tx.insert(payments).values({
+            id: paymentId,
+            bookingId,
+            userId: userId,
+            amount: amountFinal,
+            actualPaymentAmount: booking.amount,
+            currency: 'INR',
+            paymentType: 'full',
+            paymentMethod: walletAmount >= amount ? 'wallet' : 'razorpay',
+            paymentMode: 'offline',
+            status: 'pending',
+            transactionDate: new Date(),
+          });
+        }
+
+        return {
+          orderId: razorpayOrder.id,
+          amount: amountFinal,
+          originalAmount: amount,
+          walletAmountUsed: walletAmount || 0,
+          currency,
+          receipt
+        };
       });
 
-      // Store order in database
-      const paymentOrderId = uuidv4();
-      const expiresAt = new Date();
-      expiresAt.setMinutes(expiresAt.getMinutes() + 15); // 15 minutes expiry
-
-      await db.insert(paymentOrders).values({
-        id: paymentOrderId,
-        bookingId,
-        userId,
-        razorpayOrderId: razorpayOrder.id,
-        amount,
-        currency,
-        receipt,
-        expiresAt,
-      });
-
-      // Link payment order to existing payment
-      if (existingPayment) {
-        await db.update(payments)
-          .set({
-            paymentOrderId: paymentOrderId,
-            paymentMode: 'online',
-            paymentMethod: 'razorpay',
-            updatedAt: new Date()
-          })
-          .where(eq(payments.id, existingPayment.id));
-      }
-
-      return {
-        orderId: razorpayOrder.id,
-        amount,
-        currency,
-        receipt
-      };
+      return result;
 
     } catch (error) {
       console.error('Error creating payment order:', error);
@@ -307,34 +369,44 @@ export class PaymentService {
         errorMessage = error.message;
       }
 
-      // Send error notification
-      // await this.notificationService.sendNotificationFromTemplate('payment_order_failed', userId, {
-      //   bookingId,
-      //   error: errorMessage
-      // });
+      // If Razorpay order was created but DB transaction failed, 
+      // you might want to handle cleanup here
 
       throw new Error(`Failed to create payment order: ${errorMessage}`);
     }
   }
 
-  // Verify payment with comprehensive validation
+  // Verify payment with comprehensive validation in a single transaction
   async verifyPayment(params: VerifyPaymentParams) {
     const db = this.fastify.db;
     const { razorpayPaymentId, razorpayOrderId, razorpaySignature } = params;
 
     return await db.transaction(async (tx) => {
+      let paymentOrder = null;
+
       try {
-        // Find payment order
-        const paymentOrder = await tx.query.paymentOrders.findFirst({
+        // 1. Find and validate payment order with all required relations
+        paymentOrder = await tx.query.paymentOrders.findFirst({
           where: eq(paymentOrders.razorpayOrderId, razorpayOrderId),
-          with: { booking: { with: { user: true, hotel: true } } }
+          with: {
+            booking: {
+              with: {
+                user: true,
+                hotel: true
+              }
+            }
+          }
         });
 
         if (!paymentOrder) {
           throw new Error('Payment order not found');
         }
 
-        // Verify signature
+        if (paymentOrder.status === 'paid') {
+          throw new Error('Payment already processed');
+        }
+
+        // 2. Verify Razorpay signature
         const isValidSignature = this.verifyRazorpaySignature(
           razorpayOrderId,
           razorpayPaymentId,
@@ -345,14 +417,40 @@ export class PaymentService {
           throw new Error('Invalid payment signature');
         }
 
-        // Fetch payment details from Razorpay
+        // 3. Fetch and validate payment details from Razorpay
         const razorpayPayment = await this.razorpay.payments.fetch(razorpayPaymentId);
 
         if (razorpayPayment.status !== 'captured') {
-          throw new Error('Payment not captured');
+          throw new Error(`Payment not captured. Status: ${razorpayPayment.status}`);
         }
 
-        // Update payment order status
+        // 4. Verify payment amount matches
+        const expectedAmount = Math.round(paymentOrder.amount * 100); // Convert to paise
+        if (razorpayPayment.amount !== expectedAmount) {
+          throw new Error(`Payment amount mismatch. Expected: ${expectedAmount}, Received: ${razorpayPayment.amount}`);
+        }
+
+
+
+        // 6. Update payment record with transaction details
+        const [updatedPayment] = await tx.update(payments)
+          .set({
+            status: 'completed',
+            transactionDate: new Date(razorpayPayment.created_at * 1000),
+            paymentMethod: 'online',
+            razorpayPaymentId,
+            razorpayOrderId,
+            razorpaySignature,
+            updatedAt: new Date()
+          })
+          .where(eq(payments.bookingId, paymentOrder.bookingId))
+          .returning();
+
+        if (!updatedPayment) {
+          throw new Error('Failed to update payment record');
+        }
+
+        // 7. Update payment order status
         await tx.update(paymentOrders)
           .set({
             status: 'paid',
@@ -360,78 +458,155 @@ export class PaymentService {
           })
           .where(eq(paymentOrders.id, paymentOrder.id));
 
-          console.log('came here ')
-
-        const paymentReturned = await tx.update(payments).set({
-          status: 'completed',
-          transactionDate: new Date(razorpayPayment.created_at * 1000),
-          paymentMethod:'online',
-          razorpayPaymentId,
-          razorpayOrderId,
-          razorpaySignature,
-        }).where(eq(payments.bookingId, paymentOrder.bookingId)).returning();
-
-
-        console.log('came here 2')
-
-        // Update booking status
+        // 8. Update booking status
         await tx.update(bookings)
           .set({
             status: 'confirmed',
             paymentStatus: 'completed',
-            updatedAt: new Date(),
-            paymentMode:'online'
+            paymentMode: 'online',
+            walletAmountUsed: updatedPayment.walletAmountUsed,
+
+            updatedAt: new Date()
           })
           .where(eq(bookings.id, paymentOrder.bookingId));
 
-          console.log(' udpated bookings ',paymentOrder.bookingId)
+        // 9. Handle wallet debit if wallet amount was used
+        if (updatedPayment.walletAmountUsed && updatedPayment.walletAmountUsed > 0) {
+          // 5. Get wallet data for debit transaction
+          const walletData = await tx.query.wallets.findFirst({
+            where: eq(wallets.userId, paymentOrder.booking.userId)
+          });
 
-        // Send success notifications
-        await this.notificationService.sendNotificationFromTemplate('payment_success', paymentOrder.userId, {
+          if (!walletData) {
+            throw new Error('User wallet not found,but paymnet sucessful.A');
+          }
+          // Check sufficient wallet balance
+          if (walletData.balance < updatedPayment.walletAmountUsed) {
+            throw new Error('Insufficient wallet balance for debit');
+          }
+
+
+
+          const newBalance = walletData.balance - updatedPayment.walletAmountUsed;
+          const newTotalSpent = walletData.totalSpent + updatedPayment.walletAmountUsed;
+
+          // Create wallet transaction record
+          await tx.insert(walletTransactions).values({
+            id: uuidv4(),
+            walletId: walletData.id,
+            userId: walletData.userId,
+            type: 'debit',
+            source: 'payment',
+            amount: updatedPayment.walletAmountUsed,
+            balanceAfter: newBalance,
+            description: `Payment for booking ${paymentOrder.bookingId}`,
+            referenceId: paymentOrder.bookingId,
+            referenceType: 'payment',
+            createdAt: new Date()
+          });
+
+          // Update wallet balance
+          await tx.update(wallets)
+            .set({
+              balance: newBalance,
+              totalSpent: newTotalSpent,
+              updatedAt: new Date()
+            })
+            .where(eq(wallets.id, walletData.id));
+        }
+
+        // 10. Prepare notification data
+        const notificationData = {
           bookingId: paymentOrder.bookingId,
           paymentId: razorpayPaymentId,
           amount: razorpayPayment.amount / 100,
-          hotelName: paymentOrder.booking.hotel.name
-        });
+          hotelName: paymentOrder.booking.hotel.name,
+          guestName: paymentOrder.booking.user.name,
+          checkIn: paymentOrder.booking.checkInDate
+        };
 
-        // Send hotel notification
-        if (paymentOrder.booking.hotel.ownerId) {
-          await this.notificationService.sendNotificationFromTemplate('new_booking_hotel', paymentOrder.booking.hotel.ownerId, {
-            bookingId: paymentOrder.bookingId,
-            guestName: paymentOrder.booking.user.name,
-            amount: razorpayPayment.amount / 100,
-            checkIn: paymentOrder.booking.checkInDate
-          });
-        }
+        // Transaction successful - now send notifications (outside transaction)
+        // These are queued to run after transaction commits
+        setImmediate(async () => {
+          try {
+            // Send success notification to user
+            await this.notificationService.sendNotificationFromTemplate(
+              'payment_success',
+              paymentOrder.booking.userId,
+              notificationData
+            );
+
+            // Send new booking notification to hotel owner
+            if (paymentOrder.booking.hotel.ownerId) {
+              await this.notificationService.sendNotificationFromTemplate(
+                'new_booking_hotel',
+                paymentOrder.booking.hotel.ownerId,
+                notificationData
+              );
+            }
+          } catch (notificationError) {
+            console.error('Failed to send notifications:', notificationError);
+            // Note: We don't throw here as payment is already processed
+          }
+        });
 
         return {
           success: true,
-          paymentId:paymentReturned[0].id,
+          paymentId: updatedPayment.id,
           bookingId: paymentOrder.bookingId,
-          amount: razorpayPayment.amount / 100
+          amount: razorpayPayment.amount / 100,
+          walletAmountUsed: updatedPayment.walletAmountUsed || 0
         };
 
       } catch (error) {
         console.error('Payment verification failed:', error);
 
-        // Update order status to failed
+        // Handle failure updates within the same transaction
         if (paymentOrder) {
-          await tx.update(paymentOrders)
-            .set({
-              status: 'failed',
-              attempts: paymentOrder.attempts + 1,
-              updatedAt: new Date()
-            })
-            .where(eq(paymentOrders.id, paymentOrder.id));
+          try {
+            // Update payment order status to failed
+            await tx.update(paymentOrders)
+              .set({
+                status: 'failed',
+                attempts: (paymentOrder.attempts || 0) + 1,
+                updatedAt: new Date(),
+                failureReason: error.message
+              })
+              .where(eq(paymentOrders.id, paymentOrder.id));
 
-          // Send failure notification
-          await this.notificationService.sendNotificationFromTemplate('payment_failed', paymentOrder.userId, {
-            bookingId: paymentOrder.bookingId,
-            error: error.message
-          });
+            // Update booking status to failed
+            await tx.update(bookings)
+              .set({
+                status: 'payment_failed',
+                paymentStatus: 'failed',
+                updatedAt: new Date()
+              })
+              .where(eq(bookings.id, paymentOrder.bookingId));
+
+            // Queue failure notification (outside transaction)
+            setImmediate(async () => {
+              try {
+                await this.notificationService.sendNotificationFromTemplate(
+                  'payment_failed',
+                  paymentOrder.booking.userId,
+                  {
+                    bookingId: paymentOrder.bookingId,
+                    error: error.message,
+                    hotelName: paymentOrder.booking.hotel.name
+                  }
+                );
+              } catch (notificationError) {
+                console.error('Failed to send failure notification:', notificationError);
+              }
+            });
+
+          } catch (updateError) {
+            console.error('Failed to update failure status:', updateError);
+          }
         }
 
-        throw error;
+        // Re-throw the original error
+        throw new Error(`Payment verification failed: ${error.message}`);
       }
     });
   }
@@ -667,151 +842,151 @@ export class PaymentService {
       }
     });
   }
-// Get payment history
-async getPaymentHistory(filters: PaymentHistoryFilters) {
-  const db = this.fastify.db;
-  const { userId, bookingId, status, paymentMode, page = 1, limit = 10, hotelId } = filters;
+  // Get payment history
+  async getPaymentHistory(filters: PaymentHistoryFilters) {
+    const db = this.fastify.db;
+    const { userId, bookingId, status, paymentMode, page = 1, limit = 10, hotelId } = filters;
 
-  console.log('userid ', userId)
-  console.log(bookingId)
-  console.log(paymentMode)
-  console.log('status ', status)
-  console.log(hotelId)
+    console.log('userid ', userId)
+    console.log(bookingId)
+    console.log(paymentMode)
+    console.log('status ', status)
+    console.log(hotelId)
 
-  let whereConditions: any[] = [];
+    let whereConditions: any[] = [];
 
-  if (userId) {
-    whereConditions.push(eq(payments.userId, userId));
-  }
+    if (userId) {
+      whereConditions.push(eq(payments.userId, userId));
+    }
 
-  if (bookingId) {
-    whereConditions.push(eq(payments.bookingId, bookingId));
-  }
+    if (bookingId) {
+      whereConditions.push(eq(payments.bookingId, bookingId));
+    }
 
-  if (status) {
-    whereConditions.push(eq(payments.status, status));
-  }
+    if (status) {
+      whereConditions.push(eq(payments.status, status));
+    }
 
-  if (paymentMode) {
-    whereConditions.push(eq(payments.paymentMode, paymentMode));
-  }
+    if (paymentMode) {
+      whereConditions.push(eq(payments.paymentMode, paymentMode));
+    }
 
-  console.log('hotelId is ', hotelId)
+    console.log('hotelId is ', hotelId)
 
-  // For hotel filtering, we need to join with bookings table
-  let query = db
-    .select()
-    .from(payments)
-    .leftJoin(bookings, eq(payments.bookingId, bookings.id));
+    // For hotel filtering, we need to join with bookings table
+    let query = db
+      .select()
+      .from(payments)
+      .leftJoin(bookings, eq(payments.bookingId, bookings.id));
 
-  // Add hotel filter if provided
-  if (hotelId) {
-    query = query.where(and(
-      whereConditions.length > 0 ? and(...whereConditions) : undefined,
-      eq(bookings.hotelId, hotelId)
-    ));
-  } else if (whereConditions.length > 0) {
-    query = query.where(and(...whereConditions));
-  }
+    // Add hotel filter if provided
+    if (hotelId) {
+      query = query.where(and(
+        whereConditions.length > 0 ? and(...whereConditions) : undefined,
+        eq(bookings.hotelId, hotelId)
+      ));
+    } else if (whereConditions.length > 0) {
+      query = query.where(and(...whereConditions));
+    }
 
-  // Apply pagination and ordering
-  const rawPayments = await query
-    .orderBy(desc(payments.createdAt))
-    .limit(limit)
-    .offset((page - 1) * limit);
+    // Apply pagination and ordering
+    const rawPayments = await query
+      .orderBy(desc(payments.createdAt))
+      .limit(limit)
+      .offset((page - 1) * limit);
 
-  // Now get the full payment data with relations for the filtered results
-  const paymentIds = rawPayments.map(row => row.payments.id);
+    // Now get the full payment data with relations for the filtered results
+    const paymentIds = rawPayments.map(row => row.payments.id);
 
-  const paymentHistory = await db.query.payments.findMany({
-    where: inArray(payments.id, paymentIds),
-    with: {
-      user: {
-        columns: {
-          id: true,
-          name: true,
-          phone: true
-        }
-      },
-      booking: {
-        with: {
-          hotel: {
-            columns: {
-              id: true,
-              name: true,
-            }
-          },
-          room: {
-            columns: {
-              id: true,
-              name: true,
-              roomNumber: true,
+    const paymentHistory = await db.query.payments.findMany({
+      where: inArray(payments.id, paymentIds),
+      with: {
+        user: {
+          columns: {
+            id: true,
+            name: true,
+            phone: true
+          }
+        },
+        booking: {
+          with: {
+            hotel: {
+              columns: {
+                id: true,
+                name: true,
+              }
+            },
+            room: {
+              columns: {
+                id: true,
+                name: true,
+                roomNumber: true,
+              }
             }
           }
         }
-      }
-    },
-    orderBy: [desc(payments.createdAt)],
-  });
+      },
+      orderBy: [desc(payments.createdAt)],
+    });
 
-  // Get total count with the same filtering logic
-  let countQuery = db
-    .select({ count: count() })
-    .from(payments)
-    .leftJoin(bookings, eq(payments.bookingId, bookings.id));
+    // Get total count with the same filtering logic
+    let countQuery = db
+      .select({ count: count() })
+      .from(payments)
+      .leftJoin(bookings, eq(payments.bookingId, bookings.id));
 
-  if (hotelId) {
-    countQuery = countQuery.where(and(
-      whereConditions.length > 0 ? and(...whereConditions) : undefined,
-      eq(bookings.hotelId, hotelId)
-    ));
-  } else if (whereConditions.length > 0) {
-    countQuery = countQuery.where(and(...whereConditions));
+    if (hotelId) {
+      countQuery = countQuery.where(and(
+        whereConditions.length > 0 ? and(...whereConditions) : undefined,
+        eq(bookings.hotelId, hotelId)
+      ));
+    } else if (whereConditions.length > 0) {
+      countQuery = countQuery.where(and(...whereConditions));
+    }
+
+    const totalResult = await countQuery;
+    const totalPayments = totalResult[0]?.count || 0;
+
+    console.log('paymentHistory ', paymentHistory.slice(0, 3))
+
+    return {
+      payments: paymentHistory.map(payment => ({
+        id: payment.id,
+        user: {
+          id: payment.user.id,
+          name: payment.user.name,
+          phone: payment.user.phone
+        },
+        bookingId: payment.bookingId,
+        amount: payment.amount,
+        currency: payment.currency,
+        paymentType: payment.paymentType,
+        paymentMethod: payment.paymentMethod,
+        paymentMode: payment.paymentMode,
+        status: payment.status,
+        receiptNumber: payment.receiptNumber,
+        transactionDate: payment.transactionDate,
+        createdAt: payment.createdAt,
+        razorpayOrderId: payment.razorpayOrderId || null,
+        razorpayPaymentId: payment.razorpayPaymentId || null,
+        razorpaySignature: payment.razorpaySignature || null,
+        hotelId: payment.booking.hotel?.id || null,
+        booking: {
+          id: payment.booking.id,
+          checkInDate: payment.booking.checkInDate,
+          checkOutDate: payment.booking.checkOutDate,
+          totalAmount: payment.booking.totalAmount,
+          hotel: payment.booking.hotel,
+          room: payment.booking.room,
+        },
+        offlinePaymentDetails: payment.offlinePaymentDetails ? JSON.parse(payment.offlinePaymentDetails) : null,
+      })),
+      total: totalPayments,
+      page,
+      limit,
+      totalPages: Math.ceil(totalPayments / limit),
+    };
   }
-
-  const totalResult = await countQuery;
-  const totalPayments = totalResult[0]?.count || 0;
-
-  console.log('paymentHistory ', paymentHistory.slice(0, 3))
-
-  return {
-    payments: paymentHistory.map(payment => ({
-      id: payment.id,
-      user: {
-        id: payment.user.id,
-        name: payment.user.name,
-        phone: payment.user.phone
-      },
-      bookingId: payment.bookingId,
-      amount: payment.amount,
-      currency: payment.currency,
-      paymentType: payment.paymentType,
-      paymentMethod: payment.paymentMethod,
-      paymentMode: payment.paymentMode,
-      status: payment.status,
-      receiptNumber: payment.receiptNumber,
-      transactionDate: payment.transactionDate,
-      createdAt: payment.createdAt,
-      razorpayOrderId: payment.razorpayOrderId || null,
-      razorpayPaymentId: payment.razorpayPaymentId || null,
-      razorpaySignature: payment.razorpaySignature || null,
-      hotelId: payment.booking.hotel?.id || null,
-      booking: {
-        id: payment.booking.id,
-        checkInDate: payment.booking.checkInDate,
-        checkOutDate: payment.booking.checkOutDate,
-        totalAmount: payment.booking.totalAmount,
-        hotel: payment.booking.hotel,
-        room: payment.booking.room,
-      },
-      offlinePaymentDetails: payment.offlinePaymentDetails ? JSON.parse(payment.offlinePaymentDetails) : null,
-    })),
-    total: totalPayments,
-    page,
-    limit,
-    totalPages: Math.ceil(totalPayments / limit),
-  };
-}
 
   // Handle Razorpay webhooks
   async handleWebhook(signature: string, payload: string) {

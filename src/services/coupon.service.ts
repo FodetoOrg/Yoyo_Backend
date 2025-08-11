@@ -1,7 +1,6 @@
-//@ts-nocheck
 import { FastifyInstance } from "fastify";
 import { coupons, couponMappings, cities, hotels, roomTypes, couponUsages } from "../models/schema";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { eq, and, desc, inArray, isNull, lt, or } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { NotFoundError, ConflictError } from "../types/errors";
 
@@ -331,13 +330,32 @@ export class CouponService {
   }
 
   // Get all coupons for users (no permission restrictions)
+  // Get all coupons for users (no permission restrictions)
   async getUserCoupons(filters: CouponFilters = {}, userId) {
     const db = this.fastify.db;
     const { status, page = 1, limit = 10 } = filters;
 
-    let whereCondition = status ? eq(coupons.status, status) : undefined;
+    let whereConditions = [];
 
-    // First get all coupons
+    // Add status filter if provided
+    if (status) {
+      whereConditions.push(eq(coupons.status, status));
+    }
+
+    // Add condition to exclude coupons that have reached their usage limit
+    // Only show coupons where usageLimit is null (unlimited) OR usedCount < usageLimit
+    whereConditions.push(
+      or(
+        isNull(coupons.usageLimit),
+        lt(coupons.usedCount, coupons.usageLimit)
+      )
+    );
+
+    const whereCondition = whereConditions.length > 1
+      ? and(...whereConditions)
+      : whereConditions[0];
+
+    // First get all available coupons (not maxed out)
     const couponList = await db.query.coupons.findMany({
       where: whereCondition,
       with: {
@@ -364,7 +382,7 @@ export class CouponService {
 
     const usedCouponIdSet = new Set(usedCouponIds.map(usage => usage.couponId));
 
-    // Get total count
+    // Get total count (with same filters)
     const totalCoupons = await db.query.coupons.findMany({
       where: whereCondition,
     });
@@ -382,6 +400,7 @@ export class CouponService {
         validTo: coupon.validTo,
         usageLimit: coupon.usageLimit,
         usedCount: coupon.usedCount,
+        remainingUses: coupon.usageLimit ? coupon.usageLimit - coupon.usedCount : null,
         status: coupon.status,
         isUsed: usedCouponIdSet.has(coupon.id), // Check if user has used this coupon
         mappings: {
@@ -410,7 +429,7 @@ export class CouponService {
 
   // Validate coupon for booking
   // Validate coupon for booking
-  async validateCoupon(code: string, hotelId: string, roomTypeId: string, orderAmount: number,userId: string, bookingType: 'daily' | 'hourly' = 'daily') {
+  async validateCoupon(code: string, hotelId: string, roomTypeId: string, orderAmount: number, userId: string, bookingType: 'daily' | 'hourly' = 'daily') {
     const db = this.fastify.db;
 
     const coupon = await db.query.coupons.findFirst({
@@ -438,8 +457,8 @@ export class CouponService {
     const safeCouponId = coupon.id ? String(coupon.id) : null;
     const safeUserId = userId ? String(userId) : null;
 
-    console.log('coupn id is ',coupon.id)
-    console.log('userid is ',userId)
+    console.log('coupn id is ', coupon.id)
+    console.log('userid is ', userId)
     if (!safeCouponId || !safeUserId) {
       throw new Error('Invalid coupon ID or user ID');
     }

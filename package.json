@@ -46,6 +46,7 @@
     "fastify-zod": "^1.4.0",
     "firebase": "^11.7.3",
     "firebase-admin": "^13.0.2",
+    "node-cron": "^4.2.1",
     "nodemailer": "^7.0.5",
     "pino": "^8.16.2",
     "pino-pretty": "^10.2.3",

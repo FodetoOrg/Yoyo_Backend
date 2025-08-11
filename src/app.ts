@@ -38,6 +38,7 @@ import { partnerContactRoutes } from './routes/partnerContact.route';
 import { refundRoutes } from './routes/refund.route';
 import detailsRoutes from './routes/details.route'; // Assuming detailsRoutes is in './routes/details.route'
 import { walletRoutes } from './routes/wallet.route';
+import noShowCancellerCron from './plugins/noShowCancellerCron';
 
 // Create Fastify instance
 export const app: FastifyInstance = fastify({
@@ -74,6 +75,7 @@ app.register(registerSwagger);
 app.register(registerJwt);
 app.register(registerDb);
 app.register(registerErrorHandler);
+app.register(noShowCancellerCron);
 
 // Register routes
 app.register(authRoutes, { prefix: '/api/v1/auth' });

@@ -70,6 +70,7 @@ export const GetHotelResponseSchema = z.object({
   data: z.object({
     hotel: HotelSchema.extend({
       cityId: z.string(),
+      onlinePaymentEnabled:z.string()
     }),
   }),
 });

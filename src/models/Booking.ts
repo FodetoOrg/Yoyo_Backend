@@ -20,6 +20,7 @@ export const bookings = sqliteTable('bookings', {
   totalHours: integer('total_hours'), // Only for hourly bookings
   guestCount: integer('guest_count').notNull().default(1),
   totalAmount: real('total_amount').notNull(),
+  walletAmountUsed:integer('wallet_amount_used').default(0),
   paymentMode: text('payment_mode').notNull().default('offline'), // 'online', 'offline'
   requiresOnlinePayment: integer('requires_online_payment', { mode: 'boolean' }).notNull().default(false),
   status: text('status').notNull().default('pending'), // confirmed, cancelled, checked_in, completed

@@ -18,10 +18,10 @@ export const PaymentOrderSchema = z.object({
 export const PaymentSchema = z.object({
   id: z.string().uuid(),
   bookingId: z.string().uuid(),
-  user:z.object({
-    id:z.string(),
-    name:z.string(),
-    phone:z.string()
+  user: z.object({
+    id: z.string(),
+    name: z.string(),
+    phone: z.string()
 
   }),
   amount: z.number().positive(),
@@ -44,6 +44,10 @@ export const CreatePaymentOrderRequestSchema = z.object({
   bookingId: z.string().uuid(),
   amount: z.number().positive(),
   currency: z.string().default('INR'),
+  walletAmount: z.coerce.number()
+    .min(0, 'Amount must be ≥ 0')   // or .nonnegative()
+    .optional()
+    .default(0)
 });
 
 export const VerifyPaymentRequestSchema = z.object({

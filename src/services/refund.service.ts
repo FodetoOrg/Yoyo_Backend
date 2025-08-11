@@ -1,10 +1,10 @@
-//@ts-nocheck
 import { FastifyInstance } from 'fastify';
 import { eq, and, desc } from 'drizzle-orm';
-import { refunds, bookings, payments, hotels, users } from '../models/schema';
+import { refunds, bookings, wallets, walletTransactions } from '../models/schema';
 import { v4 as uuidv4 } from 'uuid';
 import { NotificationService } from './notification.service';
 import { WalletService } from './wallet.service'; // Assuming WalletService is in './wallet.service'
+import { UserRole } from '../types/common';
 
 export class RefundService {
   private fastify: FastifyInstance;
@@ -107,18 +107,24 @@ export class RefundService {
       if (params.refundType === 'hotel_cancellation') {
         // Hotel cancellation - typically full refund regardless of timing
         refundCalculation = {
-          refundAmount: booking.totalAmount,
+          refundAmount: booking.totalAmount ,
           cancellationFeeAmount: 0,
-          hoursUntilCheckIn: this.calculateHoursUntilCheckIn(booking.checkInDate)
+
         };
       } else {
+        //TO-DO
         // User cancellation - apply normal cancellation policy
-        refundCalculation = this.calculateRefundAmount(
-          booking.totalAmount,
-          booking.hotel.cancellationFeePercentage,
-          booking.checkInDate,
-          booking.hotel.cancellationTimeHours
-        );
+        // refundCalculation = this.calculateRefundAmount(
+        //   booking.totalAmount,
+        //   booking.hotel.cancellationFeePercentage,
+        //   booking.checkInDate,
+        //   booking.hotel.cancellationTimeHours
+        // );
+        refundCalculation = {
+          refundAmount: booking.totalAmount - booking.walletAmountUsed,
+          cancellationFeeAmount: 0,
+          
+        }
       }
 
       // Create refund record
@@ -132,7 +138,8 @@ export class RefundService {
         originalAmount: booking.totalAmount,
         cancellationFeeAmount: refundCalculation.cancellationFeeAmount,
         refundAmount: refundCalculation.refundAmount,
-        cancellationFeePercentage: params.refundType === 'hotel_cancellation' ? 0 : booking.hotel.cancellationFeePercentage,
+        cancellationFeePercentage:0,
+        // cancellationFeePercentage: params.refundType === 'hotel_cancellation' ? 0 : booking.hotel.cancellationFeePercentage,
         refundReason: params.refundReason,
         status: 'pending',
         refundMethod: booking.payment?.paymentMode === 'online' ? 'razorpay' : 'bank_transfer',
@@ -162,7 +169,7 @@ export class RefundService {
         refundId,
         refundAmount: refundCalculation.refundAmount,
         cancellationFeeAmount: refundCalculation.cancellationFeeAmount,
-        hoursUntilCheckIn: refundCalculation.hoursUntilCheckIn,
+
         status: 'pending'
       };
     });
@@ -215,8 +222,11 @@ export class RefundService {
   }
 
   // Process refund (Admin only)
-  async processRefund(refundId: string, processedBy: string, bankDetails?: any) {
+  async processRefund(refundId: string, processedBy: any) {
     const db = this.fastify.db;
+    if (processedBy.role !== UserRole.SUPER_ADMIN) {
+      throw new Error('You dont have access to refund this')
+    }
 
     return await db.transaction(async (tx) => {
       const refund = await tx.query.refunds.findFirst({
@@ -236,37 +246,63 @@ export class RefundService {
         throw new Error('Refund is not in pending status');
       }
 
-      let razorpayRefundId = null;
+      console.log('refund retunred ', refund)
 
-      // Process online refund through Razorpay if applicable
-      if (refund.refundMethod === 'razorpay' && refund.originalPayment?.razorpayPaymentId) {
-        try {
-          // Here you would integrate with Razorpay refund API
-          // const razorpayRefund = await this.razorpay.payments.refund(
-          //   refund.originalPayment.razorpayPaymentId,
-          //   { amount: Math.round(refund.refundAmount * 100) }
-          // );
-          // razorpayRefundId = razorpayRefund.id;
-        } catch (error) {
-          throw new Error('Failed to process online refund: ' + error.message);
-        }
+      let wallet = await tx.query.wallets.findFirst({
+        where: eq(wallets.userId, refund.userId)
+      });
+
+      console.log('wallet is ', wallet)
+
+      if (!wallet) {
+        const walletId = uuidv4();
+        [wallet] = await tx.insert(wallets).values({
+          id: walletId,
+          userId: refund.userId,
+          balance: 0,
+          totalEarned: 0,
+          totalSpent: 0,
+          status: 'active'
+        }).returning();
       }
+      console.log('wallet after  is ', wallet)
 
-      // Credit wallet with refund amount
-      await this.walletService.creditWallet({
+      const newBalance = wallet.balance + refund.refundAmount;
+      const newTotalEarned = wallet.totalEarned + refund.refundAmount;
+
+      console.log('newbalance ', newBalance)
+      console.log('newTotaleearned ', newTotalEarned)
+
+      // Update wallet balance
+      await tx.update(wallets)
+        .set({
+          balance: newBalance,
+          totalEarned: newTotalEarned,
+          updatedAt: new Date()
+        })
+        .where(eq(wallets.id, wallet.id));
+
+
+      console.log('here ')
+
+      // Create transaction record
+      const transactionId = uuidv4();
+      await tx.insert(walletTransactions).values({
+        id: transactionId,
+        walletId: wallet.id,
         userId: refund.userId,
-        amount: refund.refundAmount,
+        type: 'credit',
         source: 'refund',
+        amount: refund.refundAmount,
+        balanceAfter: newBalance,
         description: `Refund for booking ${refund.bookingId}`,
         referenceId: refund.bookingId,
-        referenceType: 'refund',
-        metadata: {
-          refundId: refund.id,
-          originalAmount: refund.originalAmount,
-          cancellationFeeAmount: refund.cancellationFeeAmount,
-          processedBy
-        }
+        referenceType: 'booking',
+        metadata: refund.metadata ? JSON.stringify(refund.metadata) : null
       });
+
+      console.log('here ', 2)
+
 
       // Update refund status
       await tx.update(refunds)
@@ -275,11 +311,11 @@ export class RefundService {
           processedBy,
           processedAt: new Date(),
           refundMethod: 'wallet',
-          razorpayRefundId,
-          bankDetails: bankDetails ? JSON.stringify(bankDetails) : null,
           updatedAt: new Date()
         })
         .where(eq(refunds.id, refundId));
+
+      console.log('here 3')
 
       return { refundId, status: 'processed', amount: refund.refundAmount };
     });

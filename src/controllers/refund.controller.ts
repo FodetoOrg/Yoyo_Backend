@@ -116,20 +116,11 @@ export class RefundController {
     try {
       this.refundService = new RefundService(request.server);
       
-      const schema = z.object({
-        bankDetails: z.object({
-          accountNumber: z.string().optional(),
-          ifscCode: z.string().optional(),
-          accountHolderName: z.string().optional(),
-          bankName: z.string().optional()
-        }).optional()
-      });
-
       const { id } = request.params as { id: string };
-      const { bankDetails } = schema.parse(request.body);
-      const processedBy = (request as any).user.id;
+     
+      const processedBy = (request as any).user;
 
-      const result = await this.refundService.processRefund(id, processedBy, bankDetails);
+    const result = await this.refundService.processRefund(id, processedBy);
 
       return reply.send({
         success: true,

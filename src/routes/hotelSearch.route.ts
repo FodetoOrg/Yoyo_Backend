@@ -35,4 +35,8 @@ export default async function hotelSearchRoutes(fastify: FastifyInstance) {
   fastify.get('/offers', {
     schema: getOffersHotelsSchema
   }, (request, reply) => hotelSearchController.getOffersHotels(request, reply));
+
+  fastify.get('/featured', {
+
+  }, (request, reply) => hotelSearchController.getFeaturedHotels(request, reply))
 }

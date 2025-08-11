@@ -779,7 +779,7 @@ export class HotelService {
 
     console.log('room is ', room)
 
-    if (!room || room.status !== 'available') {
+    if (!room) {
       return false;
     }
 

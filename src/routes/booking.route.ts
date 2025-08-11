@@ -72,7 +72,7 @@ export default async function bookingRoutes(fastify: FastifyInstance) {
       summary: 'Get user\'s bookings',
       security: [{ bearerAuth: [] }]
     },
-    preHandler:[fastify.authenticate]
+    preHandler: [fastify.authenticate]
   }, (request, reply) => bookingController.getUserBookings(request, reply));
 
   // Get hotel bookings
@@ -130,7 +130,7 @@ export default async function bookingRoutes(fastify: FastifyInstance) {
     }
   }, (request, reply) => bookingController.cancelBooking(request, reply));
 
-  
+
 
   // Update booking status (admin/hotel only)
   fastify.put('/:bookingId/status', {
@@ -138,9 +138,9 @@ export default async function bookingRoutes(fastify: FastifyInstance) {
       body: {
         type: 'object',
         properties: {
-          status: { 
-            type: 'string', 
-            enum: ['confirmed', 'cancelled', 'checked-in', 'completed'] 
+          status: {
+            type: 'string',
+            enum: ['confirmed', 'cancelled', 'checked-in', 'completed']
           },
           reason: { type: 'string' }
         },
@@ -153,6 +153,10 @@ export default async function bookingRoutes(fastify: FastifyInstance) {
       security: [{ bearerAuth: [] }]
     }
   }, (request, reply) => bookingController.updateBookingStatus(request, reply));
+
+  fastify.post('/admin/jobs/cancel-no-shows', {
+    preHandler: [fastify.authenticate] // and authorize as admin
+  }, async (req, reply) => bookingController.cancelBookingsNoShow(req, reply));
 
   // Update guest details
   fastify.put('/:bookingId/guest-details', {
@@ -170,6 +174,6 @@ export default async function bookingRoutes(fastify: FastifyInstance) {
       summary: 'Update guest details',
       security: [{ bearerAuth: [] }]
     },
-    preHandler:[fastify.authenticate]
+    preHandler: [fastify.authenticate]
   }, (request, reply) => bookingController.updateGuestDetails(request, reply));
 }

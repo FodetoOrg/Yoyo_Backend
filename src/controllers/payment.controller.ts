@@ -11,6 +11,10 @@ const createPaymentOrderSchema = z.object({
   bookingId: z.string().uuid(),
   amount: z.coerce.number().positive(),
   currency: z.string().default("INR"),
+  walletAmount: z.coerce.number()
+    .min(0, 'Amount must be ≥ 0')   // or .nonnegative()
+    .optional()
+    .default(0)
 });
 
 const verifyPaymentSchema = z.object({
@@ -77,7 +81,7 @@ export class PaymentController {
   // ---- Create payment order ----
   async createPaymentOrder(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const { bookingId, amount, currency } = createPaymentOrderSchema.parse(
+      const { bookingId, amount, currency, walletAmount } = createPaymentOrderSchema.parse(
         (request as any).body
       );
       const userId = (request as any).user.id;
@@ -87,6 +91,7 @@ export class PaymentController {
         userId,
         amount,
         currency,
+        walletAmount
       });
 
       return reply.code(201).send({

@@ -1,5 +1,5 @@
 import { FastifyInstance } from "fastify";
-import { hotels, hotelImages, rooms, hotelReviews, wishlists, coupons, couponMappings, bookings, roomHourlyStays } from "../models/schema";
+import { hotels, hotelImages, rooms, hotelReviews, wishlists, coupons, couponMappings, bookings, roomHourlyStays, configurations } from "../models/schema";
 import { eq, and, like, between, sql, desc, asc, inArray, exists, avg, count, not, or, lt, gt } from "drizzle-orm";
 import dayjs from "dayjs";
 
@@ -15,7 +15,7 @@ interface SearchFilters {
   adults: number;
   children: number;
   infants: number;
-  isNearby:boolean;
+  isNearby: boolean;
 
   // Booking type
   bookingType?: 'daily' | 'hourly';
@@ -24,7 +24,7 @@ interface SearchFilters {
   priceRange?: { min?: number; max?: number };
   starRating?: number; // minimum star rating
   amenities?: string[];
-  sortBy?: 'recommended' | 'price_low' | 'price_high' | 'rating' | 'distance' ;
+  sortBy?: 'recommended' | 'price_low' | 'price_high' | 'rating' | 'distance';
 
   // Pagination
   page?: number;
@@ -35,7 +35,7 @@ interface HomeTabFilters {
   userId?: string;
   coordinates?: { lat: number; lng: number };
   limit?: number;
-  sortBy?:string;
+  sortBy?: string;
 }
 
 export class HotelSearchService {
@@ -65,6 +65,8 @@ export class HotelSearchService {
       page = 1,
       limit = 10
     } = filters;
+
+    console.log('filters came is ', filters)
 
     const totalGuests = adults + children; // infants don't count for capacity
 
@@ -104,7 +106,7 @@ export class HotelSearchService {
 
     let hotelsData = await baseQuery;
 
-    console.log('hotel data ', hotelsData)
+    // console.log('hotel data ', hotelsData)
 
     // STEP 1: Distance calculation - Calculate distance for ALL hotels if coordinates provided
     if (coordinates) {
@@ -117,7 +119,7 @@ export class HotelSearchService {
         )
       }));
 
-      console.log('after calluctaing distance ',hotelsData)
+      console.log('after calluctaing distance ', hotelsData)
 
       // Sort by distance first to get nearest hotels
       hotelsData = hotelsData.sort((a, b) => (a.distance || 0) - (b.distance || 0));
@@ -128,7 +130,8 @@ export class HotelSearchService {
     }
 
     // STEP 2: Filter by available rooms for dates and guest capacity
-    if (filters?.isNearby ===false &&  checkIn && checkOut) {
+    if (filters?.isNearby === false && checkIn && checkOut) {
+      console.log('went inside ')
       const availableHotelIds = await this.getHotelsWithAvailableRooms(
         checkIn,
         checkOut,
@@ -160,18 +163,14 @@ export class HotelSearchService {
       });
     }
 
-    // STEP 4: Final sorting (distance is already applied if coordinates provided)
-    if (!coordinates || sortBy !== 'distance') {
-      hotelsData = this.sortHotels(hotelsData, sortBy);
-    }
-    console.log('calculated distance ', hotelsData)
+
 
     // Get pricing for each hotel and filter out hotels with no available rooms
-    const hotelsWithPricing = [];
+    let hotelsWithPricing = [];
 
     for (const hotelData of hotelsData) {
       const pricing = await this.getHotelPricing(hotelData.hotel.id, checkIn, checkOut, totalGuests, bookingType);
-
+      console.log('caompleted pricing')
       // Skip hotels with no available rooms (pricing will be null)
       if (!pricing) {
         continue;
@@ -179,7 +178,7 @@ export class HotelSearchService {
 
       const offers = await this.getHotelOffers(hotelData.hotel.id);
       const hourlyStays = await this.getHotelHourlyStays(hotelData.hotel.id);
-
+      console.log('caompleted  hourly staus ')
       hotelsWithPricing.push({
         id: hotelData.hotel.id,
         name: hotelData.hotel.name,
@@ -207,13 +206,16 @@ export class HotelSearchService {
         }
       });
     }
-
+    if (!coordinates || sortBy !== 'distance') {
+      hotelsWithPricing = this.sortHotels(hotelsWithPricing, sortBy);
+    }
+    console.log('camwe but one  ')
     // Pagination
     const total = hotelsWithPricing.length;
     const totalPages = Math.ceil(total / limit);
     const startIndex = (page - 1) * limit;
     const paginatedHotels = hotelsWithPricing.slice(startIndex, startIndex + limit);
-
+    console.log('finally last ')
     return {
       hotels: paginatedHotels,
       total,
@@ -270,6 +272,65 @@ export class HotelSearchService {
     return this.searchHotels(nearbyFilters);
   }
 
+  toIdList(value: unknown) {
+    try {
+      let v = value;
+
+      // Keep parsing while it's a string that looks like JSON
+      while (typeof v === "string") {
+        try {
+          const parsed = JSON.parse(v);
+          if (parsed === v) break; // Prevent infinite loop
+          v = parsed;
+        } catch {
+          break;
+        }
+      }
+
+      if (!Array.isArray(v)) return [];
+
+      console.log('v is ', v)
+      // Filter to keep only non-empty strings
+      return v.filter(item => typeof item === 'string' && item.trim() !== '');
+    } catch {
+      return [];
+    }
+  }
+
+  async featuresHotelsService() {
+    const cfg = await this.fastify.db.query.configurations.findFirst({
+      where: eq(configurations.key, "featured_hotels"),
+    });
+
+    const ids: string[] = this.toIdList(cfg?.value);
+    if (ids.length === 0) return [];
+
+    console.log('ids came is  ', ids)
+    const featuredHotels = await this.fastify.db.query.hotels.findMany({
+      where: and(
+        eq(hotels.status, "active"),
+        inArray(hotels.id, ids) // <-- guaranteed non-empty array of strings
+      ),
+      with: { images: { limit: 1 } },
+      // DB order isn't guaranteed to match 'ids'; we'll fix it in JS:
+      orderBy: [desc(hotels.createdAt)],
+      limit: 10,
+    });
+
+    const cfg2 = await this.fastify.db.query.configurations.findFirst({
+      where: eq(configurations.key, "app_banner_image"),
+    });
+
+
+
+
+    return {
+      hotels: featuredHotels,
+      banner: cfg2.value
+    };
+
+
+  }
   async getLatestHotels(filters: HomeTabFilters) {
     const db = this.fastify.db;
     const { limit = 10 } = filters;
@@ -357,8 +418,8 @@ export class HotelSearchService {
       .innerJoin(coupons, and(
         eq(couponMappings.couponId, coupons.id),
         eq(coupons.status, 'active'),
-        lt(coupons.validFrom,new Date()),
-        gt(coupons.validTo,new Date()),
+        lt(coupons.validFrom, new Date()),
+        gt(coupons.validTo, new Date()),
       ))
       .leftJoin(hotelImages, and(
         eq(hotels.id, hotelImages.hotelId),
@@ -454,6 +515,8 @@ export class HotelSearchService {
       .from(rooms)
       .where(and(...roomConditions));
 
+    console.log('allRooms came ', allRooms)
+
     // Check each room for booking conflicts
     const availableHotelIds = new Set<string>();
 
@@ -487,8 +550,8 @@ export class HotelSearchService {
     requestCheckIn.setMilliseconds(0);
     requestCheckOut.setMilliseconds(0);
 
-    console.log('checkin in search ',checkIn)
-    console.log('checkout in search ',checkOut)
+    console.log('checkin in search ', checkIn)
+    console.log('checkout in search ', checkOut)
 
     console.log('Checking booking conflict for room:', roomId);
     console.log('Request dates:', { checkIn: requestCheckIn, checkOut: requestCheckOut });
@@ -525,7 +588,7 @@ export class HotelSearchService {
 
     let roomConditions: any[] = [
       eq(rooms.hotelId, hotelId),
-      eq(rooms.status, 'available') // Only include available rooms
+      // eq(rooms.status, 'available') // Only include available rooms
     ];
 
     // Always filter by guest capacity if provided

@@ -7,7 +7,6 @@ import { v4 as uuidv4 } from 'uuid';
 export class WalletService {
   private fastify: FastifyInstance;
 
-  constructor() {}
 
   setFastify(fastify: FastifyInstance) {
     this.fastify = fastify;

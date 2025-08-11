@@ -1,8 +1,8 @@
-// @ts-nocheck
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { HotelSearchService } from '../services/hotelSearch.service';
 import { z } from 'zod';
 import { SearchHotelsRequestSchema, HomeTabQuerySchema } from '../schemas/hotelSearch.schema';
+import { configurations } from '@/models/Configuration';
 
 export class HotelSearchController {
   private hotelSearchService: HotelSearchService;
@@ -15,19 +15,21 @@ export class HotelSearchController {
     this.hotelSearchService.setFastify(fastify);
   }
 
+
+
   // Main hotel search
   async searchHotels(request: FastifyRequest, reply: FastifyReply) {
     try {
       const searchData = SearchHotelsRequestSchema.parse(request.body);
 
-      console.log('searchData ',searchData)
+      console.log('searchData ', searchData)
 
       const searchFilters = {
         coordinates: searchData.coordinates,
         city: searchData.city,
         radius: searchData.radius,
-        checkIn: searchData.dateRange ? new Date(searchData.dateRange.startDate+'Z') : undefined,
-        checkOut: searchData.dateRange ? new Date(searchData.dateRange.endDate+'Z') : undefined,
+        checkIn: searchData.dateRange ? new Date(searchData.dateRange.startDate + 'Z') : undefined,
+        checkOut: searchData.dateRange ? new Date(searchData.dateRange.endDate + 'Z') : undefined,
         adults: searchData.guests.adults,
         children: searchData.guests.children,
         infants: searchData.guests.infants,
@@ -41,7 +43,7 @@ export class HotelSearchController {
         isNearby: false
       };
 
-      console.log('searchFilters ',searchFilters)
+      console.log('searchFilters ', searchFilters)
 
       // Prioritize coordinates-based search over city-based search
       if (searchFilters.coordinates && (!searchFilters.city || searchFilters.city.trim() === '')) {
@@ -78,6 +80,38 @@ export class HotelSearchController {
       return reply.code(500).send({
         success: false,
         message: error.message || 'Failed to search hotels',
+      });
+    }
+  }
+
+  async getFeaturedHotels(request: FastifyRequest, reply: FastifyReply) {
+    try {
+
+
+
+      const result = await this.hotelSearchService.featuresHotelsService()
+      return reply.code(200).send({
+        success: true,
+
+        result,
+
+
+      });
+
+    } catch (e) {
+      console.log('error in featured hotels ', e)
+
+      if (e instanceof z.ZodError) {
+        return reply.code(400).send({
+          success: false,
+          message: 'Validation error',
+          errors: e.errors,
+        });
+      }
+
+      return reply.code(500).send({
+        success: false,
+        message: e.message || 'Failed to get nearby hotels',
       });
     }
   }

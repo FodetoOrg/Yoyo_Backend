@@ -293,7 +293,8 @@ export const BookingDetailsResponseSchema = z.object({
     roomRate: z.number(),
     subtotal: z.number(),
     taxes: z.number(),
-    serviceFee: z.number()
+    serviceFee: z.number(),
+    walletAmount:z.number()
   }),
   totalAmount: z.number(),
   cancellationPolicy: z.string(),

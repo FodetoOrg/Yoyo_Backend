@@ -189,6 +189,13 @@ export class ConfigurationService {
         type: 'number',
         description: 'Default cancellation period in hours',
         category: 'booking'
+      },
+      {
+        key: 'auto_cancellation_hours',
+        value: '1',
+        type: 'number',
+        description: 'Default cancellation period in hours if user donesnt show up',
+        category: 'booking'
       }
     ];
 

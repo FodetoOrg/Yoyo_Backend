@@ -1,6 +1,6 @@
 import { FastifyInstance } from 'fastify';
-import { bookings, hotels, rooms, users, customerProfiles, coupons, payments, bookingCoupons, bookingAddons, couponUsages, refunds, hotelReviews } from '../models/schema';
-import { eq, and, desc, asc, count, not, lt, gt, sql } from 'drizzle-orm';
+import { bookings, hotels, rooms, users, customerProfiles, coupons, payments, bookingCoupons, bookingAddons, couponUsages, refunds, hotelReviews, configurations } from '../models/schema';
+import { eq, and, desc, asc, count, not, lt, gt, sql, lte, inArray } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { NotFoundError, ConflictError } from '../types/errors';
 import { CouponService } from './coupon.service';
@@ -37,13 +37,88 @@ export class BookingService {
   constructor() {
     this.couponService = new CouponService();
     this.notificationService = new NotificationService();
-    this.addonService = new AddonService();
-    this.refundService = new RefundService();
+    this.addonService = new AddonService(this.fastify);
+    this.refundService = new RefundService(this.fastify);
     // Initialize Razorpay
     this.razorpay = new Razorpay({
       key_id: process.env.RAZORPAY_KEY_ID || '',
       key_secret: process.env.RAZORPAY_KEY_SECRET || ''
     });
+  }
+
+  async cancelNoShowBookings(bufferMinutes = 60) {
+    const db = this.fastify.db;
+    const now = new Date();
+    const cutoff = new Date(now.getTime() - bufferMinutes * 60 * 1000);
+    const istOffset = 5.5 * 60 * 60 * 1000; // 5:30 hours in milliseconds
+    const cutoffIST = new Date(cutoff.getTime() + istOffset);
+
+    console.log('Current time (local):', now.toString());
+    console.log('Current time (UTC):', now.toISOString());
+    console.log('Cutoff time (UTC):', cutoff.toISOString());
+    console.log('Booking check-in (UTC):', new Date('2025-08-11T13:00:00.000Z').toISOString());
+
+    console.log('Cutoff in IST equivalent:', cutoffIST.toISOString());
+    console.log('cutoff ', cutoff)
+    const candidatesAll = await db.query.bookings.findMany({
+      where: and(
+        eq(bookings.status, 'confirmed'),
+        // lte(bookings.checkInDate, cutoff)
+      ),
+      with: { hotel: true }, // for notification message
+      columns: { id: true, userId: true, checkInDate: true }
+    });
+    console.log('candidatesAll ', candidatesAll)
+
+    // Find candidates (still confirmed, missed check-in+buffer)
+    const candidates = await db.query.bookings.findMany({
+      where: and(
+        eq(bookings.status, 'confirmed'),
+        lte(bookings.checkInDate, cutoffIST)
+      ),
+      with: { hotel: true }, // for notification message
+      columns: { id: true, userId: true, checkInDate: true }
+    });
+
+    console.log('candidates ', candidates)
+
+    // return {
+    //   cancelled: 0
+    // }
+
+    if (candidates.length === 0) return { cancelled: 0 };
+
+    const ids = candidates.map(b => b.id);
+
+    await db.transaction(async (tx) => {
+      await tx.update(bookings).set({
+        status: 'cancelled',
+        cancelReason: `Auto-cancel: no-show after ${bufferMinutes} min`,
+        cancelledBy: 'system',
+        cancelledAt: now,
+        updatedAt: now
+      }).where(inArray(bookings.id, ids));
+
+      // Optional: touch related payments if needed (example)
+      await tx.update(payments).set({ status: 'cancelled', updatedAt: now })
+        .where(inArray(payments.bookingId, ids));
+    });
+
+    // Notify after commit
+    for (const b of candidates) {
+      try {
+        await this.notificationService.sendInstantBookingSuccessNotification(b.userId, {
+          title: 'Booking Cancelled (No-show)',
+          message: `Your booking at ${b.hotel.name} was cancelled after a 1-hour buffer.`,
+          type: 'booking_status_update',
+          data: { bookingId: b.id, status: 'cancelled', hotelName: b.hotel.name }
+        });
+      } catch (err) {
+        this.fastify.log.error('No-show notify failed:', err);
+      }
+    }
+
+    return { cancelled: candidates.length };
   }
 
   // Method to set Fastify instance
@@ -65,7 +140,7 @@ export class BookingService {
       where: eq(rooms.id, roomId)
     });
 
-    if (!room || room.status !== 'available') {
+    if (!room) {
       return { available: false, reason: 'Room not found or not available' };
     }
 
@@ -86,7 +161,7 @@ export class BookingService {
     // Convert dates to ensure proper comparison (remove milliseconds for consistency)
 
 
-    console.log('Checking availability for room:', roomId);
+    // console.log('Checking availability for room:', roomId);
 
 
     // Check if there are any overlapping bookings
@@ -101,17 +176,17 @@ export class BookingService {
     });
 
     if (overlappingBookings.length > 0) {
-      console.log('Found overlapping bookings:', overlappingBookings.map(b => ({
-        id: b.id,
-        checkIn: b.checkInDate,
-        checkOut: b.checkOutDate,
-        status: b.status,
-        bookingType: b.bookingType
-      })));
+      // console.log('Found overlapping bookings:', overlappingBookings.map(b => ({
+      //   id: b.id,
+      //   checkIn: b.checkInDate,
+      //   checkOut: b.checkOutDate,
+      //   status: b.status,
+      //   bookingType: b.bookingType
+      // })));
       return { available: false, reason: 'Room is already booked for the selected dates' };
     }
 
-    console.log('Room is available');
+    // console.log('Room is available');
     return { available: true, reason: null };
   }
   // Optimized createBooking method
@@ -169,8 +244,7 @@ export class BookingService {
           remainingAmount = finalAmount - advanceAmount;
         }
       }
-      console.log('started inserting ', bookingData.checkIn)
-      console.log(bookingData.checkOut)
+
       // Create booking record
       await tx.insert(bookings).values({
         id: bookingId,
@@ -224,7 +298,7 @@ export class BookingService {
         })
       }
 
-      console.log('pyments')
+
       // Create payment records
       const paymentId = uuidv4();
       await tx.insert(payments).values({
@@ -256,17 +330,17 @@ export class BookingService {
           transactionDate: paymentDueDate || new Date(),
         });
       }
-      console.log('addons ')
+
 
       // Add addons to booking if provided
       if (bookingData.addons && bookingData.addons.length > 0) {
         const data = await this.addonService.addBookingAddons(bookingId, bookingData.addons);
-        console.log('data addons us ', data)
+
         if (data.length > 0) {
           await tx.insert(bookingAddons).values(data);
         }
       }
-      console.log('retriuning id ')
+
       return bookingId;
     });
 
@@ -405,9 +479,9 @@ export class BookingService {
         email: bookingData.guestEmail
       });
 
-      console.log(`Notifications sent successfully for booking ${bookingId}`);
+
     } catch (error) {
-      console.error(`Failed to send notifications for booking ${bookingId}:`, error);
+      console.log(`Failed to send notifications for booking ${bookingId}:`, error);
       // Could implement retry logic here or add to a dead letter queue
     }
   }
@@ -554,7 +628,7 @@ export class BookingService {
       }))
     );
 
-    console.log('formattedBookings ', formattedBookings)
+
 
     return {
       bookings: formattedBookings,
@@ -641,7 +715,7 @@ export class BookingService {
     const { status, page = 1, limit = 10 } = options;
     const offset = (page - 1) * limit;
 
-    console.log('limit 2', limit)
+
     // Build where conditions
     let whereConditions = [];
     if (status) {
@@ -706,7 +780,7 @@ export class BookingService {
       })
     );
 
-    console.log('bookings length is ', formattedBookings.length)
+
 
     return {
       bookings: formattedBookings,
@@ -742,7 +816,7 @@ export class BookingService {
       },
     });
 
-    console.log('came in booking ', booking);
+
 
     if (!booking) {
       throw new NotFoundError('Booking not found');
@@ -804,75 +878,109 @@ export class BookingService {
   }
 
 
-  // Update booking status
-  async updateBookingStatus(bookingId: string, status: string, updatedBy: string, reason?: string) {
+
+
+  async updateBookingStatus(
+    bookingId: string,
+    status: string,
+    updatedBy: string,
+    reason?: string
+  ) {
     const db = this.fastify.db;
 
-    const updateData: any = {
+    const now = new Date();
+    const updateData: Partial<typeof bookings.$inferInsert> = {
       status,
-      updatedAt: new Date()
+      updatedAt: now,
     };
 
-    // Add cancel-specific fields if status is cancelled
     if (status === 'cancelled') {
-      updateData.cancelReason = reason;
-      updateData.cancelledBy = updatedBy;
-      updateData.cancelledAt = new Date();
+      (updateData as any).cancelReason = reason;
+      (updateData as any).cancelledBy = updatedBy;
+      (updateData as any).cancelledAt = now;
     }
-
-    // Add check-in timestamp if status is checked-in
     if (status === 'checked-in') {
-      updateData.checkedInAt = new Date();
+      (updateData as any).checkedInAt = now;
+      (updateData as any).paymentStatus = 'paid';
     }
-
-    // Add completion timestamp if status is completed
     if (status === 'completed') {
-      updateData.completedAt = new Date();
+      (updateData as any).completedAt = now;
     }
 
-    await db
-      .update(bookings)
-      .set(updateData)
-      .where(eq(bookings.id, bookingId));
+    // Keep the fetched booking from the tx to return later (optional)
+    let updatedBooking: any = null;
 
-    // Send notification for status update
-    const booking = await this.getBookingById(bookingId);
-    if (booking) {
+    await db.transaction(async (tx) => {
+      // Handle payment-side effects atomically with booking update
+      if (status === 'checked-in') {
+        const payment = await tx.query.payments.findFirst({
+          where: eq(payments.bookingId, bookingId),
+        });
+        if (!payment) {
+          throw new Error('Payment not registered for this booking. Do offline managing.');
+        }
+
+        await tx
+          .update(payments)
+          .set({
+            status: 'completed',
+            paymentMode: 'offline',
+            updatedAt: now,
+            paymentType: 'full',
+          })
+          .where(eq(payments.bookingId, bookingId));
+      }
+
+      await tx.update(bookings).set(updateData).where(eq(bookings.id, bookingId));
+
+      // If you want the latest snapshot inside the tx:
+      // (Adjust the `with` as per your relations)
+      updatedBooking = await tx.query.bookings.findFirst({
+        where: eq(bookings.id, bookingId),
+        with: {
+          hotel: true,
+        },
+      });
+    }); // <- commits here if no throw
+
+    // Send notification AFTER commit (so users never see a status that later rolls back)
+    if (updatedBooking) {
       try {
         let notificationMessage = '';
         switch (status) {
           case 'confirmed':
-            notificationMessage = `Your booking at ${booking.hotel.name} has been confirmed`;
+            notificationMessage = `Your booking at ${updatedBooking.hotel.name} has been confirmed`;
             break;
           case 'cancelled':
-            notificationMessage = `Your booking at ${booking.hotel.name} has been cancelled. Reason: ${reason}`;
+            notificationMessage = `Your booking at ${updatedBooking.hotel.name} has been cancelled. Reason: ${reason ?? 'N/A'}`;
             break;
           case 'checked-in':
-            notificationMessage = `You have been checked in at ${booking.hotel.name}`;
+            notificationMessage = `You have been checked in at ${updatedBooking.hotel.name}`;
             break;
           case 'completed':
-            notificationMessage = `Your stay at ${booking.hotel.name} has been completed. Thank you for choosing us!`;
+            notificationMessage = `Your stay at ${updatedBooking.hotel.name} has been completed. Thank you for choosing us!`;
             break;
           default:
             notificationMessage = `Your booking status has been updated to ${status}`;
         }
 
-        await this.notificationService.sendInstantBookingSuccessNotification(booking.userId, {
+        await this.notificationService.sendInstantBookingSuccessNotification(updatedBooking.userId, {
           title: 'Booking Status Updated',
           message: notificationMessage,
           type: 'booking_status_update',
           data: {
             bookingId,
             status,
-            hotelName: booking.hotel.name,
-          }
+            hotelName: updatedBooking.hotel.name,
+          },
         });
-      } catch (error) {
-        this.fastify.log.error('Failed to send booking status update notification:', error);
+      } catch (err) {
+        this.fastify.log.error('Failed to send booking status update notification:', err);
+        // no rethrow — status is already committed
       }
     }
 
-    return booking;
+    return updatedBooking ?? (await this.getBookingById(bookingId));
   }
 
   // Update guest details
@@ -1116,8 +1224,8 @@ export class BookingService {
       return null;
     }
 
-    console.log('booking is ', booking)
-    console.log('user is ', user)
+    // console.log('booking is ', booking)
+    // console.log('user is ', user)
 
     // Check if user is authorized to view this booking
     if (booking.userId !== user.id && booking.hotel.ownerId !== user.id && user.role !== UserRole.SUPER_ADMIN) {
@@ -1147,7 +1255,7 @@ export class BookingService {
 
     let nights = 0;
     // let subTotal = 0;
-    console.log('booking.checkInDate ', booking.checkInDate)
+    // console.log('booking.checkInDate ', booking.checkInDate)
     const checkInDate = new Date(booking.checkInDate);
     const checkOutDate = new Date(booking.checkOutDate);
     let subtotal = 0;
@@ -1183,9 +1291,9 @@ export class BookingService {
     //   }
     // }
 
-    console.log('booking ', booking)
+    // console.log('booking ', booking)
 
-    console.log('booking.hotel.amenities ', booking.hotel.amenities)
+    // console.log('booking.hotel.amenities ', booking.hotel.amenities)
 
     // Get amenities (assuming these are stored in room type or hotel)
     const amenities = JSON.parse(booking.hotel.amenities) || []
@@ -1193,8 +1301,23 @@ export class BookingService {
     // Get booking addons
     const bookingAddons = await this.addonService.getBookingAddons(booking.id);
 
-    console.log('checkin date ', checkInDate)
-    console.log('checkout ', checkOutDate)
+    // console.log('checkin date ', checkInDate)
+    // console.log('checkout ', checkOutDate)
+
+    const globalOnlinePayment = await this.fastify.db.query.configurations.findFirst({
+      where: eq(configurations.key, 'online_payment_global_enabled')
+    })
+
+    const defaultCanceellationHours = await this.fastify.db.query.configurations.findFirst({
+      where: eq(configurations.key, 'default_cancellation_hours')
+    })
+
+    const coupounUsagesFoBooking = await this.fastify.db.query.couponUsages.findFirst({
+      where: eq(couponUsages.bookingId, booking.id)
+    })
+
+    
+
 
     return {
       id: booking.id,
@@ -1210,7 +1333,8 @@ export class BookingService {
       checkIn: checkInDate,
       checkOut: checkOutDate,
       guests: booking.guestCount,
-      onlinePaymentEnabled: booking.hotel.onlinePaymentEnabled,
+      onlinePaymentEnabled: globalOnlinePayment ? globalOnlinePayment.value === 'true' ? true : false : booking.hotel.onlinePaymentEnabled,
+      cancellationHours: defaultCanceellationHours ? defaultCanceellationHours.value : 24,
       guestName: booking.guestName,
       guestEmail: booking.guestEmail,
       guestPhone: booking.guestPhone,
@@ -1224,7 +1348,9 @@ export class BookingService {
         roomRate,
         subtotal,
         taxes,
-        serviceFee
+        serviceFee,
+        walletAmount: booking.walletAmountUsed
+
       },
       totalAmount: booking.totalAmount,
       cancellationPolicy: booking.hotel.cancellationPolicy || 'Free cancellation up to 24 hours before check-in. After that, a 1-night charge will apply.',

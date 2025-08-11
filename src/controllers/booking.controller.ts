@@ -24,6 +24,39 @@ export class BookingController {
     this.hotelService = new HotelService();
   }
 
+  async cancelBookingsNoShow(request: FastifyRequest, reply: FastifyReply) {
+    try {
+
+      const response = await this.bookingService.cancelNoShowBookings(60)
+
+      console.log('response in no cancel is ', response)
+
+      return reply.code(200).send({
+        success: true,
+        data: response
+
+
+      });
+
+    } catch (error) {
+      request.log.error(error);
+
+      if (error instanceof z.ZodError) {
+        return reply.code(400).send({
+          success: false,
+          message: 'Validation error',
+          errors: error.errors,
+        });
+      }
+
+      return reply.code(500).send({
+        success: false,
+        message: error.message || 'Failed to create booking',
+      });
+
+    }
+  }
+
   // Create a new booking
   async createBooking(request: FastifyRequest, reply: FastifyReply) {
     try {
@@ -309,7 +342,7 @@ export class BookingController {
           message: 'Unauthorized. Only admin can view all bookings',
         });
       }
-      console.log('limit 1',limit)
+      console.log('limit 1', limit)
 
       const result = await this.bookingService.getAllBookings({ status, page, limit });
 
@@ -390,7 +423,7 @@ export class BookingController {
           message: 'Booking not found',
         });
       }
-      console.log('in cacnel booking ',booking)
+      console.log('in cacnel booking ', booking)
 
       // Check if the user is authorized to cancel this booking
       // Only the user who created the booking, hotel owner, or admin can cancel it
@@ -418,7 +451,7 @@ export class BookingController {
         });
       }
 
-      const cancelledBooking = await this.bookingService.cancelBooking(id, request.user ,reason);
+      const cancelledBooking = await this.bookingService.cancelBooking(id, request.user, reason);
 
       return reply.code(200).send({
         success: true,
@@ -455,7 +488,7 @@ export class BookingController {
 
       const hotel = await this.hotelService.getHotelById(id);
 
-      console.log('hotel presemt ',hotel)
+      console.log('hotel presemt ', hotel)
 
       if (!hotel) {
         return reply.code(404).send({
@@ -523,6 +556,7 @@ export class BookingController {
       const booking = await this.bookingService.getBookingById(bookingId);
 
       if (!booking) {
+        console.log('nno booking')
         return reply.code(404).send({
           success: false,
           message: 'Booking not found',
@@ -531,7 +565,7 @@ export class BookingController {
 
       // Check authorization - only hotel owner, admin, or booking user can update status
       const hotel = await this.hotelService.getHotelById(booking.hotelId);
-      if (booking.userId !== userId && hotel?.ownerId !== userId && role !== 'admin') {
+      if (booking.userId !== userId && hotel?.ownerId !== userId && role !== UserRole.SUPER_ADMIN) {
         return reply.code(403).send({
           success: false,
           message: 'Unauthorized. You do not have permission to update this booking',
