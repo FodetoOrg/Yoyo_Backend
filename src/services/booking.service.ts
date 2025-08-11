@@ -299,6 +299,17 @@ export class BookingService {
       }
 
 
+      // Calculate fee breakdown for payment
+      const platformFeeConfig = await tx.query.configurations.findFirst({
+        where: eq(configurations.key, 'platform_fee_percentage')
+      });
+      const platformFeePercentage = platformFeeConfig ? parseFloat(platformFeeConfig.value) : 5;
+
+      const roomCharge = basePrice;
+      const gstAmount = basePrice * (hotel.gstPercentage / 100);
+      const platformFeeAmount = basePrice * (platformFeePercentage / 100);
+      const discountAmount = couponValidation ? couponValidation.discountAmount : 0;
+
       // Create payment records
       const paymentId = uuidv4();
       await tx.insert(payments).values({
@@ -310,6 +321,10 @@ export class BookingService {
         paymentType: finalPaymentMode === 'offline' && advanceAmount > 0 ? 'advance' : 'full',
         paymentMethod: finalPaymentMode === 'offline' ? (hotel.defaultPaymentMethod || 'cash') : 'razorpay',
         paymentMode: 'offline',
+        roomCharge,
+        gstAmount,
+        platformFee: platformFeeAmount,
+        discountAmount,
         status: 'pending',
         transactionDate: new Date(),
       });
@@ -391,8 +406,19 @@ export class BookingService {
       basePrice = room.pricePerHour * duration;
     } else {
       duration = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60 * 24));
-      expectedPrice = room.pricePerNight * duration;
+      basePrice = room.pricePerNight * duration;
     }
+
+    // Get platform fee configuration
+    const platformFeeConfig = await db.query.configurations.findFirst({
+      where: eq(configurations.key, 'platform_fee_percentage')
+    });
+    const platformFeePercentage = platformFeeConfig ? parseFloat(platformFeeConfig.value) : 5;
+
+    // Calculate expected price with fees
+    const gstAmount = basePrice * (hotel.gstPercentage / 100);
+    const platformFeeAmount = basePrice * (platformFeePercentage / 100);
+    expectedPrice = basePrice + gstAmount + platformFeeAmount;
 
     // Coupon validation
     let couponValidation = null;
@@ -1135,9 +1161,16 @@ export class BookingService {
       };
     }
 
-    // You can add additional charges, taxes, etc. here
-    const taxes = basePrice * 0.12; // 12% GST
-    const totalAmount = basePrice + taxes;
+    // Get platform fee configuration
+    const platformFeeConfig = await this.fastify.db.query.configurations.findFirst({
+      where: eq(configurations.key, 'platform_fee_percentage')
+    });
+    const platformFeePercentage = platformFeeConfig ? parseFloat(platformFeeConfig.value) : 5;
+
+    // Calculate fees
+    const gstAmount = basePrice * (room.hotel.gstPercentage / 100);
+    const platformFee = basePrice * (platformFeePercentage / 100);
+    const totalAmount = basePrice + gstAmount + platformFee;
 
     return {
       roomId: room.id,
@@ -1145,14 +1178,17 @@ export class BookingService {
       bookingType,
       ...priceDetails,
       basePrice,
-      taxes,
+      gstAmount,
+      platformFee,
       totalAmount,
       currency: 'INR',
       checkInDate,
       checkOutDate,
       guestCount,
       hotelName: room.hotel.name,
-      available: true
+      available: true,
+      gstPercentage: room.hotel.gstPercentage,
+      platformFeePercentage
     };
   }
 
@@ -1274,9 +1310,17 @@ export class BookingService {
       subtotal = booking.room.pricePerNight * diffDays;
       roomRate = booking.room.pricePerNight;
     }
-    const taxes = 0; // 12% GST
-    const serviceFee = 0; // Fixed service fee
-    const totalCalculated = subtotal + taxes + serviceFee;
+
+    // Get platform fee configuration
+    const platformFeeConfig = await this.fastify.db.query.configurations.findFirst({
+      where: eq(configurations.key, 'platform_fee_percentage')
+    });
+    const platformFeePercentage = platformFeeConfig ? parseFloat(platformFeeConfig.value) : 5;
+
+    // Calculate fees
+    const gstAmount = subtotal * (booking.hotel.gstPercentage / 100);
+    const platformFee = subtotal * (platformFeePercentage / 100);
+    const totalCalculated = subtotal + gstAmount + platformFee;
 
     // Determine status based on dates and booking status
     let status = booking.status;
@@ -1347,8 +1391,11 @@ export class BookingService {
       priceBreakdown: {
         roomRate,
         subtotal,
-        taxes,
-        serviceFee,
+        gstAmount,
+        platformFee,
+        gstPercentage: booking.hotel.gstPercentage,
+        platformFeePercentage,
+        couponAppliedAmount: coupounUsagesFoBooking ? coupounUsagesFoBooking.discountAmount : 0,
         walletAmount: booking.walletAmountUsed
 
       },

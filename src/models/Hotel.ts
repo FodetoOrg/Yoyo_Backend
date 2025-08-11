@@ -28,6 +28,7 @@ export const hotels = sqliteTable("hotels", {
   checkOutTime: text('check_out_time').notNull().default('12:00'), // Default 12:00 PM next day
   cancellationFeePercentage: integer('cancellation_fee_percentage').notNull().default(10), // Default 10%
   cancellationTimeHours: integer('cancellation_time_hours').notNull().default(24), // Default 24 hours before check-in
+  gstPercentage: integer('gst_percentage').notNull().default(18), // Default 18% GST
   createdAt: integer("created_at", { mode: "timestamp" })
     .notNull()
     .default(new Date()),

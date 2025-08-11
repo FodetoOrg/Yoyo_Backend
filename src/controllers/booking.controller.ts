@@ -116,6 +116,14 @@ export class BookingController {
         roomTotal = room.pricePerNight * diffDays;
       }
 
+      // Get platform fee configuration
+      const platformFeeConfig = await this.configurationService.getConfiguration('platform_fee_percentage');
+      const platformFeePercentage = platformFeeConfig ? parseFloat(platformFeeConfig.value) : 5;
+
+      // Calculate fees
+      const gstAmount = roomTotal * (hotel.gstPercentage / 100);
+      const platformFee = roomTotal * (platformFeePercentage / 100);
+
       // Calculate addon total if selectedAddons are provided
       let addonTotal = 0;
       let processedAddons = [];
