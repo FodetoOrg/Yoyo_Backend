@@ -124,6 +124,9 @@ export class PaymentController {
 
       const result = await this.paymentService.verifyPayment(paymentData);
 
+      // Trigger immediate notification for payment success
+      await this.paymentService.sendPaymentSuccessNotification(result.bookingId, result.paymentId);
+
       return reply.code(200).send({
         success: true,
         message: "Payment verified successfully",
@@ -398,6 +401,9 @@ export class PaymentController {
         remainingAmount,
         razorpayPaymentDetails,
       });
+
+      // Trigger immediate notification for payment success
+      await this.paymentService.sendPaymentSuccessNotification(bookingId, result.paymentId);
 
       return reply.code(200).send({
         success: true,

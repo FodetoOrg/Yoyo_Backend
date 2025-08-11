@@ -2,9 +2,13 @@ import { FastifyInstance } from 'fastify';
 import { bookings, hotels, rooms, users, customerProfiles, coupons, payments, bookingCoupons, bookingAddons, couponUsages, refunds, hotelReviews, configurations, roomHourlyStays } from '../models/schema';
 import { eq, and, desc, asc, count, not, lt, gt, sql, lte, inArray } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
-import { NotFoundError, ConflictError } from '../types/errors';
+import { NotFoundError, ValidationError } from "../types/errors";
+import { z } from "zod";
+import { v4 as uuidv4 } from "uuid";
+import { WalletService } from "./wallet.service";
+import { NotificationService } from "./notification.service";
 import { CouponService } from './coupon.service';
-import { NotificationService } from './notification.service';
+// Removed duplicate import: import { NotificationService } from './notification.service';
 import Razorpay from 'razorpay';
 import { generateBookingConfirmationEmail } from '../utils/email';
 import { RefundService } from './refund.service'
@@ -33,12 +37,15 @@ export class BookingService {
   private razorpay: Razorpay;
   private addonService: AddonService;
   private refundService: RefundService;
+  private walletService: WalletService;
+
 
   constructor() {
     this.couponService = new CouponService();
     this.notificationService = new NotificationService();
     this.addonService = new AddonService(this.fastify);
     this.refundService = new RefundService(this.fastify);
+    this.walletService = new WalletService();
     // Initialize Razorpay
     this.razorpay = new Razorpay({
       key_id: process.env.RAZORPAY_KEY_ID || '',
@@ -49,42 +56,23 @@ export class BookingService {
   async cancelNoShowBookings(bufferMinutes = 60) {
     const db = this.fastify.db;
     const now = new Date();
-    const cutoff = new Date(now.getTime() - bufferMinutes * 60 * 1000);
+    const bufferMillis = bufferMinutes * 60 * 1000;
     const istOffset = 5.5 * 60 * 60 * 1000; // 5:30 hours in milliseconds
-    const cutoffIST = new Date(cutoff.getTime() + istOffset);
+    const cutoffIST = new Date(now.getTime() - bufferMillis + istOffset);
 
     console.log('Current time (local):', now.toString());
     console.log('Current time (UTC):', now.toISOString());
-    console.log('Cutoff time (UTC):', cutoff.toISOString());
-    console.log('Booking check-in (UTC):', new Date('2025-08-11T13:00:00.000Z').toISOString());
-
+    console.log('Cutoff time (UTC):', new Date(now.getTime() - bufferMillis).toISOString());
     console.log('Cutoff in IST equivalent:', cutoffIST.toISOString());
-    console.log('cutoff ', cutoff)
-    const candidatesAll = await db.query.bookings.findMany({
-      where: and(
-        eq(bookings.status, 'confirmed'),
-        // lte(bookings.checkInDate, cutoff)
-      ),
-      with: { hotel: true }, // for notification message
-      columns: { id: true, userId: true, checkInDate: true }
-    });
-    console.log('candidatesAll ', candidatesAll)
 
-    // Find candidates (still confirmed, missed check-in+buffer)
     const candidates = await db.query.bookings.findMany({
       where: and(
         eq(bookings.status, 'confirmed'),
-        lte(bookings.checkInDate, cutoffIST)
+        lte(bookings.checkInDate, cutoffIST) // Compare with the IST cutoff time
       ),
       with: { hotel: true }, // for notification message
       columns: { id: true, userId: true, checkInDate: true }
     });
-
-    console.log('candidates ', candidates)
-
-    // return {
-    //   cancelled: 0
-    // }
 
     if (candidates.length === 0) return { cancelled: 0 };
 
@@ -128,6 +116,7 @@ export class BookingService {
     this.notificationService.setFastify(fastify);
     this.addonService.setFastify(fastify);
     this.refundService.setFastify(fastify);
+    this.walletService.setFastify(fastify);
 
   }
 
@@ -159,11 +148,15 @@ export class BookingService {
     }
 
     // Convert dates to ensure proper comparison (remove milliseconds for consistency)
+    const checkIn = new Date(checkInDate);
+    checkIn.setMilliseconds(0);
+    const checkOut = new Date(checkOutDate);
+    checkOut.setMilliseconds(0);
 
 
     console.log('Checking availability for room:', roomId);
-    console.log(checkInDate)
-    console.log(checkOutDate)
+    console.log(checkIn)
+    console.log(checkOut)
 
 
     // Check if there are any overlapping bookings
@@ -172,8 +165,8 @@ export class BookingService {
         eq(bookings.roomId, roomId),
         not(eq(bookings.status, 'cancelled')),
         // Check for any date overlap: booking conflicts if checkIn < existing.checkOut AND checkOut > existing.checkIn
-        lt(bookings.checkInDate, checkOutDate), // existing booking starts before new booking ends
-        gt(bookings.checkOutDate, checkInDate)  // existing booking ends after new booking starts
+        lt(bookings.checkInDate, checkOut), // existing booking starts before new booking ends
+        gt(bookings.checkOutDate, checkIn)  // existing booking ends after new booking starts
       )
     });
 
@@ -239,8 +232,10 @@ export class BookingService {
       let advanceAmount = 0;
 
       if (finalPaymentMode === 'offline') {
-        paymentDueDate = new Date(bookingData.checkIn + 'Z');
-        paymentDueDate.setHours(paymentDueDate.getHours() - 24);
+        // Set payment due date to check-in date minus 24 hours
+        paymentDueDate = new Date(bookingData.checkIn);
+        paymentDueDate.setDate(paymentDueDate.getDate() - 1); // Set to one day before check-in
+        paymentDueDate.setHours(0, 0, 0, 0); // Set to midnight
 
         if (bookingData.advanceAmount && bookingData.advanceAmount > 0) {
           advanceAmount = Math.min(bookingData.advanceAmount, finalAmount);
@@ -260,7 +255,7 @@ export class BookingService {
         totalHours: totalHours,
         guestCount: bookingData.guests,
         totalAmount: finalAmount,
-        paymentMode: 'offline', // Always start as offline
+        paymentMode: 'offline', // Default to offline, will be updated if online payment is chosen
         requiresOnlinePayment,
         paymentDueDate,
         advanceAmount,
@@ -354,18 +349,91 @@ export class BookingService {
         }
       }
 
-      return bookingId;
+      return bookingId; // Return bookingId from the transaction
     });
 
     console.log('calling notifications')
     // 3. POST-TRANSACTION: Send notifications (async, don't block response)
-    this.sendBookingNotifications(bookingId, bookingData, hotel, room, couponValidation)
-      .catch(error => {
-        console.log('Failed to send booking notifications:', error);
-      });
+    // Use setImmediate to ensure this runs after the current event loop tick,
+    // allowing the transaction to commit first.
+    setImmediate(async () => {
+      try {
+        const bookingDetails = await this.getBookingById(booking); // Fetch details to send in notification
+        if (!bookingDetails) {
+          console.error(`Failed to fetch booking details for notification: ${booking}`);
+          return;
+        }
+
+        const nights = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60 * 24));
+
+        // Send immediate push notification for successful booking
+        await this.notificationService.sendInstantBookingSuccessNotification(bookingData.userId, {
+          title: 'Booking Created Successfully! 🎉',
+          message: `Your booking at ${hotel.name} has been created for ${new Date(bookingData.checkIn).toLocaleDateString()}`,
+          type: 'booking_created',
+          data: {
+            bookingId: booking,
+            hotelName: hotel.name,
+            checkInDate: new Date(bookingData.checkIn).toLocaleDateString(),
+            checkOutDate: new Date(bookingData.checkOut).toLocaleDateString(),
+            totalAmount: bookingData.totalAmount,
+            status: 'confirmed',
+            guests: bookingData.guests
+          }
+        });
+
+        // Send immediate email notification
+        await this.notificationService.sendImmediateNotification({
+          userId: bookingData.userId,
+          type: 'email',
+          title: 'Booking Confirmation - ' + hotel.name,
+          message: `
+            <h2>🎉 Booking Confirmed!</h2>
+            <p>Dear ${bookingData.guestName},</p>
+            <p>Your booking has been successfully created and confirmed!</p>
+
+            <div style="background: #f5f5f5; padding: 20px; margin: 20px 0; border-radius: 8px;">
+              <h3>Booking Details:</h3>
+              <p><strong>Hotel:</strong> ${hotel.name}</p>
+              <p><strong>Booking ID:</strong> ${booking}</p>
+              <p><strong>Check-in:</strong> ${new Date(bookingData.checkIn).toLocaleDateString()}</p>
+              <p><strong>Check-out:</strong> ${new Date(bookingData.checkOut).toLocaleDateString()}</p>
+              <p><strong>Guests:</strong> ${bookingData.guests}</p>
+              <p><strong>Total Amount:</strong> ₹${bookingData.totalAmount}</p>
+              <p><strong>Payment Mode:</strong> ${bookingData.paymentMode}</p>
+            </div>
+
+            <p>Thank you for choosing our service!</p>
+            <p>Have a wonderful stay! 🏨</p>
+          `,
+          email: bookingData.guestEmail,
+          source: 'booking_created',
+          sourceId: booking
+        });
+
+      } catch (error) {
+        console.error('Failed to send immediate booking notifications:', error);
+        // Fallback to queue
+        await this.notificationService.queueNotification({
+          userId: bookingData.userId,
+          type: 'push',
+          priority: 1,
+          title: 'Booking Created Successfully! 🎉',
+          message: `Your booking at ${hotel.name} has been created`,
+          data: {
+            bookingId: booking,
+            hotelName: hotel.name,
+            checkInDate: new Date(bookingData.checkIn).toLocaleDateString(),
+            checkOutDate: new Date(bookingData.checkOut).toLocaleDateString()
+          },
+          source: 'booking_created_fallback'
+        });
+      }
+    });
+
 
     // 4. Return the booking details
-    return await this.getBookingById(bookingId);
+    return await this.getBookingById(booking);
   }
 
   // Separate method for validation (runs before transaction)
@@ -481,7 +549,7 @@ export class BookingService {
     room: any,
     couponValidation: any
   ) {
-    const nights = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60 * 24));
+    const nights = Math.ceil((bookingData.checkOutDate.getTime() - bookingData.checkInDate.getTime()) / (1000 * 60 * 60 * 24));
 
     console.log('in notifications ')
     try {
@@ -493,8 +561,8 @@ export class BookingService {
         data: {
           bookingId,
           hotelName: hotel.name,
-          checkInDate: bookingData.checkIn.toISOString(),
-          checkOutDate: bookingData.checkOut.toISOString(),
+          checkInDate: bookingData.checkInDate.toISOString(),
+          checkOutDate: bookingData.checkOutDate.toISOString(),
         }
       });
 
@@ -510,8 +578,8 @@ export class BookingService {
           guestName: bookingData.guestName,
           guestEmail: bookingData.guestEmail,
           guestPhone: bookingData.guestPhone,
-          checkIn: bookingData.checkIn,
-          checkOut: bookingData.checkOut,
+          checkIn: bookingData.checkInDate,
+          checkOut: bookingData.checkOutDate,
           guests: bookingData.guests,
           totalAmount: bookingData.totalAmount,
           paymentMode: bookingData.paymentMode,
@@ -525,7 +593,21 @@ export class BookingService {
 
     } catch (error) {
       console.log(`Failed to send notifications for booking ${bookingId}:`, error);
-      // Could implement retry logic here or add to a dead letter queue
+      // Queue for retry if immediate notification fails
+      await this.notificationService.queueNotification({
+        userId: bookingData.userId,
+        type: 'push',
+        priority: 1,
+        title: 'Booking Created',
+        message: `Your booking at ${hotel.name} has been created successfully`,
+        data: {
+          bookingId,
+          hotelName: hotel.name,
+          checkIn: bookingData.checkInDate,
+          checkOut: bookingData.checkOutDate
+        },
+        source: 'booking_created'
+      });
     }
   }
   // Get booking by ID
@@ -982,6 +1064,7 @@ export class BookingService {
         where: eq(bookings.id, bookingId),
         with: {
           hotel: true,
+          user: true // Needed for userId for notification
         },
       });
     }); // <- commits here if no throw
@@ -1047,41 +1130,45 @@ export class BookingService {
     const booking = await this.getBookingById(bookingId);
 
     if (booking) {
-      // try {
-      //   // Send push notification
-      //   await this.notificationService.sendInstantBookingSuccessNotification(booking.userId, {
-      //     title: 'Guest Details Updated',
-      //     message: `Guest details for your booking at ${booking.hotel.name} have been updated`,
-      //     type: 'guest_details_update',
-      //     data: {
-      //       bookingId,
-      //       hotelName: booking.hotel.name,
-      //     }
-      //   });
+      // Send push notification for guest details update
+      try {
+        await this.notificationService.sendInstantBookingSuccessNotification(booking.userId, {
+          title: 'Guest Details Updated',
+          message: `Guest details for your booking at ${booking.hotel.name} have been updated`,
+          type: 'guest_details_update',
+          data: {
+            bookingId,
+            hotelName: booking.hotel.name,
+          }
+        });
+      } catch (error) {
+        this.fastify.log.error('Failed to send guest details update notification:', error);
+      }
 
-      //   // Send email notification
-      //   await this.notificationService.sendImmediateNotification({
-      //     userId: booking.userId,
-      //     type: 'email',
-      //     title: "Guest Details Updated",
-      //     message: `
-      //       <h2>Guest Details Updated</h2>
-      //       <p>Dear Guest,</p>
-      //       <p>Your guest details for booking <strong>${bookingId}</strong> at <strong>${booking.hotel.name}</strong> have been updated.</p>
-      //       <p>Updated Details:</p>
-      //       <ul>
-      //         <li><strong>Name:</strong> ${guestDetails.guestName}</li>
-      //         <li><strong>Email:</strong> ${guestDetails.guestEmail}</li>
-      //         <li><strong>Phone:</strong> ${guestDetails.guestPhone}</li>
-      //       </ul>
-      //       <p>If you did not make this change, please contact us immediately.</p>
-      //       <p>Thank you for choosing ${booking.hotel.name}!</p>
-      //     `,
-      //     email: guestDetails.guestEmail
-      //   });
-      // } catch (error) {
-      //   this.fastify.log.error('Failed to send guest details update notification:', error);
-      // }
+      // Send email notification for guest details update
+      try {
+        await this.notificationService.sendImmediateNotification({
+          userId: booking.userId,
+          type: 'email',
+          title: "Guest Details Updated",
+          message: `
+            <h2>Guest Details Updated</h2>
+            <p>Dear Guest,</p>
+            <p>Your guest details for booking <strong>${bookingId}</strong> at <strong>${booking.hotel.name}</strong> have been updated.</p>
+            <p>Updated Details:</p>
+            <ul>
+              <li><strong>Name:</strong> ${guestDetails.guestName}</li>
+              <li><strong>Email:</strong> ${guestDetails.guestEmail}</li>
+              <li><strong>Phone:</strong> ${guestDetails.guestPhone}</li>
+            </ul>
+            <p>If you did not make this change, please contact us immediately.</p>
+            <p>Thank you for choosing ${booking.hotel.name}!</p>
+          `,
+          email: guestDetails.guestEmail
+        });
+      } catch (error) {
+        this.fastify.log.error('Failed to send guest details update email:', error);
+      }
     }
 
     return booking;

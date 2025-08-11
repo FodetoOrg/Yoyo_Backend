@@ -183,6 +183,153 @@ export class PaymentService {
   }
 
   // Create Razorpay order with fail-safe mechanism
+  // Send immediate notifications for payment failure
+  async sendPaymentFailureNotifications(bookingId: string, amount: number, error: string) {
+    const db = this.fastify.db;
+    
+    try {
+      const booking = await db.query.bookings.findFirst({
+        where: eq(bookings.id, bookingId),
+        with: { user: true, hotel: true }
+      });
+
+      if (!booking) return;
+
+      setImmediate(async () => {
+        try {
+          // Send immediate push notification
+          await this.notificationService.sendInstantBookingSuccessNotification(booking.userId, {
+            title: 'Payment Failed ❌',
+            message: `Payment of ₹${amount} failed for ${booking.hotel.name}. Please try again.`,
+            type: 'payment_failed',
+            data: {
+              bookingId: bookingId,
+              hotelName: booking.hotel.name,
+              amount: amount,
+              error: error
+            }
+          });
+
+          // Send immediate email notification
+          await this.notificationService.sendImmediateNotification({
+            userId: booking.userId,
+            type: 'email',
+            title: 'Payment Failed - ' + booking.hotel.name,
+            message: `
+              <h2>❌ Payment Failed</h2>
+              <p>Dear ${booking.user.name},</p>
+              <p>Unfortunately, your payment could not be processed.</p>
+              
+              <div style="background: #ffe6e6; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3>Payment Details:</h3>
+                <p><strong>Amount:</strong> ₹${amount}</p>
+                <p><strong>Hotel:</strong> ${booking.hotel.name}</p>
+                <p><strong>Booking ID:</strong> ${bookingId}</p>
+                <p><strong>Status:</strong> ❌ Failed</p>
+              </div>
+              
+              <p>Please try again or contact our support team for assistance.</p>
+              <p>Your booking is still reserved for a limited time.</p>
+            `,
+            source: 'payment_failed',
+            sourceId: bookingId
+          });
+
+        } catch (error) {
+          console.error('Failed to send payment failure notifications:', error);
+        }
+      });
+
+    } catch (error) {
+      console.error('Error in payment failure notifications:', error);
+    }
+  }
+
+  // Send immediate notifications for online payment success
+  async sendPaymentSuccessNotifications(paymentId: string, bookingId: string, amount: number) {
+    const db = this.fastify.db;
+    
+    try {
+      const booking = await db.query.bookings.findFirst({
+        where: eq(bookings.id, bookingId),
+        with: { user: true, hotel: true }
+      });
+
+      if (!booking) return;
+
+      setImmediate(async () => {
+        try {
+          // Send immediate push notification
+          await this.notificationService.sendInstantBookingSuccessNotification(booking.userId, {
+            title: 'Payment Successful! 💳',
+            message: `₹${amount} payment successful for ${booking.hotel.name}`,
+            type: 'payment_success',
+            data: {
+              bookingId: bookingId,
+              hotelName: booking.hotel.name,
+              amount: amount,
+              paymentId: paymentId,
+              checkInDate: booking.checkInDate.toISOString(),
+              checkOutDate: booking.checkOutDate.toISOString(),
+              status: 'confirmed'
+            }
+          });
+
+          // Send immediate email notification
+          await this.notificationService.sendImmediateNotification({
+            userId: booking.userId,
+            type: 'email',
+            title: 'Payment Successful - ' + booking.hotel.name,
+            message: `
+              <h2>💳 Payment Successful!</h2>
+              <p>Dear ${booking.user.name},</p>
+              <p>Your online payment has been processed successfully!</p>
+              
+              <div style="background: #e8f5e8; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3>Payment Details:</h3>
+                <p><strong>Amount:</strong> ₹${amount}</p>
+                <p><strong>Hotel:</strong> ${booking.hotel.name}</p>
+                <p><strong>Booking ID:</strong> ${bookingId}</p>
+                <p><strong>Payment ID:</strong> ${paymentId}</p>
+                <p><strong>Status:</strong> ✅ Confirmed</p>
+              </div>
+              
+              <div style="background: #f0f8ff; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3>Your Stay Details:</h3>
+                <p><strong>Check-in:</strong> ${new Date(booking.checkInDate).toLocaleDateString()}</p>
+                <p><strong>Check-out:</strong> ${new Date(booking.checkOutDate).toLocaleDateString()}</p>
+              </div>
+              
+              <p>Thank you for your booking! We look forward to welcoming you.</p>
+            `,
+            source: 'payment_success',
+            sourceId: paymentId
+          });
+
+        } catch (error) {
+          console.error('Failed to send payment success notifications:', error);
+          // Fallback to queue
+          await this.notificationService.queueNotification({
+            userId: booking.userId,
+            type: 'push',
+            priority: 1,
+            title: 'Payment Successful!',
+            message: `Payment successful for ${booking.hotel.name}`,
+            data: {
+              bookingId: bookingId,
+              amount: amount,
+              paymentId: paymentId
+            },
+            source: 'payment_success_fallback'
+          });
+        }
+      });
+
+    } catch (error) {
+      console.error('Error in payment success notifications:', error);
+    }
+  }
+
   async createPaymentOrder(params: CreatePaymentOrderParams) {
     const db = this.fastify.db;
     const { bookingId, userId, amount, currency = 'INR', walletAmount } = params;
@@ -207,7 +354,7 @@ export class PaymentService {
       }
 
       if (amount !== booking.totalAmount - walletAmount) {
-        throw new error('There is an issue with payment')
+        throw new Error('There is an issue with payment')
       }
 
       // // Check for existing pending order (outside transaction)
@@ -794,25 +941,112 @@ export class PaymentService {
           })
           .where(eq(bookings.id, data.bookingId));
 
-        // Send notifications
-        await this.notificationService.sendNotificationFromTemplate('offline_payment_received', booking.userId, {
-          amount: data.amount,
-          paymentType,
-          receiptNumber,
-          hotelName: booking.hotel.name,
-          bookingId: booking.id
-        });
+        // Send immediate notifications
+        setImmediate(async () => {
+          try {
+            // Send immediate push notification for payment received
+            await this.notificationService.sendInstantBookingSuccessNotification(booking.userId, {
+              title: 'Payment Received! 💰',
+              message: `₹${data.amount} payment received for ${booking.hotel.name}`,
+              type: 'payment_received',
+              data: {
+                bookingId: booking.id,
+                hotelName: booking.hotel.name,
+                amount: data.amount,
+                paymentType,
+                receiptNumber,
+                isFullPayment: isFullyPaid,
+                remainingAmount: newRemainingAmount
+              }
+            });
 
-        // If fully paid, send booking confirmation
-        if (isFullyPaid) {
-          await this.notificationService.sendNotificationFromTemplate('booking_confirmed_offline', booking.userId, {
-            hotelName: booking.hotel.name,
-            checkIn: booking.checkInDate.toISOString(),
-            checkOut: booking.checkOutDate.toISOString(),
-            totalAmount: booking.totalAmount,
-            bookingId: booking.id
-          });
-        }
+            // Send immediate email notification
+            await this.notificationService.sendImmediateNotification({
+              userId: booking.userId,
+              type: 'email',
+              title: 'Payment Confirmation - ' + booking.hotel.name,
+              message: `
+                <h2>💰 Payment Received!</h2>
+                <p>Dear ${booking.user.name},</p>
+                <p>We have received your payment for booking at <strong>${booking.hotel.name}</strong>.</p>
+                
+                <div style="background: #f5f5f5; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                  <h3>Payment Details:</h3>
+                  <p><strong>Amount Paid:</strong> ₹${data.amount}</p>
+                  <p><strong>Payment Method:</strong> ${data.paymentMethod}</p>
+                  <p><strong>Receipt Number:</strong> ${receiptNumber}</p>
+                  <p><strong>Payment Type:</strong> ${paymentType}</p>
+                  ${isFullyPaid ? '<p><strong>Status:</strong> ✅ Fully Paid</p>' : `<p><strong>Remaining Amount:</strong> ₹${newRemainingAmount}</p>`}
+                </div>
+                
+                <p>Thank you for your payment!</p>
+              `,
+              source: 'payment_received',
+              sourceId: paymentId
+            });
+
+            // If fully paid, send booking confirmation notification
+            if (isFullyPaid) {
+              await this.notificationService.sendInstantBookingSuccessNotification(booking.userId, {
+                title: 'Booking Fully Paid & Confirmed! ✅',
+                message: `Your booking at ${booking.hotel.name} is now fully paid and confirmed`,
+                type: 'booking_confirmed',
+                data: {
+                  bookingId: booking.id,
+                  hotelName: booking.hotel.name,
+                  checkInDate: booking.checkInDate.toISOString(),
+                  checkOutDate: booking.checkOutDate.toISOString(),
+                  totalAmount: booking.totalAmount,
+                  status: 'confirmed'
+                }
+              });
+
+              await this.notificationService.sendImmediateNotification({
+                userId: booking.userId,
+                type: 'email',
+                title: 'Booking Confirmed - ' + booking.hotel.name,
+                message: `
+                  <h2>✅ Booking Confirmed!</h2>
+                  <p>Congratulations! Your booking is now fully paid and confirmed.</p>
+                  
+                  <div style="background: #e8f5e8; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                    <h3>Booking Details:</h3>
+                    <p><strong>Hotel:</strong> ${booking.hotel.name}</p>
+                    <p><strong>Check-in:</strong> ${new Date(booking.checkInDate).toLocaleDateString()}</p>
+                    <p><strong>Check-out:</strong> ${new Date(booking.checkOutDate).toLocaleDateString()}</p>
+                    <p><strong>Total Amount:</strong> ₹${booking.totalAmount}</p>
+                    <p><strong>Status:</strong> Confirmed ✅</p>
+                  </div>
+                  
+                  <p>We're excited to welcome you!</p>
+                `,
+                source: 'booking_confirmed',
+                sourceId: booking.id
+              });
+            }
+
+          } catch (error) {
+            console.error('Failed to send immediate payment notifications:', error);
+            // Fallback to templates
+            await this.notificationService.sendNotificationFromTemplate('offline_payment_received', booking.userId, {
+              amount: data.amount,
+              paymentType,
+              receiptNumber,
+              hotelName: booking.hotel.name,
+              bookingId: booking.id
+            });
+
+            if (isFullyPaid) {
+              await this.notificationService.sendNotificationFromTemplate('booking_confirmed_offline', booking.userId, {
+                hotelName: booking.hotel.name,
+                checkIn: booking.checkInDate.toISOString(),
+                checkOut: booking.checkOutDate.toISOString(),
+                totalAmount: booking.totalAmount,
+                bookingId: booking.id
+              });
+            }
+          }
+        });
 
         // Notify hotel owner if exists
         if (booking.hotel.ownerId) {
