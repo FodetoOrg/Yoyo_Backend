@@ -38,6 +38,7 @@ const validateCouponSchema = z.object({
   hotelId: z.string().uuid(),
   roomTypeId: z.string().uuid(),
   orderAmount: z.number().positive(),
+  bookingId: z.string().uuid().optional(),
 });
 
 export class CouponController {
@@ -219,9 +220,9 @@ export class CouponController {
   // Validate coupon
   async validateCoupon(request: FastifyRequest, reply: FastifyReply) {
     try {
-      const { code, hotelId, roomTypeId, orderAmount } = validateCouponSchema.parse(request.body);
+      const { code, hotelId, roomTypeId, orderAmount, bookingId } = validateCouponSchema.parse(request.body);
       console.log('user is in coupn validate ',request.user)
-      const result = await this.couponService.validateCoupon(code, hotelId, roomTypeId, orderAmount,request.user.id);
+      const result = await this.couponService.validateCoupon(code, hotelId, roomTypeId, orderAmount, request.user.id, 'daily', bookingId);
       
       return reply.code(200).send({
         success: true,
@@ -250,7 +251,8 @@ export class CouponController {
   async getUserCoupons(request: FastifyRequest, reply: FastifyReply) {
     try {
       const filters = couponFiltersSchema.parse(request.query);
-      const result = await this.couponService.getUserCoupons(filters,request.user.id);
+      const bookingId = (request.body as any)?.bookingId;
+      const result = await this.couponService.getUserCoupons(filters, request.user.id, bookingId);
       
       return reply.code(200).send({
         success: true,
