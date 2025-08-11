@@ -1,5 +1,5 @@
 import { FastifyInstance } from "fastify";
-import { coupons, couponMappings, cities, hotels, roomTypes, couponUsages } from "../models/schema";
+import { coupons, couponMappings, cities, hotels, roomTypes, couponUsages, bookings } from "../models/schema";
 import { eq, and, desc, inArray, isNull, lt, or } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import { NotFoundError, ConflictError } from "../types/errors";
@@ -331,7 +331,7 @@ export class CouponService {
 
   // Get all coupons for users (no permission restrictions)
   // Get all coupons for users (no permission restrictions)
-  async getUserCoupons(filters: CouponFilters = {}, userId) {
+  async getUserCoupons(filters: CouponFilters = {}, userId, bookingId?: string) {
     const db = this.fastify.db;
     const { status, page = 1, limit = 10 } = filters;
 
@@ -356,7 +356,7 @@ export class CouponService {
       : whereConditions[0];
 
     // First get all available coupons (not maxed out)
-    const couponList = await db.query.coupons.findMany({
+    let couponList = await db.query.coupons.findMany({
       where: whereCondition,
       with: {
         mappings: {
@@ -371,6 +371,21 @@ export class CouponService {
       limit,
       offset: (page - 1) * limit,
     });
+
+    // If bookingId is provided, filter coupons based on booking details
+    if (bookingId) {
+      const booking = await db.query.bookings.findFirst({
+        where: eq(bookings.id, bookingId),
+        with: {
+          hotel: true,
+          room: true,
+        },
+      });
+
+      if (booking) {
+        couponList = await this.filterCouponsByBookingMapping(couponList, booking);
+      }
+    }
 
     // Get coupon IDs that this user has used
     const usedCouponIds = await db.query.couponUsages.findMany({
@@ -427,9 +442,52 @@ export class CouponService {
     };
   }
 
-  // Validate coupon for booking
-  // Validate coupon for booking
-  async validateCoupon(code: string, hotelId: string, roomTypeId: string, orderAmount: number, userId: string, bookingType: 'daily' | 'hourly' = 'daily') {
+  // Helper method to filter coupons based on booking mapping
+  private async filterCouponsByBookingMapping(couponList: any[], booking: any) {
+    const db = this.fastify.db;
+    
+    const filteredCoupons = [];
+
+    for (const coupon of couponList) {
+      // If no mappings exist, coupon is valid for all
+      if (!coupon.mappings || coupon.mappings.length === 0) {
+        filteredCoupons.push(coupon);
+        continue;
+      }
+
+      let isValidForBooking = false;
+
+      // Check each mapping
+      for (const mapping of coupon.mappings) {
+        // Direct hotel match
+        if (mapping.hotelId && mapping.hotelId === booking.hotelId) {
+          isValidForBooking = true;
+          break;
+        }
+
+        // Direct room type match
+        if (mapping.roomTypeId && mapping.roomTypeId === booking.room.roomType) {
+          isValidForBooking = true;
+          break;
+        }
+
+        // City mapping - check hotel's city
+        if (mapping.cityId && booking.hotel.cityId === mapping.cityId) {
+          isValidForBooking = true;
+          break;
+        }
+      }
+
+      if (isValidForBooking) {
+        filteredCoupons.push(coupon);
+      }
+    }
+
+    return filteredCoupons;
+  }
+
+  // Validate coupon for booking with bookingId support
+  async validateCoupon(code: string, hotelId: string, roomTypeId: string, orderAmount: number, userId: string, bookingType: 'daily' | 'hourly' = 'daily', bookingId?: string) {
     const db = this.fastify.db;
 
     const coupon = await db.query.coupons.findFirst({
@@ -517,8 +575,33 @@ export class CouponService {
       }
     }
 
-    // Check mappings - improved logic
+    // Check mappings - improved logic with booking support
     let isValidForHotel = false;
+    let actualHotelId = hotelId;
+    let actualRoomTypeId = roomTypeId;
+    let actualCityId = null;
+
+    // If bookingId is provided, get actual booking details
+    if (bookingId) {
+      try {
+        const booking = await db.query.bookings.findFirst({
+          where: eq(bookings.id, bookingId),
+          with: {
+            hotel: true,
+            room: true,
+          },
+        });
+
+        if (booking) {
+          actualHotelId = booking.hotelId;
+          actualRoomTypeId = booking.room.roomType;
+          actualCityId = booking.hotel.cityId;
+        }
+      } catch (error) {
+        console.error('Error fetching booking details:', error);
+        // Continue with provided hotelId and roomTypeId
+      }
+    }
 
     // If no mappings exist, coupon is valid for all
     if (!coupon.mappings || coupon.mappings.length === 0) {
@@ -527,27 +610,32 @@ export class CouponService {
       // Check each mapping
       for (const mapping of coupon.mappings) {
         // Direct hotel match
-        if (mapping.hotelId && mapping.hotelId === hotelId) {
+        if (mapping.hotelId && mapping.hotelId === actualHotelId) {
           isValidForHotel = true;
           break;
         }
 
         // Direct room type match
-        if (mapping.roomTypeId && mapping.roomTypeId === roomTypeId) {
+        if (mapping.roomTypeId && mapping.roomTypeId === actualRoomTypeId) {
           isValidForHotel = true;
           break;
         }
 
-        // City mapping - need to check hotel's city
+        // City mapping - use actual city from booking or fetch from hotel
         if (mapping.cityId) {
           try {
-            // Make sure we're passing the hotelId as a string, not a Date or other object
-            const hotel = await db.query.hotels.findFirst({
-              where: eq(hotels.id, hotelId.toString()), // Ensure it's a string
-              columns: { cityId: true }
-            });
+            let cityIdToCheck = actualCityId;
+            
+            // If we don't have cityId from booking, fetch it from hotel
+            if (!cityIdToCheck) {
+              const hotel = await db.query.hotels.findFirst({
+                where: eq(hotels.id, actualHotelId.toString()),
+                columns: { cityId: true }
+              });
+              cityIdToCheck = hotel?.cityId;
+            }
 
-            if (hotel && hotel.cityId === mapping.cityId) {
+            if (cityIdToCheck && cityIdToCheck === mapping.cityId) {
               isValidForHotel = true;
               break;
             }
