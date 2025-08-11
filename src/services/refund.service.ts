@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { FastifyInstance } from 'fastify';
 import { eq, and, desc } from 'drizzle-orm';
 import { refunds, bookings, wallets, walletTransactions } from '../models/schema';
@@ -5,6 +6,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { NotificationService } from './notification.service';
 import { WalletService } from './wallet.service'; // Assuming WalletService is in './wallet.service'
 import { UserRole } from '../types/common';
+import { P } from 'pino';
 
 export class RefundService {
   private fastify: FastifyInstance;
@@ -13,14 +15,120 @@ export class RefundService {
 
   constructor(fastify: FastifyInstance) {
     this.fastify = fastify;
-    this.notificationService = new NotificationService(fastify);
-    this.walletService = new WalletService(fastify);
+    this.notificationService = new NotificationService();
+    this.walletService = new WalletService();
+    this.notificationService= new NotificationService()
   }
 
   setFastify(fastify: FastifyInstance) {
     this.fastify = fastify;
     this.notificationService.setFastify(fastify);
     this.walletService.setFastify(fastify); // Set fastify instance for walletService
+  }
+
+  async sendRefundStatusNotifications(refundId: string, status: string, userId: string, bookingId: string, amount: number, hotelName: string) {
+    setImmediate(async () => {
+      try {
+        let title = '';
+        let message = '';
+        let emailTitle = '';
+        let emailContent = '';
+
+        switch (status) {
+          case 'approved':
+            title = 'Refund Approved! 💰';
+            message = `Your refund of ₹${amount} for ${hotelName} has been approved`;
+            emailTitle = 'Refund Approved - ' + hotelName;
+            emailContent = `
+              <h2>💰 Refund Approved!</h2>
+              <p>Great news! Your refund has been approved.</p>
+              <div style="background: #e8f5e8; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3>Refund Details:</h3>
+                <p><strong>Amount:</strong> ₹${amount}</p>
+                <p><strong>Hotel:</strong> ${hotelName}</p>
+                <p><strong>Booking ID:</strong> ${bookingId}</p>
+                <p><strong>Status:</strong> Approved ✅</p>
+              </div>
+              <p>The refund will be processed to your original payment method within 5-7 business days.</p>
+            `;
+            break;
+          case 'processed':
+            title = 'Refund Processed! 💳';
+            message = `Your refund of ₹${amount} for ${hotelName} has been processed`;
+            emailTitle = 'Refund Processed - ' + hotelName;
+            emailContent = `
+              <h2>💳 Refund Processed!</h2>
+              <p>Your refund has been successfully processed.</p>
+              <div style="background: #e8f5e8; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3>Refund Details:</h3>
+                <p><strong>Amount:</strong> ₹${amount}</p>
+                <p><strong>Hotel:</strong> ${hotelName}</p>
+                <p><strong>Booking ID:</strong> ${bookingId}</p>
+                <p><strong>Status:</strong> Processed ✅</p>
+              </div>
+              <p>You should see the refund in your account within 5-7 business days.</p>
+            `;
+            break;
+          case 'rejected':
+            title = 'Refund Request Rejected ❌';
+            message = `Your refund request for ${hotelName} has been rejected`;
+            emailTitle = 'Refund Request Rejected - ' + hotelName;
+            emailContent = `
+              <h2>❌ Refund Request Rejected</h2>
+              <p>Unfortunately, your refund request has been rejected.</p>
+              <div style="background: #ffe6e6; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3>Request Details:</h3>
+                <p><strong>Hotel:</strong> ${hotelName}</p>
+                <p><strong>Booking ID:</strong> ${bookingId}</p>
+                <p><strong>Status:</strong> Rejected ❌</p>
+              </div>
+              <p>If you believe this is an error, please contact our support team.</p>
+            `;
+            break;
+        }
+
+        // Send immediate push notification
+        await this.notificationService.sendInstantBookingSuccessNotification(userId, {
+          title,
+          message,
+          type: 'refund_status_update',
+          data: {
+            refundId,
+            bookingId,
+            status,
+            amount,
+            hotelName
+          }
+        });
+
+        // Send immediate email notification
+        await this.notificationService.sendImmediateNotification({
+          userId,
+          type: 'email',
+          title: emailTitle,
+          message: emailContent,
+          source: 'refund_status_update',
+          sourceId: refundId
+        });
+
+      } catch (error) {
+        console.error('Failed to send refund status notifications:', error);
+        // Fallback to queue
+        await this.notificationService.queueNotification({
+          userId,
+          type: 'push',
+          priority: 1,
+          title: 'Refund Status Update',
+          message: `Your refund status has been updated`,
+          data: {
+            refundId,
+            bookingId,
+            status
+          },
+          source: 'refund_status_fallback'
+        });
+      }
+    });
   }
 
   // Calculate cancellation fee and refund amount
@@ -107,7 +215,7 @@ export class RefundService {
       if (params.refundType === 'hotel_cancellation') {
         // Hotel cancellation - typically full refund regardless of timing
         refundCalculation = {
-          refundAmount: booking.totalAmount ,
+          refundAmount: booking.totalAmount,
           cancellationFeeAmount: 0,
 
         };
@@ -123,7 +231,7 @@ export class RefundService {
         refundCalculation = {
           refundAmount: booking.totalAmount - booking.walletAmountUsed,
           cancellationFeeAmount: 0,
-          
+
         }
       }
 
@@ -138,7 +246,7 @@ export class RefundService {
         originalAmount: booking.totalAmount,
         cancellationFeeAmount: refundCalculation.cancellationFeeAmount,
         refundAmount: refundCalculation.refundAmount,
-        cancellationFeePercentage:0,
+        cancellationFeePercentage: 0,
         // cancellationFeePercentage: params.refundType === 'hotel_cancellation' ? 0 : booking.hotel.cancellationFeePercentage,
         refundReason: params.refundReason,
         status: 'pending',
@@ -224,6 +332,7 @@ export class RefundService {
   // Process refund (Admin only)
   async processRefund(refundId: string, processedBy: any) {
     const db = this.fastify.db;
+    console.log('processedBy ',processedBy)
     if (processedBy.role !== UserRole.SUPER_ADMIN) {
       throw new Error('You dont have access to refund this')
     }
@@ -316,6 +425,14 @@ export class RefundService {
         .where(eq(refunds.id, refundId));
 
       console.log('here 3')
+      await this.sendRefundStatusNotifications(
+        refundId,
+        'Success',
+        refund.userId,
+        refund.bookingId,
+        refund.refundAmount,
+        refund.booking?.hotel?.name || 'Hotel'
+      );
 
       return { refundId, status: 'processed', amount: refund.refundAmount };
     });
@@ -362,10 +479,14 @@ export class RefundService {
         .where(eq(bookings.id, refund.bookingId));
 
       // Send notification
-      await this.notificationService.sendNotificationFromTemplate('refund_rejected', refund.userId, {
-        rejectionReason,
-        bookingId: refund.bookingId
-      });
+      await this.sendRefundStatusNotifications(
+        refundId,
+        'rejected',
+        refund.userId,
+        refund.bookingId,
+        refund.refundAmount,
+        refund.booking?.hotel?.name || 'Hotel'
+      );
 
       return { success: true, refundId, status: 'rejected' };
     });

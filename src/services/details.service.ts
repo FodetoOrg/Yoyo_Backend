@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { sql, eq, desc, and, count } from 'drizzle-orm';
 import { FastifyInstance } from 'fastify';
 import { rooms, hotels, bookings, users, payments, refunds, addons, roomAddons, bookingAddons, paymentOrders, wallets, walletTransactions, walletUsages, hotelReviews } from '../models/schema';

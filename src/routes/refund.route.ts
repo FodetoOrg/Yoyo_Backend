@@ -4,7 +4,7 @@ import { RefundController } from '../controllers/refund.controller';
 
 export async function refundRoutes(fastify: FastifyInstance) {
   const refundController = new RefundController();
-
+  refundController.setFastify(fastify);
   // User routes
   fastify.post('/refunds', {
     onRequest: [fastify.authenticate],

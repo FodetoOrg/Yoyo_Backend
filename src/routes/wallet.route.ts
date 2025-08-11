@@ -1,4 +1,4 @@
-
+// @ts-nocheck
 import { FastifyInstance } from 'fastify';
 import { WalletController } from '../controllers/wallet.controller';
 

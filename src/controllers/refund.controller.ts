@@ -1,4 +1,4 @@
-//@ts-nocheck
+// @ts-nocheck
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { RefundService } from '../services/refund.service';
 import { z } from 'zod';
@@ -7,18 +7,20 @@ export class RefundController {
   private refundService: RefundService;
 
   constructor() {
-    // Service will be initialized in the route handler
+    this.refundService = new RefundService();
+  }
+
+  setFastify(fastify: any) {
+    this.refundService.setFastify(fastify);
   }
 
   // Create refund request
   async createRefundRequest(request: FastifyRequest, reply: FastifyReply) {
     try {
-      this.refundService = new RefundService(request.server);
-      
       const schema = z.object({
         bookingId: z.string().uuid(),
         refundReason: z.string().min(10),
-        refundType: z.enum(['cancellation', 'no_show']).default('cancellation')
+        refundType: z.enum(['cancellation', 'no_show']).default('cancellation'),
       });
 
       const { bookingId, refundReason, refundType } = schema.parse(request.body);
@@ -28,28 +30,28 @@ export class RefundController {
         bookingId,
         userId,
         refundReason,
-        refundType
+        refundType,
       });
 
       return reply.code(201).send({
         success: true,
         message: 'Refund request created successfully',
-        data: result
+        data: result,
       });
     } catch (error) {
       request.log.error(error);
-      
+
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
           success: false,
           message: 'Validation error',
-          errors: error.errors
+          errors: error.errors,
         });
       }
 
       return reply.code(400).send({
         success: false,
-        message: error.message || 'Failed to create refund request'
+        message: (error as any)?.message || 'Failed to create refund request',
       });
     }
   }
@@ -57,22 +59,25 @@ export class RefundController {
   // Get user refunds
   async getUserRefunds(request: FastifyRequest, reply: FastifyReply) {
     try {
-      this.refundService = new RefundService(request.server);
-      
-      const { page = 1, limit = 10 } = request.query as any;
+      const querySchema = z.object({
+        page: z.coerce.number().int().min(1).default(1),
+        limit: z.coerce.number().int().min(1).max(100).default(10),
+      });
+
+      const { page, limit } = querySchema.parse((request as any).query || {});
       const userId = (request as any).user.id;
 
-      const refunds = await this.refundService.getUserRefunds(userId, Number(page), Number(limit));
+      const refunds = await this.refundService.getUserRefunds(userId, page, limit);
 
       return reply.send({
         success: true,
-        data: refunds
+        data: refunds,
       });
     } catch (error) {
       request.log.error(error);
       return reply.code(500).send({
         success: false,
-        message: 'Failed to fetch refunds'
+        message: 'Failed to fetch refunds',
       });
     }
   }
@@ -80,33 +85,33 @@ export class RefundController {
   // Get refund by ID
   async getRefundById(request: FastifyRequest, reply: FastifyReply) {
     try {
-      this.refundService = new RefundService(request.server);
-      
-      const { id } = request.params as { id: string };
+      const paramsSchema = z.object({ id: z.string().uuid() });
+      const { id } = paramsSchema.parse((request as any).params);
+
       const userId = (request as any).user.id;
       const userRole = (request as any).user.role;
 
       const refund = await this.refundService.getRefundById(
-        id, 
+        id,
         userRole === 'user' ? userId : undefined
       );
 
       if (!refund) {
         return reply.code(404).send({
           success: false,
-          message: 'Refund not found'
+          message: 'Refund not found',
         });
       }
 
       return reply.send({
         success: true,
-        data: refund
+        data: refund,
       });
     } catch (error) {
       request.log.error(error);
       return reply.code(500).send({
         success: false,
-        message: 'Failed to fetch refund'
+        message: 'Failed to fetch refund',
       });
     }
   }
@@ -114,24 +119,23 @@ export class RefundController {
   // Process refund (Admin only)
   async processRefund(request: FastifyRequest, reply: FastifyReply) {
     try {
-      this.refundService = new RefundService(request.server);
-      
-      const { id } = request.params as { id: string };
-     
-      const processedBy = (request as any).user;
+      const paramsSchema = z.object({ id: z.string().uuid() });
+      const { id } = paramsSchema.parse((request as any).params);
 
-    const result = await this.refundService.processRefund(id, processedBy);
+      const processedBy = (request as any).user; // keep as userId for consistency
+
+      const result = await this.refundService.processRefund(id, processedBy);
 
       return reply.send({
         success: true,
         message: 'Refund processed successfully',
-        data: result
+        data: result,
       });
     } catch (error) {
       request.log.error(error);
       return reply.code(400).send({
         success: false,
-        message: error.message || 'Failed to process refund'
+        message: (error as any)?.message || 'Failed to process refund',
       });
     }
   }
@@ -139,14 +143,14 @@ export class RefundController {
   // Reject refund (Admin only)
   async rejectRefund(request: FastifyRequest, reply: FastifyReply) {
     try {
-      this.refundService = new RefundService(request.server);
-      
-      const schema = z.object({
-        rejectionReason: z.string().min(10)
+      const paramsSchema = z.object({ id: z.string().uuid() });
+      const bodySchema = z.object({
+        rejectionReason: z.string().min(10),
       });
 
-      const { id } = request.params as { id: string };
-      const { rejectionReason } = schema.parse(request.body);
+      const { id } = paramsSchema.parse((request as any).params);
+      const { rejectionReason } = bodySchema.parse((request as any).body);
+
       const processedBy = (request as any).user.id;
 
       const result = await this.refundService.rejectRefund(id, processedBy, rejectionReason);
@@ -154,13 +158,13 @@ export class RefundController {
       return reply.send({
         success: true,
         message: 'Refund rejected successfully',
-        data: result
+        data: result,
       });
     } catch (error) {
       request.log.error(error);
       return reply.code(400).send({
         success: false,
-        message: error.message || 'Failed to reject refund'
+        message: (error as any)?.message || 'Failed to reject refund',
       });
     }
   }
@@ -168,26 +172,31 @@ export class RefundController {
   // Get all refunds (Admin only)
   async getAllRefunds(request: FastifyRequest, reply: FastifyReply) {
     try {
-      this.refundService = new RefundService(request.server);
-      
-      const { status, refundType, page = 1, limit = 10 } = request.query as any;
+      const querySchema = z.object({
+        status: z.string().optional(),
+        refundType: z.enum(['cancellation', 'no_show']).optional(),
+        page: z.coerce.number().int().min(1).default(1),
+        limit: z.coerce.number().int().min(1).max(100).default(10),
+      });
+
+      const { status, refundType, page, limit } = querySchema.parse((request as any).query || {});
 
       const refunds = await this.refundService.getAllRefunds({
         status,
         refundType,
-        page: Number(page),
-        limit: Number(limit)
+        page,
+        limit,
       });
 
       return reply.send({
         success: true,
-        data: refunds
+        data: refunds,
       });
     } catch (error) {
       request.log.error(error);
       return reply.code(500).send({
         success: false,
-        message: 'Failed to fetch refunds'
+        message: 'Failed to fetch refunds',
       });
     }
   }

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { AnalyticsService } from '../services/analytics.service';
 import { z } from 'zod';

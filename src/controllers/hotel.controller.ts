@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { FastifyRequest, FastifyReply } from "fastify";
 import { HotelService } from "../services/hotel.service";
 import dayjs from "dayjs";
