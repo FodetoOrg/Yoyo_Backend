@@ -516,8 +516,22 @@ export class PaymentService {
         errorMessage = error.message;
       }
 
-      // If Razorpay order was created but DB transaction failed, 
-      // you might want to handle cleanup here
+      // Send immediate failure notification
+      setImmediate(async () => {
+        try {
+          const db = this.fastify.db;
+          const booking = await db.query.bookings.findFirst({
+            where: eq(bookings.id, bookingId),
+            with: { user: true, hotel: true }
+          });
+
+          if (booking) {
+            await this.sendPaymentFailureNotifications(bookingId, amount, errorMessage);
+          }
+        } catch (notifError) {
+          console.error('Failed to send payment failure notification:', notifError);
+        }
+      });
 
       throw new Error(`Failed to create payment order: ${errorMessage}`);
     }

@@ -977,6 +977,58 @@ export class BookingService {
         refundType: user.role === 'hotel' ? 'hotel_cancellation' : 'cancellation'
       });
 
+      // Send immediate cancellation notifications
+      setImmediate(async () => {
+        try {
+          // Send immediate push notification
+          await this.notificationService.sendInstantBookingSuccessNotification(booking.userId, {
+            title: 'Booking Cancelled & Refund Initiated 💰',
+            message: `Your booking at ${booking.hotel.name} has been cancelled. Refund request initiated.`,
+            type: 'booking_cancelled',
+            data: {
+              bookingId,
+              hotelName: booking.hotel.name,
+              cancelReason,
+              refundInitiated: true,
+              cancelledBy: user.role === 'hotel' ? 'hotel' : 'user'
+            }
+          });
+
+          // Send immediate email notification
+          await this.notificationService.sendImmediateNotification({
+            userId: booking.userId,
+            type: 'email',
+            title: 'Booking Cancelled & Refund Initiated - ' + booking.hotel.name,
+            message: `
+              <h2>❌ Booking Cancelled</h2>
+              <p>Dear ${booking.user.name},</p>
+              <p>Your booking has been cancelled and a refund request has been initiated.</p>
+              
+              <div style="background: #ffe6e6; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3>Cancellation Details:</h3>
+                <p><strong>Hotel:</strong> ${booking.hotel.name}</p>
+                <p><strong>Booking ID:</strong> ${bookingId}</p>
+                <p><strong>Cancelled By:</strong> ${user.role === 'hotel' ? 'Hotel' : 'You'}</p>
+                <p><strong>Reason:</strong> ${cancelReason}</p>
+              </div>
+              
+              <div style="background: #e8f5e8; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3>Refund Information:</h3>
+                <p>A refund request has been created and will be processed according to our refund policy.</p>
+                <p>You will receive updates on the refund status via email and notifications.</p>
+              </div>
+              
+              <p>We apologize for any inconvenience caused.</p>
+            `,
+            source: 'booking_cancelled_refund',
+            sourceId: bookingId
+          });
+
+        } catch (error) {
+          console.error('Failed to send cancellation notifications:', error);
+        }
+      });
+
       return {
         message: 'Booking cancelled successfully. Refund request created.',
         refundInfo: refundResult,
@@ -993,6 +1045,53 @@ export class BookingService {
           updatedAt: new Date(),
         })
         .where(eq(bookings.id, bookingId));
+
+      // Send immediate cancellation notifications
+      setImmediate(async () => {
+        try {
+          // Send immediate push notification
+          await this.notificationService.sendInstantBookingSuccessNotification(booking.userId, {
+            title: 'Booking Cancelled ❌',
+            message: `Your booking at ${booking.hotel.name} has been cancelled.`,
+            type: 'booking_cancelled',
+            data: {
+              bookingId,
+              hotelName: booking.hotel.name,
+              cancelReason,
+              refundInitiated: false,
+              cancelledBy: user.role === 'hotel' ? 'hotel' : 'user'
+            }
+          });
+
+          // Send immediate email notification
+          await this.notificationService.sendImmediateNotification({
+            userId: booking.userId,
+            type: 'email',
+            title: 'Booking Cancelled - ' + booking.hotel.name,
+            message: `
+              <h2>❌ Booking Cancelled</h2>
+              <p>Dear ${booking.user.name},</p>
+              <p>Your booking has been cancelled.</p>
+              
+              <div style="background: #ffe6e6; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3>Cancellation Details:</h3>
+                <p><strong>Hotel:</strong> ${booking.hotel.name}</p>
+                <p><strong>Booking ID:</strong> ${bookingId}</p>
+                <p><strong>Cancelled By:</strong> ${user.role === 'hotel' ? 'Hotel' : 'You'}</p>
+                <p><strong>Reason:</strong> ${cancelReason}</p>
+              </div>
+              
+              <p><strong>Note:</strong> No refund is required as payment was not completed.</p>
+              <p>Thank you for your understanding.</p>
+            `,
+            source: 'booking_cancelled_no_refund',
+            sourceId: bookingId
+          });
+
+        } catch (error) {
+          console.error('Failed to send cancellation notifications:', error);
+        }
+      });
 
       return {
         message: 'Booking cancelled successfully. No refund required as payment was not completed.',
@@ -1071,39 +1170,128 @@ export class BookingService {
 
     // Send notification AFTER commit (so users never see a status that later rolls back)
     if (updatedBooking) {
-      try {
-        let notificationMessage = '';
-        switch (status) {
-          case 'confirmed':
-            notificationMessage = `Your booking at ${updatedBooking.hotel.name} has been confirmed`;
-            break;
-          case 'cancelled':
-            notificationMessage = `Your booking at ${updatedBooking.hotel.name} has been cancelled. Reason: ${reason ?? 'N/A'}`;
-            break;
-          case 'checked-in':
-            notificationMessage = `You have been checked in at ${updatedBooking.hotel.name}`;
-            break;
-          case 'completed':
-            notificationMessage = `Your stay at ${updatedBooking.hotel.name} has been completed. Thank you for choosing us!`;
-            break;
-          default:
-            notificationMessage = `Your booking status has been updated to ${status}`;
-        }
+      setImmediate(async () => {
+        try {
+          let notificationMessage = '';
+          let emailTitle = '';
+          let emailContent = '';
+          
+          switch (status) {
+            case 'confirmed':
+              notificationMessage = `Your booking at ${updatedBooking.hotel.name} has been confirmed`;
+              emailTitle = 'Booking Confirmed - ' + updatedBooking.hotel.name;
+              emailContent = `
+                <h2>✅ Booking Confirmed!</h2>
+                <p>Great news! Your booking has been confirmed.</p>
+                <div style="background: #e8f5e8; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                  <h3>Booking Details:</h3>
+                  <p><strong>Hotel:</strong> ${updatedBooking.hotel.name}</p>
+                  <p><strong>Booking ID:</strong> ${bookingId}</p>
+                  <p><strong>Status:</strong> Confirmed ✅</p>
+                </div>
+                <p>We look forward to welcoming you!</p>
+              `;
+              break;
+            case 'cancelled':
+              notificationMessage = `Your booking at ${updatedBooking.hotel.name} has been cancelled. Reason: ${reason ?? 'N/A'}`;
+              emailTitle = 'Booking Cancelled - ' + updatedBooking.hotel.name;
+              emailContent = `
+                <h2>❌ Booking Cancelled</h2>
+                <p>Your booking has been cancelled.</p>
+                <div style="background: #ffe6e6; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                  <h3>Cancellation Details:</h3>
+                  <p><strong>Hotel:</strong> ${updatedBooking.hotel.name}</p>
+                  <p><strong>Booking ID:</strong> ${bookingId}</p>
+                  <p><strong>Reason:</strong> ${reason ?? 'N/A'}</p>
+                  <p><strong>Status:</strong> Cancelled ❌</p>
+                </div>
+                <p>If you have any questions, please contact our support team.</p>
+              `;
+              break;
+            case 'checked-in':
+              notificationMessage = `You have been checked in at ${updatedBooking.hotel.name}`;
+              emailTitle = 'Check-in Successful - ' + updatedBooking.hotel.name;
+              emailContent = `
+                <h2>🏨 Check-in Successful!</h2>
+                <p>Welcome! You have been successfully checked in.</p>
+                <div style="background: #e8f5e8; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                  <h3>Check-in Details:</h3>
+                  <p><strong>Hotel:</strong> ${updatedBooking.hotel.name}</p>
+                  <p><strong>Booking ID:</strong> ${bookingId}</p>
+                  <p><strong>Status:</strong> Checked In 🏨</p>
+                </div>
+                <p>Enjoy your stay with us!</p>
+              `;
+              break;
+            case 'completed':
+              notificationMessage = `Your stay at ${updatedBooking.hotel.name} has been completed. Thank you for choosing us!`;
+              emailTitle = 'Stay Completed - ' + updatedBooking.hotel.name;
+              emailContent = `
+                <h2>🎉 Stay Completed!</h2>
+                <p>Thank you for staying with us! We hope you had a wonderful experience.</p>
+                <div style="background: #f0f8ff; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                  <h3>Completion Details:</h3>
+                  <p><strong>Hotel:</strong> ${updatedBooking.hotel.name}</p>
+                  <p><strong>Booking ID:</strong> ${bookingId}</p>
+                  <p><strong>Status:</strong> Completed 🎉</p>
+                </div>
+                <p>We'd love to hear about your experience. Please consider leaving a review!</p>
+              `;
+              break;
+            default:
+              notificationMessage = `Your booking status has been updated to ${status}`;
+              emailTitle = 'Booking Status Update - ' + updatedBooking.hotel.name;
+              emailContent = `
+                <h2>📋 Booking Status Updated</h2>
+                <p>Your booking status has been updated.</p>
+                <div style="background: #f5f5f5; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                  <p><strong>Hotel:</strong> ${updatedBooking.hotel.name}</p>
+                  <p><strong>Booking ID:</strong> ${bookingId}</p>
+                  <p><strong>New Status:</strong> ${status}</p>
+                </div>
+              `;
+          }
 
-        await this.notificationService.sendInstantBookingSuccessNotification(updatedBooking.userId, {
-          title: 'Booking Status Updated',
-          message: notificationMessage,
-          type: 'booking_status_update',
-          data: {
-            bookingId,
-            status,
-            hotelName: updatedBooking.hotel.name,
-          },
-        });
-      } catch (err) {
-        this.fastify.log.error('Failed to send booking status update notification:', err);
-        // no rethrow — status is already committed
-      }
+          // Send immediate push notification
+          await this.notificationService.sendInstantBookingSuccessNotification(updatedBooking.userId, {
+            title: 'Booking Status Updated',
+            message: notificationMessage,
+            type: 'booking_status_update',
+            data: {
+              bookingId,
+              status,
+              hotelName: updatedBooking.hotel.name,
+            },
+          });
+
+          // Send immediate email notification
+          await this.notificationService.sendImmediateNotification({
+            userId: updatedBooking.userId,
+            type: 'email',
+            title: emailTitle,
+            message: emailContent,
+            source: 'booking_status_update',
+            sourceId: bookingId
+          });
+
+        } catch (err) {
+          this.fastify.log.error('Failed to send booking status update notifications:', err);
+          // Fallback to queue
+          await this.notificationService.queueNotification({
+            userId: updatedBooking.userId,
+            type: 'push',
+            priority: 1,
+            title: 'Booking Status Updated',
+            message: `Your booking status has been updated to ${status}`,
+            data: {
+              bookingId,
+              status,
+              hotelName: updatedBooking.hotel.name
+            },
+            source: 'booking_status_update_fallback'
+          });
+        }
+      });
     }
 
     return updatedBooking ?? (await this.getBookingById(bookingId));

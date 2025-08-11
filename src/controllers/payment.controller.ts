@@ -125,7 +125,7 @@ export class PaymentController {
       const result = await this.paymentService.verifyPayment(paymentData);
 
       // Trigger immediate notification for payment success
-      await this.paymentService.sendPaymentSuccessNotification(result.bookingId, result.paymentId);
+      await this.paymentService.sendPaymentSuccessNotifications(result.paymentId, result.bookingId, result.amount);
 
       return reply.code(200).send({
         success: true,
@@ -403,7 +403,7 @@ export class PaymentController {
       });
 
       // Trigger immediate notification for payment success
-      await this.paymentService.sendPaymentSuccessNotification(bookingId, result.paymentId);
+      await this.paymentService.sendPaymentSuccessNotifications(bookingId, result.paymentId, result.amount);
 
       return reply.code(200).send({
         success: true,
