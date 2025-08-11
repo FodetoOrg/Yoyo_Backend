@@ -265,12 +265,64 @@ export class RefundService {
         })
         .where(eq(bookings.id, params.bookingId));
 
-      // Send notifications
-      await this.notificationService.sendNotificationFromTemplate('refund_request_created', params.user.id, {
-        bookingId: params.bookingId,
-        refundAmount: refundCalculation.refundAmount,
-        cancellationFeeAmount: refundCalculation.cancellationFeeAmount,
-        expectedDays: booking.payment?.paymentMode === 'online' ? 7 : 10
+      // Send immediate refund request created notifications
+      setImmediate(async () => {
+        try {
+          // Send immediate push notification
+          await this.notificationService.sendInstantBookingSuccessNotification(booking.userId, {
+            title: 'Refund Request Created! 💰',
+            message: `Your refund request of ₹${refundCalculation.refundAmount} for ${booking.hotel.name} has been submitted`,
+            type: 'refund_request_created',
+            data: {
+              refundId,
+              bookingId: params.bookingId,
+              refundAmount: refundCalculation.refundAmount,
+              hotelName: booking.hotel.name
+            }
+          });
+
+          // Send immediate email notification
+          await this.notificationService.sendImmediateNotification({
+            userId: booking.userId,
+            type: 'email',
+            title: 'Refund Request Submitted - ' + booking.hotel.name,
+            message: `
+              <h2>💰 Refund Request Submitted</h2>
+              <p>Dear ${booking.user.name},</p>
+              <p>Your refund request has been successfully submitted and is being processed.</p>
+              
+              <div style="background: #fff3cd; padding: 20px; margin: 20px 0; border-radius: 8px;">
+                <h3>Refund Request Details:</h3>
+                <p><strong>Hotel:</strong> ${booking.hotel.name}</p>
+                <p><strong>Booking ID:</strong> ${params.bookingId}</p>
+                <p><strong>Refund Amount:</strong> ₹${refundCalculation.refundAmount}</p>
+                <p><strong>Expected Processing:</strong> ${booking.payment?.paymentMode === 'online' ? 7 : 10} business days</p>
+                <p><strong>Status:</strong> Under Review 🔄</p>
+              </div>
+              
+              <p>We will notify you once your refund request is processed.</p>
+              <p>Thank you for your patience!</p>
+            `,
+            source: 'refund_request_created',
+            sourceId: refundId
+          });
+
+        } catch (error) {
+          console.error('Failed to send refund request notifications:', error);
+          // Fallback to queue
+          await this.notificationService.queueNotification({
+            userId: booking.userId,
+            type: 'push',
+            priority: 1,
+            title: 'Refund Request Created',
+            message: `Your refund request has been submitted`,
+            data: {
+              refundId,
+              bookingId: params.bookingId
+            },
+            source: 'refund_request_fallback'
+          });
+        }
       });
 
       return {
@@ -425,6 +477,16 @@ export class RefundService {
 
       console.log('here 3')
 
+      // Send refund processed notifications
+      await this.sendRefundStatusNotifications(
+        refundId, 
+        'processed', 
+        refund.userId, 
+        refund.bookingId, 
+        refund.refundAmount,
+        refund.booking?.hotel?.name || 'Hotel'
+      );
+
       return { refundId, status: 'processed', amount: refund.refundAmount };
     });
   }
@@ -469,11 +531,15 @@ export class RefundService {
         })
         .where(eq(bookings.id, refund.bookingId));
 
-      // Send notification
-      await this.notificationService.sendNotificationFromTemplate('refund_rejected', refund.userId, {
-        rejectionReason,
-        bookingId: refund.bookingId
-      });
+      // Send refund rejection notifications
+      await this.sendRefundStatusNotifications(
+        refundId, 
+        'rejected', 
+        refund.userId, 
+        refund.bookingId, 
+        refund.refundAmount,
+        refund.booking?.hotel?.name || 'Hotel'
+      );
 
       return { success: true, refundId, status: 'rejected' };
     });
