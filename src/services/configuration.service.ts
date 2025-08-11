@@ -1,4 +1,3 @@
-
 // @ts-nocheck
 import { FastifyInstance } from "fastify";
 import { configurations } from "../models/schema";
@@ -16,7 +15,7 @@ export class ConfigurationService {
   // Get all configurations
   async getAllConfigurations(category?: string) {
     const db = this.fastify.db;
-    
+
     let whereConditions = [eq(configurations.isActive, true)];
     if (category) {
       whereConditions.push(eq(configurations.category, category));
@@ -28,7 +27,7 @@ export class ConfigurationService {
 
     return configs.reduce((acc, config) => {
       let value = config.value;
-      
+
       // Parse value based on type
       switch (config.type) {
         case 'boolean':
@@ -46,7 +45,7 @@ export class ConfigurationService {
           }
           break;
       }
-      
+
       acc[config.key] = value;
       return acc;
     }, {});
@@ -55,7 +54,7 @@ export class ConfigurationService {
   // Get specific configuration
   async getConfiguration(key: string) {
     const db = this.fastify.db;
-    
+
     const config = await db.select()
       .from(configurations)
       .where(and(eq(configurations.key, key), eq(configurations.isActive, true)))
@@ -92,7 +91,7 @@ export class ConfigurationService {
   // Update or create configuration
   async setConfiguration(key: string, value: any, type: string, description?: string, category: string = 'app') {
     const db = this.fastify.db;
-    
+
     let stringValue = value;
     if (type === 'json' || type === 'array') {
       stringValue = JSON.stringify(value);
@@ -119,7 +118,7 @@ export class ConfigurationService {
         })
         .where(eq(configurations.key, key))
         .returning();
-      
+
       return updated[0];
     } else {
       // Create new
@@ -133,7 +132,7 @@ export class ConfigurationService {
           category,
         })
         .returning();
-      
+
       return created[0];
     }
   }
@@ -196,6 +195,13 @@ export class ConfigurationService {
         type: 'number',
         description: 'Default cancellation period in hours if user donesnt show up',
         category: 'booking'
+      },
+      {
+        key: 'platform_fee_percentage',
+        value: '5',
+        type: 'number',
+        description: 'Default platform fee percentage',
+        category: 'app'
       }
     ];
 
@@ -215,5 +221,19 @@ export class ConfigurationService {
         );
       }
     }
+  }
+
+  // Add method to get configuration by key
+  async getConfiguration(key: string) {
+    const db = this.fastify.db;
+
+    return await db.query.configurations.findFirst({
+      where: eq(configurations.key, key)
+    });
+  }
+
+  async getPlatformFeePercentage(): Promise<number> {
+    const config = await this.getConfiguration('platform_fee_percentage');
+    return config ? parseFloat(config.value) : 5;
   }
 }

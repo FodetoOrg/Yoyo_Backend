@@ -18,3 +18,14 @@ export const configurations = sqliteTable('configurations', {
 
 export type Configuration = typeof configurations.$inferSelect;
 export type ConfigurationInsert = typeof configurations.$inferInsert;
+
+// Default configurations that should be inserted
+export const defaultConfigurations = [
+  {
+    key: 'platform_fee_percentage',
+    value: '5',
+    type: 'number',
+    description: 'Platform fee percentage applied to bookings',
+    category: 'payment'
+  }
+];

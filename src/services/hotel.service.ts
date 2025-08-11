@@ -12,6 +12,7 @@ import {
   hotelReviews,
   bookings,
   roomAddons,
+  configurations // Assuming configurations table is imported
 } from "../models/schema";
 
 import { v4 as uuidv4 } from "uuid";
@@ -216,6 +217,8 @@ export class HotelService {
         onlinePaymentEnabled: hotelData.onlinePaymentEnabled ?? true,
         offlinePaymentEnabled: hotelData.offlinePaymentEnabled !== false, // Default true
         cancellationPeriodHours: hotelData.cancellationPeriodHours ?? 24,
+        // Initialize GST percentage
+        gstPercentage: 18,
       });
 
       // add hotel city to hotel
@@ -550,7 +553,7 @@ export class HotelService {
 
     return formattedRooms;
   }
-  
+
 
   // Get hotel reviews with rating breakdown
   async getHotelReviews(hotelId: string) {
@@ -868,5 +871,33 @@ export class HotelService {
     }
 
     return allHotelUsers;
+  }
+
+  // Add this method to HotelService
+  async getHotelWithGstDetails(hotelId: string) {
+    const db = this.fastify.db;
+
+    const hotel = await db.query.hotels.findFirst({
+      where: eq(hotels.id, hotelId),
+      with: {
+        rooms: true, // Assuming you might need rooms, adjust as necessary
+        images: true, // Assuming you might need images, adjust as necessary
+      }
+    });
+
+    if (!hotel) {
+      throw new Error('Hotel not found');
+    }
+
+    // Get platform fee configuration
+    const platformFeeConfig = await db.query.configurations.findFirst({
+      where: eq(configurations.key, 'platform_fee_percentage')
+    });
+
+    return {
+      ...hotel,
+      gstPercentage: hotel.gstPercentage, // Assuming gstPercentage is a field in your Hotel schema
+      platformFeePercentage: platformFeeConfig ? parseFloat(platformFeeConfig.value) : 5 // Default to 5% if not found
+    };
   }
 }

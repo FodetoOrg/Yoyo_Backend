@@ -23,6 +23,10 @@ export const payments = sqliteTable('payments', {
   receiptNumber: text('receipt_number'), // For offline payments
   walletAmountUsed: real('wallet_amount_used').default(0), // Amount paid using wallet
   actualPaymentAmount: real('actual_payment_amount'), // Amount paid through payment gateway after wallet deduction
+  roomCharge: real('room_charge').default(0), // Base room charge
+  gstAmount: real('gst_amount').default(0), // GST amount
+  platformFee: real('platform_fee').default(0), // Platform fee amount
+  discountAmount: real('discount_amount').default(0), // Coupon discount amount
   status: text('status').notNull().default('pending'), // pending, completed, failed, refund ,refund_completed
   transactionDate: integer('transaction_date', { mode: 'timestamp' }).notNull().default(new Date()),
   createdAt: integer('created_at', { mode: 'timestamp' }).notNull().default(new Date()),
