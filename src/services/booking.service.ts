@@ -1,5 +1,5 @@
 import { FastifyInstance } from 'fastify';
-import { bookings, hotels, rooms, users, customerProfiles, coupons, payments, bookingCoupons, bookingAddons, couponUsages, refunds, hotelReviews, configurations } from '../models/schema';
+import { bookings, hotels, rooms, users, customerProfiles, coupons, payments, bookingCoupons, bookingAddons, couponUsages, refunds, hotelReviews, configurations, roomHourlyStays } from '../models/schema';
 import { eq, and, desc, asc, count, not, lt, gt, sql, lte, inArray } from 'drizzle-orm';
 import { v4 as uuidv4 } from 'uuid';
 import { NotFoundError, ConflictError } from '../types/errors';
@@ -161,7 +161,9 @@ export class BookingService {
     // Convert dates to ensure proper comparison (remove milliseconds for consistency)
 
 
-    // console.log('Checking availability for room:', roomId);
+    console.log('Checking availability for room:', roomId);
+    console.log(checkInDate)
+    console.log(checkOutDate)
 
 
     // Check if there are any overlapping bookings
@@ -198,7 +200,7 @@ export class BookingService {
     checkOut: Date;
     bookingType: 'daily' | 'hourly';
     guests: number;
-    totalAmount: number;
+    addonTotalCalcluated: number;
     frontendPrice: number;
     specialRequests?: string;
     paymentMode?: string;
@@ -214,8 +216,9 @@ export class BookingService {
 
     // 1. PRE-TRANSACTION: Validate and prepare data (can fail without side effects)
     const validationResult = await this.validateBookingData(bookingData);
-    const { hotel, room, couponValidation, finalAmount, finalPaymentMode } = validationResult;
+    const { hotel, room, couponValidation, finalAmount, finalPaymentMode, gstAmount, platformFeeAmount, basePrice } = validationResult;
 
+    console.log('validationresult is ',validationResult)
     // 2. TRANSACTION: Only database operations (keep this minimal and fast)
     const booking = await db.transaction(async (tx) => {
       // Calculate duration based on booking type
@@ -299,15 +302,10 @@ export class BookingService {
       }
 
 
-      // Calculate fee breakdown for payment
-      const platformFeeConfig = await tx.query.configurations.findFirst({
-        where: eq(configurations.key, 'platform_fee_percentage')
-      });
-      const platformFeePercentage = platformFeeConfig ? parseFloat(platformFeeConfig.value) : 5;
 
-      const roomCharge = basePrice;
-      const gstAmount = basePrice * (hotel.gstPercentage / 100);
-      const platformFeeAmount = basePrice * (platformFeePercentage / 100);
+
+
+
       const discountAmount = couponValidation ? couponValidation.discountAmount : 0;
 
       // Create payment records
@@ -321,7 +319,7 @@ export class BookingService {
         paymentType: finalPaymentMode === 'offline' && advanceAmount > 0 ? 'advance' : 'full',
         paymentMethod: finalPaymentMode === 'offline' ? (hotel.defaultPaymentMethod || 'cash') : 'razorpay',
         paymentMode: 'offline',
-        roomCharge,
+        roomCharge: basePrice,
         gstAmount,
         platformFee: platformFeeAmount,
         discountAmount,
@@ -373,6 +371,7 @@ export class BookingService {
   private async validateBookingData(bookingData: any) {
     const db = this.fastify.db;
 
+    console.log('came here ')
     // Parallel validation queries
     const [hotel, room] = await Promise.all([
       db.query.hotels.findFirst({
@@ -400,40 +399,56 @@ export class BookingService {
     let expectedPrice = 0;
     let duration = 0;
     let basePrice = 0;
-
+    console.log('came here  2')
     if (bookingData.bookingType === 'hourly') {
       duration = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60));
-      basePrice = room.pricePerHour * duration;
+
+      console.log('hourlStay')
+      const hourlStay = await db.query.roomHourlyStays.findFirst({
+        where: and(eq(roomHourlyStays.roomId, bookingData.roomId), eq(roomHourlyStays.hours, duration))
+      })
+      console.log('hourlStay is ',hourlStay)
+      if (!hourlStay) {
+        throw new Error('The selected rooms have been booked in the meantime. Please choose different dates or rooms.')
+      }
+      basePrice = hourlStay.price
+
+
     } else {
       duration = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60 * 24));
       basePrice = room.pricePerNight * duration;
     }
+    console.log('came here  3')
 
     // Get platform fee configuration
     const platformFeeConfig = await db.query.configurations.findFirst({
-      where: eq(configurations.key, 'platform_fee_percentage')
+      where: eq(configurations.key, 'platform_fee')
     });
-    const platformFeePercentage = platformFeeConfig ? parseFloat(platformFeeConfig.value) : 5;
+    const platformFeePercentage = platformFeeConfig ? parseFloat(platformFeeConfig.value) : 0;
 
     // Calculate expected price with fees
-    const gstAmount = basePrice * (hotel.gstPercentage / 100);
-    const platformFeeAmount = basePrice * (platformFeePercentage / 100);
-    expectedPrice = basePrice + gstAmount + platformFeeAmount;
+    const gstAmount = (basePrice+bookingData.addonTotalCalcluated) * (hotel.gstPercentage / 100);
+    const platformFeeAmount = platformFeePercentage;
+    expectedPrice = basePrice + gstAmount + platformFeeAmount + bookingData.addonTotalCalcluated;
 
     // Coupon validation
     let couponValidation = null;
-    let finalAmount = bookingData.totalAmount;
+    let finalAmount = expectedPrice;
+
+    console.log('finalAmount is came ',finalAmount)
 
     if (bookingData.couponCode) {
       try {
         couponValidation = await this.couponService.validateCoupon(
           bookingData.couponCode,
           bookingData.hotelId,
-          room.roomType,
-          bookingData.totalAmount,
+          room.roomTypeId,
+          basePrice + bookingData.addonTotalCalcluated,
           bookingData.userId,
           bookingData.bookingType
         );
+
+        console.log('couponValidation ', couponValidation)
 
         if (couponValidation) {
           finalAmount = finalAmount - couponValidation.discountAmount;
@@ -454,7 +469,7 @@ export class BookingService {
       }
     }
 
-    return { hotel, room, couponValidation, finalAmount, finalPaymentMode };
+    return { hotel, room, couponValidation, finalAmount, finalPaymentMode, gstAmount, platformFeeAmount, basePrice };
   }
 
   // Separate async method for notifications (runs after transaction)
@@ -1163,7 +1178,7 @@ export class BookingService {
 
     // Get platform fee configuration
     const platformFeeConfig = await this.fastify.db.query.configurations.findFirst({
-      where: eq(configurations.key, 'platform_fee_percentage')
+      where: eq(configurations.key, 'platform_fee')
     });
     const platformFeePercentage = platformFeeConfig ? parseFloat(platformFeeConfig.value) : 5;
 
@@ -1313,7 +1328,7 @@ export class BookingService {
 
     // Get platform fee configuration
     const platformFeeConfig = await this.fastify.db.query.configurations.findFirst({
-      where: eq(configurations.key, 'platform_fee_percentage')
+      where: eq(configurations.key, 'platform_fee')
     });
     const platformFeePercentage = platformFeeConfig ? parseFloat(platformFeeConfig.value) : 5;
 
@@ -1360,7 +1375,7 @@ export class BookingService {
       where: eq(couponUsages.bookingId, booking.id)
     })
 
-    
+
 
 
     return {
@@ -1435,5 +1450,19 @@ export class BookingService {
         userName: reviewData.user?.name || 'Anonymous'
       } : null
     };
+  }
+
+  async getGstCalculated(hotelId, amount) {
+
+    const hotel = await this.fastify.db.query.hotels.findFirst({
+      where: eq(hotels.id, hotelId)
+
+
+    })
+    if (!hotel) {
+      return 0;
+    }
+
+    return amount * (hotel.gstPercentage / 100)
   }
 }

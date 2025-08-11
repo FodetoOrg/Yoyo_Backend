@@ -70,7 +70,8 @@ export const GetHotelResponseSchema = z.object({
   data: z.object({
     hotel: HotelSchema.extend({
       cityId: z.string(),
-      onlinePaymentEnabled:z.string()
+      onlinePaymentEnabled: z.string(),
+      gstPercentage:z.string()
     }),
   }),
 });
@@ -95,6 +96,7 @@ export const CreateHotelBodySchema = z.object({
   paymentMode: z.enum(['online', 'offline', 'both']).default('offline'),
   onlinePaymentEnabled: z.boolean().default(false),
   offlinePaymentEnabled: z.boolean().default(true),
+  gstPercentage: z.number()
 });
 
 export const CreateHotelResponseSchema = z.object({
@@ -211,7 +213,7 @@ export const getHotelDetailsQuerySchema = z.object({
   guests: z.number().int().min(1).optional(),
   checkIn: z.string().optional(),
   checkOut: z.string().optional(),
-  bookingType:z.string().optional()
+  bookingType: z.string().optional()
 });
 
 export const getHotelDetailsSchema = {

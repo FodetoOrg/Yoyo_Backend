@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { FastifyRequest, FastifyReply } from "fastify";
 import { HotelService } from "../services/hotel.service";
 import dayjs from "dayjs";
@@ -177,6 +176,7 @@ export class HotelController {
           };
         })
       );
+    
 
       // Create room upgrade data structure - only if there are available rooms
       const roomUpgradeData = {
@@ -189,11 +189,13 @@ export class HotelController {
           pricePerHour: roomsWithAddons[0].pricePerHour,
           capacity: roomsWithAddons[0].capacity,
           addons: roomsWithAddons[0].addons,
+          roomtType: roomsWithAddons[0].roomTypeId,
           isCurrent: true,
           bookingType: bookingType,
           displayPrice: bookingType === "hourly" ? (roomsWithAddons[0].pricePerHour || roomsWithAddons[0].pricePerNight) : roomsWithAddons[0].pricePerNight,
           bedType:roomsWithAddons[0].bedType,
-          capacity:roomsWithAddons[0].capacity
+          capacity:roomsWithAddons[0].capacity,
+          hourlyStays:roomsWithAddons[0].hourlyStays
 
 
         } : null,
@@ -209,10 +211,13 @@ export class HotelController {
           bookingType: bookingType,
           displayPrice: bookingType === "hourly" ? (room.pricePerHour) : room.pricePerNight,
           bedType:room.bedType,
-          capacity:room.capacity
+          roomtType:room.roomTypeId,
+          capacity:room.capacity,
+          hourlyStays:room.hourlyStays
         })),
         totalAvailableRooms: roomsWithAddons.length
       };
+     
 
       return reply.code(200).send({
         success: true,

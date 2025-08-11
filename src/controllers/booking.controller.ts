@@ -116,13 +116,7 @@ export class BookingController {
         roomTotal = room.pricePerNight * diffDays;
       }
 
-      // Get platform fee configuration
-      const platformFeeConfig = await this.configurationService.getConfiguration('platform_fee_percentage');
-      const platformFeePercentage = platformFeeConfig ? parseFloat(platformFeeConfig.value) : 5;
 
-      // Calculate fees
-      const gstAmount = roomTotal * (hotel.gstPercentage / 100);
-      const platformFee = roomTotal * (platformFeePercentage / 100);
 
       // Calculate addon total if selectedAddons are provided
       let addonTotal = 0;
@@ -148,11 +142,9 @@ export class BookingController {
         }));
       }
 
-      console.log('addonTotal ', addonTotal)
 
-      // Calculate final total amount
-      const totalAmount = roomTotal + addonTotal;
-      console.log('totalAmount ', totalAmount)
+
+
 
       // Create booking
       const booking = await this.bookingService.createBooking({
@@ -163,7 +155,7 @@ export class BookingController {
         checkOut: checkOutDate,
         bookingType: bookingData.bookingType || 'daily',
         guests: bookingData.guests,
-        totalAmount,
+        addonTotalCalcluated: addonTotal,
         frontendPrice: bookingData.totalAmount, // Pass frontend price for validation
         specialRequests: bookingData.specialRequests,
         paymentMode: bookingData.paymentMode,
@@ -189,7 +181,7 @@ export class BookingController {
 
           },
           paymentInfo: {
-            totalAmount,
+
             currency: 'INR',
             paymentMode: booking?.paymentMode,
             requiresOnlinePayment: booking?.requiresOnlinePayment,

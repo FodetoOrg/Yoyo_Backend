@@ -75,7 +75,7 @@ app.register(registerSwagger);
 app.register(registerJwt);
 app.register(registerDb);
 app.register(registerErrorHandler);
-app.register(noShowCancellerCron);
+// app.register(noShowCancellerCron);
 
 // Register routes
 app.register(authRoutes, { prefix: '/api/v1/auth' });

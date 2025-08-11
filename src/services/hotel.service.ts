@@ -47,6 +47,7 @@ interface HotelCreateParams {
   onlinePaymentEnabled?: boolean;
   offlinePaymentEnabled?: boolean;
   cancellationPeriodHours?: number;
+  gstPercentage: number;
 }
 
 interface RoomCreateParams {
@@ -140,6 +141,11 @@ export class HotelService {
     if (!hotel) {
       return null;
     }
+    const platformFeeConfig = await db.query.configurations.findFirst({
+      where: eq(configurations.key, 'platform_fee')
+    });
+
+
 
     // Format hotel data
     return {
@@ -147,6 +153,7 @@ export class HotelService {
       name: hotel.name,
       description: hotel.description,
       address: hotel.address,
+      platformFee: platformFeeConfig ? parseFloat(platformFeeConfig.value) : 5,
       city: hotel.city,
       state: hotel.state,
       country: hotel.country,
@@ -162,6 +169,7 @@ export class HotelService {
       updatedAt: hotel.updatedAt,
       cityId: hotel.city ? hotel.city.cityId : null,
       mapCoordinates: hotel.mapCoordinates,
+      gstPercentage: hotel.gstPercentage,
       images: hotel.images.map((image) => ({
         id: image.id,
         url: image.url,
@@ -218,7 +226,7 @@ export class HotelService {
         offlinePaymentEnabled: hotelData.offlinePaymentEnabled !== false, // Default true
         cancellationPeriodHours: hotelData.cancellationPeriodHours ?? 24,
         // Initialize GST percentage
-        gstPercentage: 18,
+        gstPercentage: hotelData.gstPercentage,
       });
 
       // add hotel city to hotel
@@ -708,6 +716,7 @@ export class HotelService {
       with: {
         images: true,
         roomType: true,
+        hourlyStays: true
       },
       orderBy: [rooms.roomNumber, rooms.name],
     });
@@ -738,6 +747,7 @@ export class HotelService {
       status: room.status,
       createdAt: room.createdAt,
       updatedAt: room.updatedAt,
+      hourlyStays: room.hourlyStays,
       images: room.images.map((image) => ({
         id: image.id,
         url: image.url,
@@ -891,7 +901,7 @@ export class HotelService {
 
     // Get platform fee configuration
     const platformFeeConfig = await db.query.configurations.findFirst({
-      where: eq(configurations.key, 'platform_fee_percentage')
+      where: eq(configurations.key, 'platform_fee')
     });
 
     return {

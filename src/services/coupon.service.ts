@@ -372,6 +372,8 @@ export class CouponService {
       offset: (page - 1) * limit,
     });
 
+    couponList = couponList.filter(coupon => new Date(coupon.validTo) > new Date())
+
     // If hotelId is provided, filter coupons based on hotel mappings
     if (hotelId) {
       const hotel = await db.query.hotels.findFirst({
@@ -626,78 +628,81 @@ export class CouponService {
     let actualRoomTypeId = roomTypeId;
     let actualCityId = null;
 
-    // If bookingId is provided, get actual booking details
-    if (bookingId) {
+    if (hotelId) {
+
+      console.log('hotelId ', hotelId)
       try {
-        const booking = await db.query.bookings.findFirst({
-          where: eq(bookings.id, bookingId),
-          with: {
-            hotel: true,
-            room: true,
-          },
+        const hotel = await db.query.hotels.findFirst({
+          where: eq(hotels.id, hotelId),
+
         });
 
-        if (booking) {
-          actualHotelId = booking.hotelId;
-          actualRoomTypeId = booking.room.roomType;
-          actualCityId = booking.hotel.cityId;
+        if (hotel) {
+
+          actualCityId = hotel.cityId;
         }
+        console.log('hotel is ', hotel)
       } catch (error) {
-        console.error('Error fetching booking details:', error);
+        console.error('Error fetching hotel details:', error);
         // Continue with provided hotelId and roomTypeId
       }
+
     }
 
-    // If no mappings exist, coupon is valid for all
-    if (!coupon.mappings || coupon.mappings.length === 0) {
-      isValidForHotel = true;
-    } else {
-      // Check each mapping
-      for (const mapping of coupon.mappings) {
-        // Direct hotel match
-        if (mapping.hotelId && mapping.hotelId === actualHotelId) {
-          isValidForHotel = true;
-          break;
-        }
 
-        // Direct room type match
-        if (mapping.roomTypeId && mapping.roomTypeId === actualRoomTypeId) {
-          isValidForHotel = true;
-          break;
-        }
+    console.log('actualRoomTypeId ', actualRoomTypeId)
 
-        // City mapping - use actual city from booking or fetch from hotel
-        if (mapping.cityId) {
-          try {
-            let cityIdToCheck = actualCityId;
+    console.log('mappings ', coupon.mappings)
 
-            // If we don't have cityId from booking, fetch it from hotel
-            if (!cityIdToCheck) {
-              const hotel = await db.query.hotels.findFirst({
-                where: eq(hotels.id, actualHotelId.toString()),
-                columns: { cityId: true }
-              });
-              cityIdToCheck = hotel?.cityId;
-            }
+    // Check each mapping
+    for (const mapping of coupon.mappings) {
+      // Direct hotel match
+      if (mapping.hotelId && mapping.hotelId === actualHotelId) {
+        isValidForHotel = true;
+        break;
+      }
 
-            if (cityIdToCheck && cityIdToCheck === mapping.cityId) {
-              isValidForHotel = true;
-              break;
-            }
-          } catch (error) {
-            console.error('Error checking hotel city mapping:', error);
-            // Continue to next mapping instead of failing completely
-            continue;
+      // Direct room type match
+      if (mapping.roomTypeId && mapping.roomTypeId === actualRoomTypeId) {
+        isValidForHotel = true;
+        console.log('came here success')
+        break;
+      }
+
+      // City mapping - use actual city from booking or fetch from hotel
+      if (mapping.cityId) {
+        try {
+          let cityIdToCheck = actualCityId;
+
+          // If we don't have cityId from booking, fetch it from hotel
+          if (!cityIdToCheck) {
+            const hotel = await db.query.hotels.findFirst({
+              where: eq(hotels.id, actualHotelId.toString()),
+              columns: { cityId: true }
+            });
+            cityIdToCheck = hotel?.cityId;
           }
+
+          if (cityIdToCheck && cityIdToCheck === mapping.cityId) {
+            isValidForHotel = true;
+            break;
+          }
+        } catch (error) {
+          console.error('Error checking hotel city mapping:', error);
+          // Continue to next mapping instead of failing completely
+          continue;
         }
       }
     }
+
 
     if (!isValidForHotel) {
       console.log('it is not valid hotel');
       throw new Error('Coupon is not valid for this hotel or room type');
     }
 
+    console.log('came butone ',coupon)
+    console.log('orderAmount ',orderAmount)
     // Calculate discount
     let discountAmount = 0;
     if (coupon.discountType === 'percentage') {
@@ -709,6 +714,7 @@ export class CouponService {
       discountAmount = coupon.discountValue;
     }
 
+    console.log('here issue')
     // Ensure discount doesn't exceed order amount
     discountAmount = Math.min(discountAmount, orderAmount);
 

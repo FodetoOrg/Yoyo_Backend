@@ -66,7 +66,8 @@ export const CreateBookingBodySchema = z.object({
   paymentMode: z.enum(['online', 'offline']).optional(),
   advanceAmount: z.number().positive().optional(),
   couponCode: z.string().optional(),
-  totalAmount: z.number()
+  totalAmount: z.number(),
+  
 });
 
 export const CreateBookingResponseSchema = z.object({

@@ -197,10 +197,10 @@ export class ConfigurationService {
         category: 'booking'
       },
       {
-        key: 'platform_fee_percentage',
+        key: 'platform_fee',
         value: '5',
         type: 'number',
-        description: 'Default platform fee percentage',
+        description: 'Default platform fee',
         category: 'app'
       }
     ];
@@ -233,7 +233,7 @@ export class ConfigurationService {
   }
 
   async getPlatformFeePercentage(): Promise<number> {
-    const config = await this.getConfiguration('platform_fee_percentage');
+    const config = await this.getConfiguration('platform_fee');
     return config ? parseFloat(config.value) : 5;
   }
 }

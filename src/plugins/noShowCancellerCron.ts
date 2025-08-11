@@ -9,6 +9,8 @@ export default fp(async function noShowCancellerCron(fastify) {
 
     console.log('cron started ')
     const bookingService = new BookingService();
+    bookingService.setFastify(fastify)
+    b
 
     const run = async () => {
         if (running) return;

@@ -74,6 +74,8 @@ export class HotelSearchService {
       eq(hotels.status, 'active')
     ];
 
+
+
     // Remove city-based filtering - we'll use coordinates instead
     // if (city) {
     //   whereConditions.push(like(hotels.city, `%${city}%`));
@@ -504,13 +506,17 @@ export class HotelSearchService {
     // For hourly bookings, ensure rooms have hourly pricing
     if (bookingType === 'hourly') {
       roomConditions.push(sql`${rooms.pricePerHour} IS NOT NULL AND ${rooms.pricePerHour} > 0`);
+
     }
+    roomConditions.push(bookingType === 'daily' ? eq(rooms.isDailyBooking, true) : eq(rooms.isHourlyBooking, true))
 
     // Get all rooms that match criteria
     const allRooms = await db
       .select({
         roomId: rooms.id,
-        hotelId: rooms.hotelId
+        hotelId: rooms.hotelId,
+        hotelName: rooms.hotelId,
+        name: rooms.name
       })
       .from(rooms)
       .where(and(...roomConditions));
@@ -520,14 +526,34 @@ export class HotelSearchService {
     // Check each room for booking conflicts
     const availableHotelIds = new Set<string>();
 
+
+
     for (const room of allRooms) {
+      let staysPresent = false;
+      if (bookingType === 'hourly') {
+        console.log('yes came in ')
+        const hourlyStays = await db.query.roomHourlyStays.findMany({
+          where: and(eq(roomHourlyStays.roomId, room.roomId), gt(roomHourlyStays.price, 0))
+        })
+
+        console.log('hourlyStays came ', hourlyStays.length || 0)
+
+        if (hourlyStays && hourlyStays.length === 3) {
+          staysPresent = true
+        }
+
+      }
+
+
+
       const hasConflict = await this.checkRoomBookingConflict(
         room.roomId,
         checkIn,
         checkOut
       );
+      console.log('hasConflict ', hasConflict)
 
-      if (!hasConflict) {
+      if (hasConflict === false && staysPresent === true) {
         availableHotelIds.add(room.hotelId);
       }
     }
