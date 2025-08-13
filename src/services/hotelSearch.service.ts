@@ -554,8 +554,16 @@ export class HotelSearchService {
       );
       console.log('hasConflict ', hasConflict)
 
-      if (hasConflict === false && staysPresent === true) {
-        availableHotelIds.add(room.hotelId);
+      if (hasConflict === false) {
+
+        if (bookingType === 'hourly') {
+          if (staysPresent === true) {
+            availableHotelIds.add(room.hotelId);
+          }
+        } else {
+          availableHotelIds.add(room.hotelId);
+        }
+
       }
     }
 
