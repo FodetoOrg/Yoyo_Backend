@@ -38,7 +38,7 @@ export class HotelController {
 
   async getHotels(request: FastifyRequest, reply: FastifyReply) {
     console.log("getHotels ", request.user);
-    const {type } = request.query
+    const { type } = request.query
     const hotels = await this.hotelService.getHotels(type);
     return reply.code(200).send({
       success: true,
@@ -134,11 +134,11 @@ export class HotelController {
       if (guests && guests > 0) {
         rooms = rooms.filter(room => room.capacity >= guests);
       }
-   
+
 
       // If dates are provided, filter by availability
       if (checkIn && checkOut && rooms.length > 0) {
-       
+
         const checkInDate = new Date(checkIn.endsWith('Z') || checkIn.includes('+') ? checkIn : checkIn + 'Z');
         const checkOutDate = new Date(checkOut.endsWith('Z') || checkOut.includes('+') ? checkOut : checkOut + 'Z');
 
@@ -172,7 +172,7 @@ export class HotelController {
           };
         })
       );
-    
+
 
       // Create room upgrade data structure - only if there are available rooms
       const roomUpgradeData = {
@@ -188,10 +188,11 @@ export class HotelController {
           roomtType: roomsWithAddons[0].roomTypeId,
           isCurrent: true,
           bookingType: bookingType,
-          displayPrice: bookingType === "hourly" ? (roomsWithAddons[0].pricePerHour || roomsWithAddons[0].pricePerNight) : roomsWithAddons[0].pricePerNight,
-          bedType:roomsWithAddons[0].bedType,
-          capacity:roomsWithAddons[0].capacity,
-          hourlyStays:roomsWithAddons[0].hourlyStays
+          displayPrice: bookingType === "hourly" ? (roomsWithAddons[0].hourlyStays.length
+            ? Math.min(...roomsWithAddons[0].hourlyStays.map(item => item.price)) : 0) : roomsWithAddons[0].pricePerNight,
+          bedType: roomsWithAddons[0].bedType,
+          capacity: roomsWithAddons[0].capacity,
+          hourlyStays: roomsWithAddons[0].hourlyStays
 
 
         } : null,
@@ -205,15 +206,16 @@ export class HotelController {
           capacity: room.capacity,
           addons: room.addons,
           bookingType: bookingType,
-          displayPrice: bookingType === "hourly" ? (room.pricePerHour) : room.pricePerNight,
-          bedType:room.bedType,
-          roomtType:room.roomTypeId,
-          capacity:room.capacity,
-          hourlyStays:room.hourlyStays
+          displayPrice: bookingType === "hourly" ? room.hourlyStays.length
+            ? Math.min(...room.hourlyStays.map(item => item.price)) : 0 : room.pricePerNight,
+          bedType: room.bedType,
+          roomtType: room.roomTypeId,
+          capacity: room.capacity,
+          hourlyStays: room.hourlyStays
         })),
         totalAvailableRooms: roomsWithAddons.length
       };
-     
+
 
       return reply.code(200).send({
         success: true,

@@ -12,11 +12,7 @@ export default async function detailsRoutes(fastify: FastifyInstance) {
   detailsController.setFastify(fastify);
 
   // Get all wallet usages (admin only)
-  fastify.get('/details/wallet-usages', {
-    preHandler: [fastify.authenticate,
-      //  rbacGuard(['superadmin'])
-      ]
-  }, getAllWalletUsages);
+ 
 
   // Get all refunds (admin only)
   fastify.get('/details/refunds', {
@@ -73,6 +69,12 @@ export default async function detailsRoutes(fastify: FastifyInstance) {
   }, (request: FastifyRequest, reply: FastifyReply) => 
     detailsController.getRoomDetails(request as any, reply)
   );
+
+  fastify.get('/walletusages', {
+    preHandler: [fastify.authenticate,
+      //  rbacGuard(['superadmin'])
+      ]
+  }, getAllWalletUsages);
 
   // Payment details with booking, user, room, and hotel information
   fastify.get('/payments/:paymentId', {

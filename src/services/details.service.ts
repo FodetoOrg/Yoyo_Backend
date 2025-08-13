@@ -1,4 +1,4 @@
-// @ts-nocheck
+
 import { sql, eq, desc, and, count } from 'drizzle-orm';
 import { FastifyInstance } from 'fastify';
 import { rooms, hotels, bookings, users, payments, refunds, addons, roomAddons, bookingAddons, paymentOrders, wallets, walletTransactions, walletUsages, hotelReviews } from '../models/schema';
@@ -590,15 +590,15 @@ export class DetailsService {
       userEmail: users.email,
       bookingId: hotelReviews.bookingId
     })
-    .from(hotelReviews)
-    .leftJoin(users, eq(hotelReviews.userId, users.id))
-    .where(and(
-      eq(hotelReviews.hotelId, hotelId),
-      eq(hotelReviews.isApproved, true)
-    ))
-    .orderBy(desc(hotelReviews.createdAt));
+      .from(hotelReviews)
+      .leftJoin(users, eq(hotelReviews.userId, users.id))
+      .where(and(
+        eq(hotelReviews.hotelId, hotelId),
+        eq(hotelReviews.isApproved, true)
+      ))
+      .orderBy(desc(hotelReviews.createdAt));
 
- 
+
 
     return {
       hotel: {
@@ -640,7 +640,7 @@ export class DetailsService {
       },
       reviews: hotelReviewsDB.map(review => ({
         ...review,
-      
+
       }))
     };
   }
@@ -651,43 +651,30 @@ export class DetailsService {
     const db = this.fastify.db;
     const offset = (page - 1) * limit;
 
-    const walletUsages = await db.select({
-      id: walletUsages.id,
-      userId: walletUsages.userId,
-      bookingId: walletUsages.bookingId,
-      paymentId: walletUsages.paymentId,
-      amountUsed: walletUsages.amountUsed,
-      balanceBefore: walletUsages.balanceBefore,
-      balanceAfter: walletUsages.balanceAfter,
-      createdAt: walletUsages.createdAt,
+    const walletUsagesDb = await db.select({
+      id: walletTransactions.id,
+      userId: walletTransactions.userId,
+      source: walletTransactions.source,
+      amountUsed: walletTransactions.amount,
+      refrenceType: walletTransactions.referenceType,
+      refrenceId: walletTransactions.referenceId,
+
+
+      createdAt: walletTransactions.createdAt,
       userName: users.name,
       userEmail: users.email,
       userPhone: users.phone,
-      bookingReference: bookings.bookingReference,
-      hotelName: hotels.name,
-      paymentAmount: payments.amount,
-      paymentMethod: payments.method,
-    })
-    .from(walletUsages)
-    .leftJoin(users, eq(walletUsages.userId, users.id))
-    .leftJoin(bookings, eq(walletUsages.bookingId, bookings.id))
-    .leftJoin(hotels, eq(bookings.hotelId, hotels.id))
-    .leftJoin(payments, eq(walletUsages.paymentId, payments.id))
-    .orderBy(desc(walletUsages.createdAt))
-    .limit(limit)
-    .offset(offset);
 
-    const totalCount = await db.select({ count: count() })
-      .from(walletUsages);
+
+    })
+      .from(walletTransactions)
+      .leftJoin(users, eq(walletTransactions.userId, users.id))
+      .orderBy(desc(walletTransactions.createdAt))
+
+
 
     return {
-      walletUsages,
-      pagination: {
-        page,
-        limit,
-        total: totalCount[0].count,
-        pages: Math.ceil(totalCount[0].count / limit)
-      }
+      walletUsagesDb
     };
   }
 
@@ -696,7 +683,7 @@ export class DetailsService {
     const db = this.fastify.db;
     const offset = (page - 1) * limit;
 
-    const refunds = await db.select({
+    const refundsDB = await db.select({
       id: refunds.id,
       bookingId: refunds.bookingId,
       paymentId: refunds.paymentId,
@@ -714,20 +701,20 @@ export class DetailsService {
       originalPaymentAmount: payments.amount,
       originalPaymentMethod: payments.method,
     })
-    .from(refunds)
-    .leftJoin(bookings, eq(refunds.bookingId, bookings.id))
-    .leftJoin(users, eq(bookings.userId, users.id))
-    .leftJoin(hotels, eq(bookings.hotelId, hotels.id))
-    .leftJoin(payments, eq(refunds.paymentId, payments.id))
-    .orderBy(desc(refunds.createdAt))
-    .limit(limit)
-    .offset(offset);
+      .from(refunds)
+      .leftJoin(bookings, eq(refunds.bookingId, bookings.id))
+      .leftJoin(users, eq(bookings.userId, users.id))
+      .leftJoin(hotels, eq(bookings.hotelId, hotels.id))
+      .leftJoin(payments, eq(refunds.paymentId, payments.id))
+      .orderBy(desc(refunds.createdAt))
+      .limit(limit)
+      .offset(offset);
 
     const totalCount = await db.select({ count: count() })
       .from(refunds);
 
     return {
-      refunds,
+      refundsDB,
       pagination: {
         page,
         limit,
@@ -782,13 +769,13 @@ export class DetailsService {
         createdAt: hotelReviews.createdAt
       }
     })
-    .from(bookings)
-    .leftJoin(users, eq(bookings.userId, users.id))
-    .leftJoin(hotels, eq(bookings.hotelId, hotels.id))
-    .leftJoin(rooms, eq(bookings.roomId, rooms.id))
-    .leftJoin(hotelReviews, eq(bookings.id, hotelReviews.bookingId))
-    .where(eq(bookings.id, bookingId))
-    .limit(1);
+      .from(bookings)
+      .leftJoin(users, eq(bookings.userId, users.id))
+      .leftJoin(hotels, eq(bookings.hotelId, hotels.id))
+      .leftJoin(rooms, eq(bookings.roomId, rooms.id))
+      .leftJoin(hotelReviews, eq(bookings.id, hotelReviews.bookingId))
+      .where(eq(bookings.id, bookingId))
+      .limit(1);
 
     if (booking.length === 0) {
       throw new NotFoundError('Booking not found');
