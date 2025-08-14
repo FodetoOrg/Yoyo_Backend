@@ -807,7 +807,7 @@ export class NotificationService {
       });
 
       const mailOptions = {
-        from: '"Hotel Booking" <noreply@yoyolite.com>',
+        from: '"Hotel Booking" <support@yoyolite.com>',
         to: data.to,
         subject: data.subject,
         html: data.html,
