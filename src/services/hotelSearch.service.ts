@@ -163,7 +163,7 @@ export class HotelSearchService {
       hotelsData = hotelsData.filter(hotel => {
         const hotelAmenities = hotel.hotel.amenities ? JSON.parse(hotel.hotel.amenities) : [];
         return amenities.every(amenity => hotelAmenities.includes(amenity));
-      });
+      }); 
     }
 
 
@@ -188,6 +188,7 @@ export class HotelSearchService {
         description: hotelData.hotel.description,
         address: hotelData.hotel.address,
         city: hotelData.hotel.city,
+        taxPercentage:hotelData.hotel.gstPercentage,
         starRating: parseInt(hotelData.hotel.starRating || '0'),
         amenities: hotelData.hotel.amenities ? JSON.parse(hotelData.hotel.amenities) : [],
         coordinates: this.parseCoordinates(hotelData.hotel.mapCoordinates),
@@ -199,6 +200,7 @@ export class HotelSearchService {
         pricing: pricing,
         offers: offers,
         hourlyStays: hourlyStays,
+        
         images: {
           primary: hotelData.primaryImage,
           gallery: await this.getHotelImages(hotelData.hotel.id),
