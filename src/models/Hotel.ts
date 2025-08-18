@@ -12,6 +12,7 @@ export const hotels = sqliteTable("hotels", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
   description: text("description"),
+  about:text('about'),
   address: text("address").notNull(),
   city: text("city").notNull(),
   zipCode: text("zip_code"),

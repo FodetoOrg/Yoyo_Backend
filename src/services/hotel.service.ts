@@ -49,6 +49,7 @@ interface HotelCreateParams {
   offlinePaymentEnabled?: boolean;
   cancellationPeriodHours?: number;
   gstPercentage: number;
+  about?: string
 }
 
 interface RoomCreateParams {
@@ -154,6 +155,7 @@ export class HotelService {
       name: hotel.name,
       description: hotel.description,
       address: hotel.address,
+      about: hotel.about,
       platformFee: platformFeeConfig ? parseFloat(platformFeeConfig.value) : 5,
       city: hotel.city,
       state: hotel.state,
@@ -213,6 +215,7 @@ export class HotelService {
         name: hotelData.name,
         description: hotelData.description,
         address: hotelData.address,
+        about: hotelData.about,
         city: hotelCity.name,
         country: hotelCity.country,
         zipCode: hotelData.zipCode,

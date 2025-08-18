@@ -1,7 +1,7 @@
 // @ts-nocheck
 import { FastifyInstance } from "fastify";
 import { hotels, hotelImages, rooms, hotelReviews, wishlists, coupons, couponMappings, bookings, roomHourlyStays, configurations } from "../models/schema";
-import { eq, and, like, between, sql, desc, asc, inArray, exists, avg, count, not, or, lt, gt } from "drizzle-orm";
+import { eq, and, like, between, sql, desc, asc, inArray, exists, avg, count, not, or, lt, gt, lte, gte } from "drizzle-orm";
 import dayjs from "dayjs";
 
 interface SearchFilters {
@@ -731,8 +731,9 @@ export class HotelSearchService {
       .innerJoin(coupons, and(
         eq(couponMappings.couponId, coupons.id),
         eq(coupons.status, 'active'),
-        sql`${coupons.validFrom} <= datetime('now')`,
-        sql`${coupons.validTo} >= datetime('now')`
+        lte(coupons.validFrom,new Date()),
+        gte(coupons.validTo,new Date())
+        
       ))
       .where(eq(couponMappings.hotelId, hotelId))
 

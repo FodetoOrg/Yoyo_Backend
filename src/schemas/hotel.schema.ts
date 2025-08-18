@@ -96,7 +96,8 @@ export const CreateHotelBodySchema = z.object({
   paymentMode: z.enum(['online', 'offline', 'both']).default('offline'),
   onlinePaymentEnabled: z.boolean().default(false),
   offlinePaymentEnabled: z.boolean().default(true),
-  gstPercentage: z.number()
+  gstPercentage: z.number(),
+  about:z.string().optional()
 });
 
 export const CreateHotelResponseSchema = z.object({
