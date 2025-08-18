@@ -22,13 +22,13 @@ export default async function wishlistRoutes(fastify: FastifyInstance) {
 
   // Get user's wishlist
   fastify.get('/', {
-    schema: getWishlistSchema,
+    // schema: getWishlistSchema,
     security: [{ bearerAuth: [] }]
   }, (request, reply) => wishlistController.getWishlist(request, reply));
 
   // Add hotel to wishlist
   fastify.post('/', {
-    schema: addToWishlistSchema,
+    // schema: addToWishlistSchema,
     security: [{ bearerAuth: [] }]
   }, (request, reply) => wishlistController.addToWishlist(request, reply));
 

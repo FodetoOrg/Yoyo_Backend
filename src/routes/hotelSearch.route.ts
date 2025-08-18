@@ -15,7 +15,7 @@ export default async function hotelSearchRoutes(fastify: FastifyInstance) {
 
   // Main hotel search endpoint
   fastify.post('/search', {
-    schema: searchHotelsSchema
+    // schema: searchHotelsSchema
   }, (request, reply) => hotelSearchController.searchHotels(request, reply));
 
   // Enhanced nearby search with full filtering support
