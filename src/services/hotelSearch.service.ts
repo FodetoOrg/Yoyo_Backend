@@ -132,31 +132,7 @@ export class HotelSearchService {
       hotelsData = hotelsData.filter(hotel => hotel.distance <= radius);
     }
 
-    // STEP 2: Filter by available rooms for dates and guest capacity
-    if (filters?.isNearby === false && checkIn && checkOut) {
-      console.log('went inside ')
-      const availableHotelIds = await this.getHotelsWithAvailableRooms(
-        checkIn,
-        checkOut,
-        totalGuests,
-        priceRange,
-        bookingType
-      );
-
-      if (availableHotelIds.length === 0) {
-        return {
-          hotels: [],
-          total: 0,
-          page,
-          limit,
-          totalPages: 0,
-        };
-      }
-
-      // Filter hotels to only include those with available rooms
-      hotelsData = hotelsData.filter(h => availableHotelIds.includes(h.hotel.id));
-      console.log('after all filtering ', hotelsData)
-    }
+    // STEP 2: No longer filter by room availability - return all hotels
 
     // STEP 3: Amenities filtering
     if (amenities && amenities.length > 0) {
@@ -168,20 +144,28 @@ export class HotelSearchService {
 
 
 
-    // Get pricing for each hotel and filter out hotels with no available rooms
+    // Get pricing for each hotel - include all hotels regardless of availability
     let hotelsWithPricing = [];
 
     for (const hotelData of hotelsData) {
       const pricing = await this.getHotelPricing(hotelData.hotel.id, checkIn, checkOut, totalGuests, bookingType);
-      console.log('caompleted pricing')
-      // Skip hotels with no available rooms (pricing will be null)
-      if (!pricing) {
-        continue;
-      }
-
+      console.log('completed pricing')
+      
+      // Get base pricing even if no rooms are available
+      const basePricing = pricing || await this.getBasePricing(hotelData.hotel.id, bookingType);
+      
       const offers = await this.getHotelOffers(hotelData.hotel.id);
       const hourlyStays = await this.getHotelHourlyStays(hotelData.hotel.id);
-      console.log('caompleted  hourly staus ')
+      
+      // Calculate offer pricing if coupons are available
+      const offerPricing = basePricing ? await this.calculateOfferPricing(
+        hotelData.hotel.id, 
+        basePricing, 
+        offers,
+        bookingType
+      ) : null;
+      
+      console.log('completed hourly stays')
       hotelsWithPricing.push({
         id: hotelData.hotel.id,
         name: hotelData.hotel.name,
@@ -197,10 +181,10 @@ export class HotelSearchService {
           average: Math.round((hotelData.avgRating || 0) * 10) / 10,
           count: hotelData.reviewCount || 0,
         },
-        pricing: pricing,
+        pricing: basePricing,
+        offerPricing: offerPricing,
         offers: offers,
         hourlyStays: hourlyStays,
-
         images: {
           primary: hotelData.primaryImage,
           gallery: await this.getHotelImages(hotelData.hotel.id),
@@ -371,7 +355,16 @@ export class HotelSearchService {
           : 0;
 
         const pricing = await this.getHotelPricing(hotel.id);
+        const basePricing = pricing || await this.getBasePricing(hotel.id, 'daily');
         const hourlyStays = await this.getHotelHourlyStays(hotel.id);
+        const offers = await this.getHotelOffers(hotel.id);
+        
+        const offerPricing = basePricing ? await this.calculateOfferPricing(
+          hotel.id, 
+          basePricing, 
+          offers,
+          'daily'
+        ) : null;
 
         console.log('hotel is ', hotel)
 
@@ -388,15 +381,17 @@ export class HotelSearchService {
             average: Math.round(avgRating * 10) / 10,
             count: reviews.length,
           },
-          pricing: pricing ? {
-            startingFrom: pricing.startingFrom,
-            range: pricing.range,
-            currency: pricing.currency,
-            totalPrice: pricing.totalPrice,
-            perNight: pricing.perNight,
-            perHour: pricing.perHour,
-            bookingType: pricing.bookingType
+          pricing: basePricing ? {
+            startingFrom: basePricing.startingFrom,
+            range: basePricing.range,
+            currency: basePricing.currency,
+            totalPrice: basePricing.totalPrice,
+            perNight: basePricing.perNight,
+            perHour: basePricing.perHour,
+            bookingType: basePricing.bookingType
           } : null,
+          offerPricing: offerPricing,
+          offers: offers,
           hourlyStays: hourlyStays,
           images: {
             primary: hotel.images[0]?.url || null,
@@ -453,7 +448,23 @@ export class HotelSearchService {
           : 0;
 
         const pricing = await this.getHotelPricing(item.hotel.id);
+        const basePricing = pricing || await this.getBasePricing(item.hotel.id, 'daily');
         const hourlyStays = await this.getHotelHourlyStays(item.hotel.id);
+        
+        const offers = [{
+          title: item.coupon.description || `${item.coupon.discountValue}% OFF`,
+          discountType: item.coupon.discountType,
+          discountValue: item.coupon.discountValue,
+          code: item.coupon.code,
+          validUntil: item.coupon.validTo,
+        }];
+
+        const offerPricing = basePricing ? await this.calculateOfferPricing(
+          item.hotel.id, 
+          basePricing, 
+          offers,
+          'daily'
+        ) : null;
 
         return {
           id: item.hotel.id,
@@ -468,18 +479,13 @@ export class HotelSearchService {
             average: Math.round(avgRating * 10) / 10,
             count: reviews.length,
           },
-          pricing,
+          pricing: basePricing,
+          offerPricing: offerPricing,
           hourlyStays: hourlyStays,
           images: {
             primary: item.primaryImage,
           },
-          offers: [{
-            title: item.coupon.description || `${item.coupon.discountValue}% OFF`,
-            discountType: item.coupon.discountType,
-            discountValue: item.coupon.discountValue,
-            code: item.coupon.code,
-            validUntil: item.coupon.validTo,
-          }],
+          offers: offers,
         };
       })
     );
@@ -662,9 +668,17 @@ export class HotelSearchService {
       availableRooms = actuallyAvailableRooms;
     }
 
-    // Return null if no rooms are available (this will exclude hotel from search results)
+    // If no available rooms, get basic pricing from all rooms
     if (availableRooms.length === 0) {
-      return null;
+      availableRooms = await db.query.rooms.findMany({
+        where: eq(rooms.hotelId, hotelId),
+        orderBy: [asc(rooms.pricePerNight)],
+      });
+      
+      // Still return null if hotel has no rooms at all
+      if (availableRooms.length === 0) {
+        return null;
+      }
     }
 
     // Calculate prices based on booking type
@@ -830,5 +844,96 @@ export class HotelSearchService {
   private parseCoordinates(coordString: string): { lat: number; lng: number } {
     const [lat, lng] = coordString.split(',').map(Number);
     return { lat: lat || 17.4065, lng: lng || 78.4772 };
+  }
+
+  private async getBasePricing(hotelId: string, bookingType: 'daily' | 'hourly' = 'daily') {
+    const db = this.fastify.db;
+
+    const allRooms = await db.query.rooms.findMany({
+      where: eq(rooms.hotelId, hotelId),
+      orderBy: [asc(rooms.pricePerNight)],
+    });
+
+    if (allRooms.length === 0) {
+      return null;
+    }
+
+    let minPrice, maxPrice;
+
+    if (bookingType === 'hourly') {
+      const hourlyRooms = allRooms.filter(r => r.pricePerHour && r.pricePerHour > 0);
+      if (hourlyRooms.length === 0) {
+        return null;
+      }
+      minPrice = Math.min(...hourlyRooms.map(r => r.pricePerHour));
+      maxPrice = Math.max(...hourlyRooms.map(r => r.pricePerHour));
+    } else {
+      minPrice = Math.min(...allRooms.map(r => r.pricePerNight));
+      maxPrice = Math.max(...allRooms.map(r => r.pricePerNight));
+    }
+
+    return {
+      startingFrom: minPrice,
+      range: { min: minPrice, max: maxPrice },
+      currency: 'INR',
+      totalPrice: null,
+      perNight: bookingType === 'daily',
+      perHour: bookingType === 'hourly',
+      bookingType,
+      availableRooms: 0 // No available rooms for dates
+    };
+  }
+
+  private async calculateOfferPricing(hotelId: string, basePricing: any, offers: any[], bookingType: 'daily' | 'hourly') {
+    if (!offers || offers.length === 0 || !basePricing) {
+      return null;
+    }
+
+    // Find the best offer (highest discount)
+    let bestOffer = null;
+    let maxDiscount = 0;
+
+    for (const offer of offers) {
+      let discountAmount = 0;
+      const basePrice = basePricing.startingFrom;
+
+      if (offer.discountType === 'percentage') {
+        discountAmount = (basePrice * offer.discountValue) / 100;
+      } else {
+        discountAmount = offer.discountValue;
+      }
+
+      if (discountAmount > maxDiscount) {
+        maxDiscount = discountAmount;
+        bestOffer = offer;
+      }
+    }
+
+    if (!bestOffer) {
+      return null;
+    }
+
+    const basePrice = basePricing.startingFrom;
+    let discountAmount = 0;
+
+    if (bestOffer.discountType === 'percentage') {
+      discountAmount = (basePrice * bestOffer.discountValue) / 100;
+    } else {
+      discountAmount = bestOffer.discountValue;
+    }
+
+    const offerPrice = Math.max(basePrice - discountAmount, 0);
+    const discountPercentage = basePrice > 0 ? Math.round((discountAmount / basePrice) * 100) : 0;
+
+    return {
+      originalPrice: basePrice,
+      offerPrice: offerPrice,
+      discountAmount: discountAmount,
+      discountPercentage: discountPercentage,
+      couponCode: bestOffer.code,
+      offerTitle: bestOffer.title,
+      currency: 'INR',
+      bookingType
+    };
   }
 }
