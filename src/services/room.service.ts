@@ -3,7 +3,7 @@ import { FastifyInstance } from "fastify";
 import { rooms, hotels, roomImages, roomTypes, bookings, users } from '../models/schema';
 import { eq, and, like, desc, asc, count, sql, not, or } from 'drizzle-orm';
 import { v4 as uuidv4 } from "uuid";
-import { uploadToStorage } from "../config/firebase/firebase.ts";
+import { uploadToStorage } from "../config/firebase/firebase";
 import { NotFoundError, ConflictError, ForbiddenError } from "../types/errors";
 
 interface RoomCreateParams {

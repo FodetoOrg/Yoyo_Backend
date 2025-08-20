@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { FastifyInstance } from "fastify";
-import { uploadToStorage } from "../config/firebase/firebase.ts";
+import { uploadToStorage } from "../config/firebase/firebase";
 import { v4 as uuidv4 } from "uuid";
 import { NotFoundError } from "../types/errors";
 

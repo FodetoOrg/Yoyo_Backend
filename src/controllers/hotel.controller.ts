@@ -12,7 +12,7 @@ import {
   CreateRoomBodySchema,
   HotelSearchQuerySchema
 } from "../schemas/hotel.schema";
-import { uploadToStorage } from "../config/firebase/firebase.ts";
+import { uploadToStorage } from "../config/firebase/firebase";
 import { ForbiddenError } from "../types/errors";
 
 interface AuthenticatedRequest extends FastifyRequest {

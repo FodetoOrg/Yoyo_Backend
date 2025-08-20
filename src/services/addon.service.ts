@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { eq, and, inArray } from 'drizzle-orm';
 import { addons, roomAddons, bookingAddons } from '../models/Addon';
 import { rooms } from '../models/Room';
-import { uploadToStorage } from '../config/firebase/firebase.ts';
+import { uploadToStorage } from '../config/firebase/firebase';
 import { ConflictError, NotFoundError } from '../types/errors';
 import { hotels } from '../models/Hotel';
 

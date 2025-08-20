@@ -8,7 +8,7 @@ import {
   initializeConfigurations
 } from '../controllers/configuration.controller';
 import { configurations } from '../models/Configuration';
-import { uploadToStorage } from '../config/firebase/firebase.ts';
+import { uploadToStorage } from '../config/firebase/firebase';
 
 async function configurationRoutes(fastify: FastifyInstance) {
   // Get all configurations (admin only)

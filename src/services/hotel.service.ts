@@ -20,7 +20,7 @@ import { v4 as uuidv4 } from "uuid";
 import { eq, and, like, inArray, exists, not, isNull, desc, or, sql, lt, gt } from "drizzle-orm";
 import { UserRole } from "../types/common";
 import { ForbiddenError } from "../types/errors";
-import { uploadToStorage } from "../config/firebase/firebase.ts";
+import { uploadToStorage } from "../config/firebase/firebase";
 import { formatTimeAgo } from "../utils/helpers";
 
 
