@@ -115,4 +115,69 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
       security: [{ bearerAuth: [] }]
     }
   }, (request, reply) => notificationController.testNotification(request, reply));
+
+  // Send web notification (Admin only)
+  fastify.post('/send-web', {
+    schema: {
+      tags: ['notifications'],
+      summary: 'Send web notification',
+      security: [{ bearerAuth: [] }],
+      body: {
+        type: 'object',
+        required: ['userId', 'title', 'message'],
+        properties: {
+          userId: { type: 'string', format: 'uuid' },
+          title: { type: 'string', minLength: 1 },
+          message: { type: 'string', minLength: 1 },
+          type: { type: 'string', enum: ['info', 'success', 'warning', 'error'] },
+          data: { type: 'object' },
+          requireInteraction: { type: 'boolean' }
+        }
+      }
+    },
+    preHandler: rbacGuard(permissions.viewAnalytics)
+  }, (request, reply) => notificationController.sendWebNotification(request, reply));
+
+  // Send admin notification (Admin only)
+  fastify.post('/send-admin', {
+    schema: {
+      tags: ['notifications'],
+      summary: 'Send notification to all admins',
+      security: [{ bearerAuth: [] }],
+      body: {
+        type: 'object',
+        required: ['title', 'message'],
+        properties: {
+          title: { type: 'string', minLength: 1 },
+          message: { type: 'string', minLength: 1 },
+          type: { type: 'string', enum: ['info', 'success', 'warning', 'error'] },
+          data: { type: 'object' },
+          requireInteraction: { type: 'boolean' }
+        }
+      }
+    },
+    preHandler: rbacGuard(permissions.viewAnalytics)
+  }, (request, reply) => notificationController.sendAdminNotification(request, reply));
+
+  // Send hotel vendor notification (Admin only)
+  fastify.post('/send-hotel-vendor', {
+    schema: {
+      tags: ['notifications'],
+      summary: 'Send notification to hotel vendors',
+      security: [{ bearerAuth: [] }],
+      body: {
+        type: 'object',
+        required: ['hotelId', 'title', 'message'],
+        properties: {
+          hotelId: { type: 'string', format: 'uuid' },
+          title: { type: 'string', minLength: 1 },
+          message: { type: 'string', minLength: 1 },
+          type: { type: 'string', enum: ['info', 'success', 'warning', 'error'] },
+          data: { type: 'object' },
+          requireInteraction: { type: 'boolean' }
+        }
+      }
+    },
+    preHandler: rbacGuard(permissions.viewAnalytics)
+  }, (request, reply) => notificationController.sendHotelVendorNotification(request, reply));
 }

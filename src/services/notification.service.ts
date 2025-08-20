@@ -14,6 +14,7 @@ const nodemailer = require('nodemailer');
 import admin from "../config/firebase/firebase";
 import { Expo, ExpoPushMessage, ExpoPushTicket } from 'expo-server-sdk';
 import { NotFoundError } from "../types/errors";
+import { WebNotificationService } from "./webNotification.service";
 
 interface NotificationData {
   userId: string;
@@ -38,13 +39,16 @@ interface SMSNotificationData {
 export class NotificationService {
   private fastify!: FastifyInstance;
   private expo: Expo;
+  private webNotificationService: WebNotificationService;
 
   constructor() {
     this.expo = new Expo();
+    this.webNotificationService = new WebNotificationService();
   }
 
   setFastify(fastify: FastifyInstance) {
     this.fastify = fastify;
+    this.webNotificationService.setFastify(fastify);
   }
 
   // Register push token for a device
@@ -443,6 +447,45 @@ export class NotificationService {
       };
     }
   }
+  // Register web client
+  registerWebClient(userId: string, socket: any) {
+    return this.webNotificationService.registerClient(userId, socket);
+  }
+
+  // Send web notification
+  async sendWebNotification(data: {
+    userId: string;
+    title: string;
+    message: string;
+    type: 'info' | 'success' | 'warning' | 'error';
+    data?: any;
+    requireInteraction?: boolean;
+  }) {
+    return this.webNotificationService.sendBrowserNotification(data);
+  }
+
+  // Send admin web notification
+  async sendAdminWebNotification(data: {
+    title: string;
+    message: string;
+    type: 'info' | 'success' | 'warning' | 'error';
+    data?: any;
+    requireInteraction?: boolean;
+  }) {
+    return this.webNotificationService.sendAdminNotification(data);
+  }
+
+  // Send hotel vendor web notification
+  async sendHotelVendorWebNotification(hotelId: string, data: {
+    title: string;
+    message: string;
+    type: 'info' | 'success' | 'warning' | 'error';
+    data?: any;
+    requireInteraction?: boolean;
+  }) {
+    return this.webNotificationService.sendHotelVendorNotification(hotelId, data);
+  }
+
   // Send notification to hotel staff/management
   async sendHotelNotification(hotelId: string, options: {
     title: string;
@@ -477,6 +520,18 @@ export class NotificationService {
             message: options.message,
             type: 'info',
             data: { ...options.data, hotelId }
+          })
+        );
+
+        // Send web notification
+        notifications.push(
+          this.sendWebNotification({
+            userId: staff.id,
+            title: options.title,
+            message: options.message,
+            type: 'info',
+            data: { ...options.data, hotelId },
+            requireInteraction: true
           })
         );
 
