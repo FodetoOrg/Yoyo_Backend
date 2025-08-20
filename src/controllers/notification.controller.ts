@@ -51,22 +51,7 @@ const testNotificationSchema = z.object({
   message: z.string().min(1),
 });
 
-const sendWebNotificationSchema = z.object({
-  userId: z.string().uuid(),
-  title: z.string().min(1),
-  message: z.string().min(1),
-  type: z.enum(['info', 'success', 'warning', 'error']).default('info'),
-  data: z.any().optional(),
-  requireInteraction: z.boolean().default(false),
-});
 
-const sendAdminNotificationSchema = z.object({
-  title: z.string().min(1),
-  message: z.string().min(1),
-  type: z.enum(['info', 'success', 'warning', 'error']).default('info'),
-  data: z.any().optional(),
-  requireInteraction: z.boolean().default(false),
-});
 
 const sendHotelVendorNotificationSchema = z.object({
   hotelId: z.string().uuid(),
@@ -364,62 +349,6 @@ export class NotificationController {
     }
   }
 
-  // Send web notification
-  async sendWebNotification(request: FastifyRequest, reply: FastifyReply) {
-    try {
-      const notificationData = sendWebNotificationSchema.parse(request.body);
-      const notification = await this.notificationService.sendWebNotification(notificationData);
-      
-      return reply.code(201).send({
-        success: true,
-        message: 'Web notification sent successfully',
-        data: notification,
-      });
-    } catch (error) {
-      request.log.error(error);
-      
-      if (error instanceof z.ZodError) {
-        return reply.code(400).send({
-          success: false,
-          message: 'Validation error',
-          errors: error.errors,
-        });
-      }
-      
-      return reply.code(500).send({
-        success: false,
-        message: error.message || 'Failed to send web notification',
-      });
-    }
-  }
-
-  // Send admin notification
-  async sendAdminNotification(request: FastifyRequest, reply: FastifyReply) {
-    try {
-      const notificationData = sendAdminNotificationSchema.parse(request.body);
-      const result = await this.notificationService.sendAdminWebNotification(notificationData);
-      
-      return reply.code(201).send({
-        success: true,
-        message: 'Admin notification sent successfully',
-        data: result,
-      });
-    } catch (error) {
-      request.log.error(error);
-      
-      if (error instanceof z.ZodError) {
-        return reply.code(400).send({
-          success: false,
-          message: 'Validation error',
-          errors: error.errors,
-        });
-      }
-      
-      return reply.code(500).send({
-        message: error.message || 'Failed to send admin notification',
-      });
-    }
-  }
 
   // Get VAPID public key
   async getVapidPublicKey(request: FastifyRequest, reply: FastifyReply) {

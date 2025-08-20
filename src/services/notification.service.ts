@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { FastifyInstance } from "fastify";
 import {
   notificationQueue,
@@ -14,8 +13,7 @@ const nodemailer = require('nodemailer');
 import admin from "../config/firebase/firebase";
 import { Expo, ExpoPushMessage, ExpoPushTicket } from 'expo-server-sdk';
 import { NotFoundError } from "../types/errors";
-import { WebNotificationService } from "./webNotification.service";
-import { WebPushService } from "./webPushService"; // Assuming WebPushService is in a separate file
+import { WebPushNotificationService } from "../services/webPushNotification.service"; // Assuming WebPushService is in a separate file
 
 interface NotificationData {
   userId: string;
@@ -40,18 +38,18 @@ interface SMSNotificationData {
 export class NotificationService {
   private fastify!: FastifyInstance;
   private expo: Expo;
-  private webNotificationService: WebNotificationService;
-  private webPushService: WebPushService; // Add WebPushService instance
+ 
+  private webPushService: WebPushNotificationService; // Add WebPushService instance
 
   constructor() {
     this.expo = new Expo();
-    this.webNotificationService = new WebNotificationService();
-    this.webPushService = new WebPushService(); // Initialize WebPushService
+  
+    this.webPushService = new WebPushNotificationService(); // Initialize WebPushService
   }
 
   setFastify(fastify: FastifyInstance) {
     this.fastify = fastify;
-    this.webNotificationService.setFastify(fastify);
+
     this.webPushService.setFastify(fastify); // Set fastify for WebPushService
   }
 
@@ -452,11 +450,7 @@ export class NotificationService {
     }
   }
 
-  // Register web client
-  registerWebClient(userId: string, socket: any) {
-    return this.webNotificationService.registerClient(userId, socket);
-  }
-
+ 
   // Send web notification
   async sendWebNotification(data: {
     userId: string;

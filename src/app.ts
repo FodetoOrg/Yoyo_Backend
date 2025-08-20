@@ -12,6 +12,7 @@ import registerSwagger from './plugins/swagger';
 import registerJwt from './plugins/jwt';
 import registerDb from './plugins/db';
 import registerErrorHandler from './plugins/error-handler';
+import webPushRoutes from './routes/webPush.route';
 
 // Import routes
 import authRoutes from './routes/auth.route';
@@ -40,7 +41,7 @@ import { refundRoutes } from './routes/refund.route';
 import detailsRoutes from './routes/details.route'; // Assuming detailsRoutes is in './routes/details.route'
 import { walletRoutes } from './routes/wallet.route';
 import noShowCancellerCron from './plugins/noShowCancellerCron';
-import webSocketRoutes from './routes/webSocket.route';
+
 
 // Create Fastify instance
 export const app: FastifyInstance = fastify({
@@ -115,12 +116,9 @@ app.register(walletRoutes, { prefix: '/api/v1' });
 const configurationRoutes = require('./routes/configuration.route').default;
 app.register(configurationRoutes, { prefix: '/api/v1' });
 
-// Register WebSocket routes for real-time notifications
-app.register(webSocketRoutes);
 
-// Register web push routes
-  const webPushRoutes = await import('./routes/webPush.route');
-  await fastify.register(webPushRoutes.default, { prefix: '/api/web-push' });
+
+app.register(webPushRoutes.default, { prefix: '/api/web-push' });
 
 // Default route
 app.get('/', async () => {
