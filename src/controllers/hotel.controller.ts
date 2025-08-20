@@ -12,7 +12,7 @@ import {
   CreateRoomBodySchema,
   HotelSearchQuerySchema
 } from "../schemas/hotel.schema";
-import { uploadToS3 } from "../config/aws";
+import { uploadToStorage } from "../config/firebase/firebase.ts";
 import { ForbiddenError } from "../types/errors";
 
 interface AuthenticatedRequest extends FastifyRequest {
@@ -260,7 +260,7 @@ export class HotelController {
         imageUrls = await Promise.all(
           hotelData.images.map(async (base64Image) => {
             const buffer = Buffer.from(base64Image.split(',')[1], 'base64');
-            return await uploadToS3(buffer, 'image.jpg', 'image/jpeg');
+            return await uploadToStorage(buffer, 'image.jpg', 'image/jpeg');
           })
         );
       }

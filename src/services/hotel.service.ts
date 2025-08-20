@@ -20,7 +20,7 @@ import { v4 as uuidv4 } from "uuid";
 import { eq, and, like, inArray, exists, not, isNull, desc, or, sql, lt, gt } from "drizzle-orm";
 import { UserRole } from "../types/common";
 import { ForbiddenError } from "../types/errors";
-import { uploadToS3 } from "../config/aws";
+import { uploadToStorage } from "../config/firebase/firebase.ts";
 import { formatTimeAgo } from "../utils/helpers";
 
 
@@ -355,7 +355,7 @@ export class HotelService {
           .map(async (image) => {
             if (typeof image === 'string' && image.startsWith('data:image/')) {
               const buffer = Buffer.from(image.split(',')[1], 'base64');
-              return await uploadToS3(buffer, `hotel-${processedData.id}-${Date.now()}.jpg`, 'image/jpeg');
+              return await uploadToStorage(buffer, `hotel-${processedData.id}-${Date.now()}.jpg`, 'image/jpeg');
             } else if (typeof image === 'object' && image !== null && 'url' in image) {
               return image.url; // If it's an existing image URL
             }
@@ -431,7 +431,7 @@ export class HotelService {
           // Check if it's base64 data
           if (base64Image.startsWith('data:image/')) {
             const buffer = Buffer.from(base64Image.split(',')[1], 'base64');
-            return await uploadToS3(buffer, `room-${roomId}-${Date.now()}.jpg`, 'image/jpeg');
+            return await uploadToStorage(buffer, `room-${roomId}-${Date.now()}.jpg`, 'image/jpeg');
           }
           return base64Image; // If it's already a URL
         })
@@ -650,7 +650,7 @@ export class HotelService {
             // Check if it's base64 data
             if (base64Image.startsWith('data:image/')) {
               const buffer = Buffer.from(base64Image.split(',')[1], 'base64');
-              return await uploadToS3(buffer, `room-${roomId}-${Date.now()}.jpg`, 'image/jpeg');
+              return await uploadToStorage(buffer, `room-${roomId}-${Date.now()}.jpg`, 'image/jpeg');
             }
             return base64Image; // If it's already a URL
           })

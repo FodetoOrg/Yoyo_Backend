@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { FastifyInstance } from "fastify";
-import { uploadToS3 } from "../config/aws";
+import { uploadToStorage } from "../config/firebase/firebase.ts";
 import { v4 as uuidv4 } from "uuid";
 import { NotFoundError } from "../types/errors";
 
@@ -61,7 +61,7 @@ export class UploadService {
       const uniqueFilename = `${uuidv4()}-${filename.replace(/\.[^/.]+$/, "")}${fileExtension}`;
 
       // Upload to S3
-      const url = await uploadToS3(processedBuffer, uniqueFilename, processedMimetype);
+      const url = await uploadToStorage(processedBuffer, uniqueFilename, processedMimetype);
 
       return {
         id: uuidv4(),

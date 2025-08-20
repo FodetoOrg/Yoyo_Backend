@@ -3,7 +3,7 @@ import { FastifyInstance } from "fastify";
 import { rooms, hotels, roomImages, roomTypes, bookings, users } from '../models/schema';
 import { eq, and, like, desc, asc, count, sql, not, or } from 'drizzle-orm';
 import { v4 as uuidv4 } from "uuid";
-import { uploadToS3 } from "../config/aws";
+import { uploadToStorage } from "../config/firebase/firebase.ts";
 import { NotFoundError, ConflictError, ForbiddenError } from "../types/errors";
 
 interface RoomCreateParams {
@@ -265,7 +265,7 @@ export class RoomService {
             if (base64Image.startsWith('data:image/')) {
               const buffer = Buffer.from(base64Image.split(',')[1], 'base64');
               const fileName = `room-${roomId}-${Date.now()}-${index}.jpg`;
-              return await uploadToS3(buffer, fileName, 'image/jpeg');
+              return await uploadToStorage(buffer, fileName, 'image/jpeg');
             }
             return base64Image; // If it's already a URL
           })
@@ -366,7 +366,7 @@ export class RoomService {
             if (base64Image.startsWith('data:image/')) {
               const buffer = Buffer.from(base64Image.split(',')[1], 'base64');
               const fileName = `room-${roomId}-${Date.now()}-${index}.jpg`;
-              return await uploadToS3(buffer, fileName, 'image/jpeg');
+              return await uploadToStorage(buffer, fileName, 'image/jpeg');
             }
             return base64Image; // If it's already a URL
           })

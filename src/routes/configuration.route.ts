@@ -8,7 +8,7 @@ import {
   initializeConfigurations
 } from '../controllers/configuration.controller';
 import { configurations } from '../models/Configuration';
-import { uploadToS3 } from '../config/aws';
+import { uploadToStorage } from '../config/firebase/firebase.ts';
 
 async function configurationRoutes(fastify: FastifyInstance) {
   // Get all configurations (admin only)
@@ -78,7 +78,7 @@ async function configurationRoutes(fastify: FastifyInstance) {
         if (body.banner_image.startsWith('data:image/')) {
           const buffer = Buffer.from(body.banner_image.split(',')[1], 'base64');
           const filename = `banner-${Date.now()}.jpg`;
-          bannerImageUrl = await uploadToS3(buffer, filename, 'image/jpeg');
+          bannerImageUrl = await uploadToStorage(buffer, filename, 'image/jpeg');
         } else {
           return reply.code(400).send({
             success: false,

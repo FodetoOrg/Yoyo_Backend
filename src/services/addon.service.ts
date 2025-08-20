@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { eq, and, inArray } from 'drizzle-orm';
 import { addons, roomAddons, bookingAddons } from '../models/Addon';
 import { rooms } from '../models/Room';
-import { uploadToS3 } from '../config/aws';
+import { uploadToStorage } from '../config/firebase/firebase.ts';
 import { ConflictError, NotFoundError } from '../types/errors';
 import { hotels } from '../models/Hotel';
 
@@ -52,7 +52,7 @@ export class AddonService {
     let image = null;
     if (addonData.image.startsWith('data:image/')) {
       const buffer = Buffer.from(addonData.image.split(',')[1], 'base64');
-      image = await uploadToS3(buffer, `hotel-${addonData.name}-${Date.now()}.jpg`, 'image/jpeg');
+      image = await uploadToStorage(buffer, `hotel-${addonData.name}-${Date.now()}.jpg`, 'image/jpeg');
     }
     if (!image) {
       throw Error('Unable to Process Request')
@@ -127,7 +127,7 @@ export class AddonService {
     if (updateData.image && updateData.image.startsWith('data:image/')) {
 
       const buffer = Buffer.from(updateData.image.split(',')[1], 'base64');
-      image = await uploadToS3(buffer, `hotel-${addonId}-${Date.now()}.jpg`, 'image/jpeg');
+      image = await uploadToStorage(buffer, `hotel-${addonId}-${Date.now()}.jpg`, 'image/jpeg');
     }
 
 
