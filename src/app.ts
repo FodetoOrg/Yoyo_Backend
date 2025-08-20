@@ -113,6 +113,10 @@ app.register(walletRoutes, { prefix: '/api/v1' });
 const configurationRoutes = require('./routes/configuration.route').default;
 app.register(configurationRoutes, { prefix: '/api/v1' });
 
+// Register WebSocket routes for real-time notifications
+const webSocketRoutes = await import('./routes/webSocket.route');
+await fastify.register(webSocketRoutes.default);
+
 // Default route
 app.get('/', async () => {
   return { message: 'Hotel Booking API' };
