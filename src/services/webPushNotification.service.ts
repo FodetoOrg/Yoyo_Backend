@@ -188,6 +188,7 @@ export class WebPushNotificationService {
 
       const sendPromises = userSubscriptions.map(async (subscription, index) => {
         try {
+          console.log('payload is ',payload)
           await webpush.sendNotification(subscription, payload);
           console.log(`Web push sent successfully to subscription ${index + 1} for user ${data.userId}`);
           return { success: true, subscription: subscription.endpoint };

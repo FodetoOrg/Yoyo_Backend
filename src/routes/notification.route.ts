@@ -26,7 +26,7 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
   // Get user notifications
   fastify.get('/', {
     schema: {
-      ...getUserNotificationsSchema,
+      // ...getUserNotificationsSchema,
       tags: ['notifications'],
       summary: 'Get user notifications',
       security: [{ bearerAuth: [] }]

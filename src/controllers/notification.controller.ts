@@ -378,7 +378,7 @@ export class NotificationController {
       const { subscription } = request.body as any;
       const userId = (request as any).user.id;
 
-      const result = await this.notificationService.subscribeUserToWebPush(userId, subscription);
+      const result = await this.webpushNotificationService.subscribeUser(userId, subscription);
 
       return reply.code(201).send({
         success: true,

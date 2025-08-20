@@ -6,6 +6,7 @@ import { permissions } from '../utils/rbac';
 
 export default async function webPushRoutes(fastify: FastifyInstance) {
   const notificationController = new NotificationController();
+  notificationController['webpushNotificationService'].setFastify(fastify)
 
   // Get VAPID public key
   fastify.get('/vapid-public-key', {
