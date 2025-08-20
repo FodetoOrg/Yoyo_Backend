@@ -12,7 +12,10 @@ import registerSwagger from './plugins/swagger';
 import registerJwt from './plugins/jwt';
 import registerDb from './plugins/db';
 import registerErrorHandler from './plugins/error-handler';
-import webPushRoutes from './routes/webPush.route';
+// Removed the dynamic import for webPushRoutes as it was causing an issue.
+// const webPushRoutes = await Promise.resolve().then(() => __importStar(require('./routes/webPush.route')));
+import webPushRoutes from './routes/webPush.route'; // Replaced with direct import
+
 
 // Import routes
 import authRoutes from './routes/auth.route';
