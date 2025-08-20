@@ -16,6 +16,7 @@ export * from './Staff';
 export * from './NotificationQueue';
 export * from './Notification';
 export * from './PushToken';
+export * from './WebPushSubscription';
 export * from './PaymentOrder';
 export * from './CustomerProfile';
 export * from './Wishlist';

@@ -1,7 +1,7 @@
 
 // @ts-nocheck
 import { FastifyInstance } from "fastify";
-import { notifications, users } from "../models/schema";
+import { notifications, users, webPushSubscriptions } from "../models/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import * as webpush from 'web-push';
@@ -34,7 +34,6 @@ interface WebPushNotificationData {
 
 export class WebPushNotificationService {
   private fastify!: FastifyInstance;
-  private userSubscriptions: Map<string, WebPushSubscription[]> = new Map();
 
   constructor() {
     // Configure VAPID details for Web Push
@@ -66,24 +65,38 @@ export class WebPushNotificationService {
   // Subscribe user to web push notifications
   async subscribeUser(userId: string, subscription: WebPushSubscription) {
     try {
-      if (!this.userSubscriptions.has(userId)) {
-        this.userSubscriptions.set(userId, []);
-      }
-
-      const userSubs = this.userSubscriptions.get(userId)!;
+      const db = this.fastify.db;
       
       // Check if subscription already exists
-      const existingIndex = userSubs.findIndex(sub => sub.endpoint === subscription.endpoint);
-      
-      if (existingIndex >= 0) {
+      const existing = await db.select()
+        .from(webPushSubscriptions)
+        .where(eq(webPushSubscriptions.endpoint, subscription.endpoint))
+        .limit(1);
+
+      if (existing.length > 0) {
         // Update existing subscription
-        userSubs[existingIndex] = subscription;
+        await db.update(webPushSubscriptions)
+          .set({
+            userId,
+            p256dhKey: subscription.keys.p256dh,
+            authKey: subscription.keys.auth,
+            isActive: true,
+            updatedAt: new Date()
+          })
+          .where(eq(webPushSubscriptions.endpoint, subscription.endpoint));
       } else {
         // Add new subscription
-        userSubs.push(subscription);
+        await db.insert(webPushSubscriptions).values({
+          id: uuidv4(),
+          userId,
+          endpoint: subscription.endpoint,
+          p256dhKey: subscription.keys.p256dh,
+          authKey: subscription.keys.auth,
+          isActive: true
+        });
       }
 
-      console.log(`Web push subscription added for user ${userId}. Total subscriptions: ${userSubs.length}`);
+      console.log(`Web push subscription saved for user ${userId}`);
       
       return {
         success: true,
@@ -99,15 +112,16 @@ export class WebPushNotificationService {
   // Unsubscribe user from web push notifications
   async unsubscribeUser(userId: string, endpoint: string) {
     try {
-      const userSubs = this.userSubscriptions.get(userId);
-      if (!userSubs) {
-        return { success: false, message: 'No subscriptions found' };
-      }
+      const db = this.fastify.db;
+      
+      await db.update(webPushSubscriptions)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(and(
+          eq(webPushSubscriptions.userId, userId),
+          eq(webPushSubscriptions.endpoint, endpoint)
+        ));
 
-      const filteredSubs = userSubs.filter(sub => sub.endpoint !== endpoint);
-      this.userSubscriptions.set(userId, filteredSubs);
-
-      console.log(`Web push subscription removed for user ${userId}. Remaining: ${filteredSubs.length}`);
+      console.log(`Web push subscription deactivated for user ${userId}`);
       
       return {
         success: true,
@@ -120,10 +134,30 @@ export class WebPushNotificationService {
     }
   }
 
+  // Get user subscriptions from database
+  async getUserSubscriptions(userId: string) {
+    const db = this.fastify.db;
+    
+    const subscriptions = await db.select()
+      .from(webPushSubscriptions)
+      .where(and(
+        eq(webPushSubscriptions.userId, userId),
+        eq(webPushSubscriptions.isActive, true)
+      ));
+
+    return subscriptions.map(sub => ({
+      endpoint: sub.endpoint,
+      keys: {
+        p256dh: sub.p256dhKey,
+        auth: sub.authKey
+      }
+    }));
+  }
+
   // Send web push notification to specific user
   async sendWebPushNotification(data: WebPushNotificationData) {
     try {
-      const userSubscriptions = this.userSubscriptions.get(data.userId);
+      const userSubscriptions = await this.getUserSubscriptions(data.userId);
       
       if (!userSubscriptions || userSubscriptions.length === 0) {
         console.log(`No web push subscriptions found for user ${data.userId}`);
@@ -308,14 +342,19 @@ export class WebPushNotificationService {
   }
 
   // Get subscription count for user
-  getSubscriptionCount(userId: string): number {
-    return this.userSubscriptions.get(userId)?.length || 0;
+  async getSubscriptionCount(userId: string): Promise<number> {
+    const subscriptions = await this.getUserSubscriptions(userId);
+    return subscriptions.length;
   }
 
   // Get all users with active subscriptions
-  getActiveUsers(): string[] {
-    return Array.from(this.userSubscriptions.keys()).filter(
-      userId => this.userSubscriptions.get(userId)!.length > 0
-    );
+  async getActiveUsers(): Promise<string[]> {
+    const db = this.fastify.db;
+    
+    const activeSubscriptions = await db.select({ userId: webPushSubscriptions.userId })
+      .from(webPushSubscriptions)
+      .where(eq(webPushSubscriptions.isActive, true));
+
+    return [...new Set(activeSubscriptions.map(sub => sub.userId))];
   }
 }
