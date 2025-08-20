@@ -35,7 +35,7 @@
     "@fastify/multipart": "^7.7.3",
     "@fastify/swagger": "^8.15.0",
     "@fastify/swagger-ui": "^2.1.0",
-    "@fastify/websocket": "^11.2.0",
+    "@fastify/websocket": "8.3.1",
     "@firebase/auth": "^1.10.4",
     "@libsql/client": "^0.15.9",
     "@types/nodemailer": "^6.4.17",

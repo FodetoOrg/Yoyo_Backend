@@ -3,6 +3,7 @@ import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import { config } from 'dotenv';
 
+
 // Load environment variables
 config();
 
@@ -39,6 +40,7 @@ import { refundRoutes } from './routes/refund.route';
 import detailsRoutes from './routes/details.route'; // Assuming detailsRoutes is in './routes/details.route'
 import { walletRoutes } from './routes/wallet.route';
 import noShowCancellerCron from './plugins/noShowCancellerCron';
+import webSocketRoutes from './routes/webSocket.route';
 
 // Create Fastify instance
 export const app: FastifyInstance = fastify({
@@ -114,8 +116,8 @@ const configurationRoutes = require('./routes/configuration.route').default;
 app.register(configurationRoutes, { prefix: '/api/v1' });
 
 // Register WebSocket routes for real-time notifications
-const webSocketRoutes = await import('./routes/webSocket.route');
-await fastify.register(webSocketRoutes.default);
+
+app.register(webSocketRoutes);
 
 // Default route
 app.get('/', async () => {
