@@ -15,6 +15,7 @@ import admin from "../config/firebase/firebase";
 import { Expo, ExpoPushMessage, ExpoPushTicket } from 'expo-server-sdk';
 import { NotFoundError } from "../types/errors";
 import { WebNotificationService } from "./webNotification.service";
+import { WebPushService } from "./webPushService"; // Assuming WebPushService is in a separate file
 
 interface NotificationData {
   userId: string;
@@ -40,15 +41,18 @@ export class NotificationService {
   private fastify!: FastifyInstance;
   private expo: Expo;
   private webNotificationService: WebNotificationService;
+  private webPushService: WebPushService; // Add WebPushService instance
 
   constructor() {
     this.expo = new Expo();
     this.webNotificationService = new WebNotificationService();
+    this.webPushService = new WebPushService(); // Initialize WebPushService
   }
 
   setFastify(fastify: FastifyInstance) {
     this.fastify = fastify;
     this.webNotificationService.setFastify(fastify);
+    this.webPushService.setFastify(fastify); // Set fastify for WebPushService
   }
 
   // Register push token for a device
@@ -447,6 +451,7 @@ export class NotificationService {
       };
     }
   }
+
   // Register web client
   registerWebClient(userId: string, socket: any) {
     return this.webNotificationService.registerClient(userId, socket);
@@ -1290,4 +1295,57 @@ export class NotificationService {
     await Promise.all(notifications);
   }
 
+  // Send system announcement to all connected users
+  async sendSystemAnnouncement(data: Omit<WebNotificationData, 'userId'>) {
+    return this.webNotificationService.sendSystemAnnouncement(data);
+  }
+
+  // Web Push Notification methods
+  getVapidPublicKey() {
+    return this.webPushService.getVapidPublicKey();
+  }
+
+  async subscribeUserToWebPush(userId: string, subscription: any) {
+    return this.webPushService.subscribeUser(userId, subscription);
+  }
+
+  async unsubscribeUserFromWebPush(userId: string, endpoint: string) {
+    return this.webPushService.unsubscribeUser(userId, endpoint);
+  }
+
+  async sendWebPushNotification(data: {
+    userId: string;
+    title: string;
+    message: string;
+    type: 'info' | 'success' | 'warning' | 'error';
+    data?: any;
+    requireInteraction?: boolean;
+    url?: string;
+  }) {
+    return this.webPushService.sendWebPushNotification({
+      ...data,
+      icon: '/favicon.ico',
+      badge: '/badge.png'
+    });
+  }
+
+  async sendAdminWebPushNotification(data: {
+    title: string;
+    message: string;
+    type: 'info' | 'success' | 'warning' | 'error';
+    data?: any;
+    requireInteraction?: boolean;
+  }) {
+    return this.webPushService.sendAdminWebPushNotification(data);
+  }
+
+  async sendHotelVendorWebPushNotification(hotelId: string, data: {
+    title: string;
+    message: string;
+    type: 'info' | 'success' | 'warning' | 'error';
+    data?: any;
+    requireInteraction?: boolean;
+  }) {
+    return this.webPushService.sendHotelVendorWebPushNotification(hotelId, data);
+  }
 }

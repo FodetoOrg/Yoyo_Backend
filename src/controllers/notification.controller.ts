@@ -421,6 +421,150 @@ export class NotificationController {
     }
   }
 
+  // Get VAPID public key
+  async getVapidPublicKey(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const publicKey = this.notificationService.getVapidPublicKey();
+      
+      return reply.code(200).send({
+        success: true,
+        data: { publicKey },
+      });
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send({
+        success: false,
+        message: 'Failed to get VAPID public key',
+      });
+    }
+  }
+
+  // Subscribe to web push notifications
+  async subscribeWebPush(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { subscription } = request.body as any;
+      const userId = (request as any).user.id;
+      
+      const result = await this.notificationService.subscribeUserToWebPush(userId, subscription);
+      
+      return reply.code(201).send({
+        success: true,
+        message: 'Successfully subscribed to web push notifications',
+        data: result,
+      });
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send({
+        success: false,
+        message: 'Failed to subscribe to web push notifications',
+      });
+    }
+  }
+
+  // Unsubscribe from web push notifications
+  async unsubscribeWebPush(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { endpoint } = request.body as any;
+      const userId = (request as any).user.id;
+      
+      const result = await this.notificationService.unsubscribeUserFromWebPush(userId, endpoint);
+      
+      return reply.code(200).send({
+        success: true,
+        message: 'Successfully unsubscribed from web push notifications',
+        data: result,
+      });
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send({
+        success: false,
+        message: 'Failed to unsubscribe from web push notifications',
+      });
+    }
+  }
+
+  // Send test web push notification
+  async sendTestWebPush(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { message } = request.body as any;
+      const userId = (request as any).user.id;
+      
+      const result = await this.notificationService.sendWebPushNotification({
+        userId,
+        title: 'Test Web Push Notification',
+        message,
+        type: 'info',
+        requireInteraction: true
+      });
+      
+      return reply.code(201).send({
+        success: true,
+        message: 'Test web push notification sent',
+        data: result,
+      });
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send({
+        success: false,
+        message: 'Failed to send test web push notification',
+      });
+    }
+  }
+
+  // Send web push to all admins
+  async sendAdminWebPush(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { title, message, type = 'info', data, requireInteraction } = request.body as any;
+      
+      const result = await this.notificationService.sendAdminWebPushNotification({
+        title,
+        message,
+        type,
+        data,
+        requireInteraction
+      });
+      
+      return reply.code(201).send({
+        success: true,
+        message: 'Admin web push notifications sent',
+        data: result,
+      });
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send({
+        success: false,
+        message: 'Failed to send admin web push notifications',
+      });
+    }
+  }
+
+  // Send web push to hotel vendors
+  async sendHotelVendorWebPush(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { hotelId, title, message, type = 'info', data, requireInteraction } = request.body as any;
+      
+      const result = await this.notificationService.sendHotelVendorWebPushNotification(hotelId, {
+        title,
+        message,
+        type,
+        data,
+        requireInteraction
+      });
+      
+      return reply.code(201).send({
+        success: true,
+        message: 'Hotel vendor web push notifications sent',
+        data: result,
+      });
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send({
+        success: false,
+        message: 'Failed to send hotel vendor web push notifications',
+      });
+    }
+  }
+
   // Send hotel vendor notification
   async sendHotelVendorNotification(request: FastifyRequest, reply: FastifyReply) {
     try {

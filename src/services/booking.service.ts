@@ -567,6 +567,22 @@ export class BookingService {
         }
       });
 
+      // Send web push notification
+      await this.notificationService.sendWebPushNotification({
+        userId: bookingData.userId,
+        title: 'Booking Confirmed! 🎉',
+        message: `Your booking at ${hotel.name} has been confirmed. Check-in: ${bookingData.checkIn.toLocaleDateString()}`,
+        type: 'success',
+        requireInteraction: true,
+        url: `/bookings/${bookingId}`,
+        data: {
+          bookingId,
+          hotelName: hotel.name,
+          checkInDate: bookingData.checkIn.toISOString(),
+          checkOutDate: bookingData.checkOut.toISOString(),
+        }
+      });
+
       // Send email notification
       await this.notificationService.sendImmediateNotification({
         userId: bookingData.userId,

@@ -116,8 +116,11 @@ const configurationRoutes = require('./routes/configuration.route').default;
 app.register(configurationRoutes, { prefix: '/api/v1' });
 
 // Register WebSocket routes for real-time notifications
-
 app.register(webSocketRoutes);
+
+// Register web push routes
+  const webPushRoutes = await import('./routes/webPush.route');
+  await fastify.register(webPushRoutes.default, { prefix: '/api/web-push' });
 
 // Default route
 app.get('/', async () => {
