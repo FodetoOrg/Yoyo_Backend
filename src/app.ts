@@ -118,7 +118,7 @@ app.register(configurationRoutes, { prefix: '/api/v1' });
 
 
 
-app.register(webPushRoutes.default, { prefix: '/api/web-push' });
+app.register(webPushRoutes, { prefix: '/api/v1/web-push' });
 
 // Default route
 app.get('/', async () => {

@@ -1,7 +1,7 @@
-// @ts-nocheck
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { NotificationService } from '../services/notification.service';
 import { z } from 'zod';
+import { WebPushNotificationService } from '../services/webPushNotification.service';
 
 const getUserNotificationsSchema = z.object({
   page: z.number().int().min(1).default(1),
@@ -64,13 +64,17 @@ const sendHotelVendorNotificationSchema = z.object({
 
 export class NotificationController {
   private notificationService: NotificationService;
+  private webpushNotificationService: WebPushNotificationService;
 
   constructor() {
     this.notificationService = new NotificationService();
+    this.webpushNotificationService = new WebPushNotificationService()
+
   }
 
   setFastify(fastify: any) {
     this.notificationService.setFastify(fastify);
+    this.webpushNotificationService.setFastify(fastify)
   }
 
   // Get user notifications
@@ -78,16 +82,16 @@ export class NotificationController {
     try {
       const userId = (request as any).user.id;
       const { page, limit } = getUserNotificationsSchema.parse(request.query);
-      
+
       const result = await this.notificationService.getUserNotifications(userId, page, limit);
-      
+
       return reply.code(200).send({
         success: true,
         data: result,
       });
     } catch (error) {
       request.log.error(error);
-      
+
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
           success: false,
@@ -95,7 +99,7 @@ export class NotificationController {
           errors: error.errors,
         });
       }
-      
+
       return reply.code(500).send({
         success: false,
         message: error.message || 'Failed to fetch notifications',
@@ -108,9 +112,9 @@ export class NotificationController {
     try {
       const userId = (request as any).user.id;
       const { notificationId } = markAsReadSchema.parse(request.body);
-      
+
       const notification = await this.notificationService.markAsRead(userId, notificationId);
-      
+
       return reply.code(200).send({
         success: true,
         message: 'Notification marked as read',
@@ -118,7 +122,7 @@ export class NotificationController {
       });
     } catch (error) {
       request.log.error(error);
-      
+
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
           success: false,
@@ -126,7 +130,7 @@ export class NotificationController {
           errors: error.errors,
         });
       }
-      
+
       const statusCode = error.message === 'Notification not found' ? 404 : 500;
       return reply.code(statusCode).send({
         success: false,
@@ -140,7 +144,7 @@ export class NotificationController {
     try {
       const userId = (request as any).user.id;
       const result = await this.notificationService.markAllAsRead(userId);
-      
+
       return reply.code(200).send({
         success: true,
         message: 'All notifications marked as read',
@@ -148,7 +152,7 @@ export class NotificationController {
       });
     } catch (error) {
       request.log.error(error);
-      
+
       return reply.code(500).send({
         success: false,
         message: error.message || 'Failed to mark all notifications as read',
@@ -161,16 +165,16 @@ export class NotificationController {
     try {
       const userId = (request as any).user.id;
       const { notificationId } = deleteNotificationSchema.parse(request.body);
-      
+
       await this.notificationService.deleteNotification(userId, notificationId);
-      
+
       return reply.code(200).send({
         success: true,
         message: 'Notification deleted successfully',
       });
     } catch (error) {
       request.log.error(error);
-      
+
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
           success: false,
@@ -178,7 +182,7 @@ export class NotificationController {
           errors: error.errors,
         });
       }
-      
+
       const statusCode = error.message === 'Notification not found' ? 404 : 500;
       return reply.code(statusCode).send({
         success: false,
@@ -192,7 +196,7 @@ export class NotificationController {
     try {
       const notificationData = sendNotificationSchema.parse(request.body);
       const notification = await this.notificationService.sendRealTimeNotification(notificationData);
-      
+
       return reply.code(201).send({
         success: true,
         message: 'Notification sent successfully',
@@ -200,7 +204,7 @@ export class NotificationController {
       });
     } catch (error) {
       request.log.error(error);
-      
+
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
           success: false,
@@ -208,7 +212,7 @@ export class NotificationController {
           errors: error.errors,
         });
       }
-      
+
       return reply.code(500).send({
         success: false,
         message: error.message || 'Failed to send notification',
@@ -221,7 +225,7 @@ export class NotificationController {
     try {
       const emailData = sendEmailSchema.parse(request.body);
       const result = await this.notificationService.sendEmailNotification(emailData);
-      
+
       return reply.code(201).send({
         success: true,
         message: 'Email sent successfully',
@@ -229,7 +233,7 @@ export class NotificationController {
       });
     } catch (error) {
       request.log.error(error);
-      
+
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
           success: false,
@@ -237,7 +241,7 @@ export class NotificationController {
           errors: error.errors,
         });
       }
-      
+
       return reply.code(500).send({
         success: false,
         message: error.message || 'Failed to send email',
@@ -250,7 +254,7 @@ export class NotificationController {
     try {
       const smsData = sendSMSSchema.parse(request.body);
       const result = await this.notificationService.sendSMSNotification(smsData);
-      
+
       return reply.code(201).send({
         success: true,
         message: 'SMS sent successfully',
@@ -258,7 +262,7 @@ export class NotificationController {
       });
     } catch (error) {
       request.log.error(error);
-      
+
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
           success: false,
@@ -266,7 +270,7 @@ export class NotificationController {
           errors: error.errors,
         });
       }
-      
+
       return reply.code(500).send({
         success: false,
         message: error.message || 'Failed to send SMS',
@@ -280,21 +284,21 @@ export class NotificationController {
       const userId = (request as any).user.id;
       const { token, platform, deviceInfo } = registerTokenSchema.parse(request.body);
 
-      console.log('token, platform, deviceInfo ',token)
+      console.log('token, platform, deviceInfo ', token)
       console.log(platform)
-      console.log('deviceInfo ',deviceInfo)
-      
+      console.log('deviceInfo ', deviceInfo)
+
       // Generate device ID from user and platform info
       const deviceId = `${userId}-${platform}-${Date.now()}`;
-      
+
       const result = await this.notificationService.registerPushToken(
-        userId, 
-        token, 
-        deviceId, 
-        platform, 
+        userId,
+        token,
+        deviceId,
+        platform,
         deviceInfo
       );
-      
+
       return reply.code(201).send({
         success: true,
         message: 'Push token registered successfully',
@@ -302,7 +306,7 @@ export class NotificationController {
       });
     } catch (error) {
       request.log.error(error);
-      
+
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
           success: false,
@@ -310,7 +314,7 @@ export class NotificationController {
           errors: error.errors,
         });
       }
-      
+
       return reply.code(500).send({
         success: false,
         message: error.message || 'Failed to register push token',
@@ -323,9 +327,9 @@ export class NotificationController {
     try {
       const userId = (request as any).user.id;
       const { message } = testNotificationSchema.parse(request.body);
-      
+
       const result = await this.notificationService.sendTestNotification(userId, message);
-      
+
       return reply.code(201).send({
         success: true,
         message: 'Test notification sent successfully',
@@ -333,7 +337,7 @@ export class NotificationController {
       });
     } catch (error) {
       request.log.error(error);
-      
+
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
           success: false,
@@ -341,7 +345,7 @@ export class NotificationController {
           errors: error.errors,
         });
       }
-      
+
       return reply.code(500).send({
         success: false,
         message: error.message || 'Failed to send test notification',
@@ -354,7 +358,7 @@ export class NotificationController {
   async getVapidPublicKey(request: FastifyRequest, reply: FastifyReply) {
     try {
       const publicKey = this.notificationService.getVapidPublicKey();
-      
+
       return reply.code(200).send({
         success: true,
         data: { publicKey },
@@ -373,9 +377,9 @@ export class NotificationController {
     try {
       const { subscription } = request.body as any;
       const userId = (request as any).user.id;
-      
+
       const result = await this.notificationService.subscribeUserToWebPush(userId, subscription);
-      
+
       return reply.code(201).send({
         success: true,
         message: 'Successfully subscribed to web push notifications',
@@ -395,9 +399,9 @@ export class NotificationController {
     try {
       const { endpoint } = request.body as any;
       const userId = (request as any).user.id;
-      
+
       const result = await this.notificationService.unsubscribeUserFromWebPush(userId, endpoint);
-      
+
       return reply.code(200).send({
         success: true,
         message: 'Successfully unsubscribed from web push notifications',
@@ -417,15 +421,15 @@ export class NotificationController {
     try {
       const { message } = request.body as any;
       const userId = (request as any).user.id;
-      
-      const result = await this.notificationService.sendWebPushNotification({
+
+      const result = await this.webpushNotificationService.sendWebPushNotification({
         userId,
         title: 'Test Web Push Notification',
         message,
         type: 'info',
         requireInteraction: true
       });
-      
+
       return reply.code(201).send({
         success: true,
         message: 'Test web push notification sent',
@@ -444,7 +448,7 @@ export class NotificationController {
   async sendAdminWebPush(request: FastifyRequest, reply: FastifyReply) {
     try {
       const { title, message, type = 'info', data, requireInteraction } = request.body as any;
-      
+
       const result = await this.notificationService.sendAdminWebPushNotification({
         title,
         message,
@@ -452,7 +456,7 @@ export class NotificationController {
         data,
         requireInteraction
       });
-      
+
       return reply.code(201).send({
         success: true,
         message: 'Admin web push notifications sent',
@@ -471,7 +475,7 @@ export class NotificationController {
   async sendHotelVendorWebPush(request: FastifyRequest, reply: FastifyReply) {
     try {
       const { hotelId, title, message, type = 'info', data, requireInteraction } = request.body as any;
-      
+
       const result = await this.notificationService.sendHotelVendorWebPushNotification(hotelId, {
         title,
         message,
@@ -479,7 +483,7 @@ export class NotificationController {
         data,
         requireInteraction
       });
-      
+
       return reply.code(201).send({
         success: true,
         message: 'Hotel vendor web push notifications sent',
@@ -508,7 +512,7 @@ export class NotificationController {
           requireInteraction: notificationData.requireInteraction
         }
       );
-      
+
       return reply.code(201).send({
         success: true,
         message: 'Hotel vendor notification sent successfully',
@@ -516,7 +520,7 @@ export class NotificationController {
       });
     } catch (error) {
       request.log.error(error);
-      
+
       if (error instanceof z.ZodError) {
         return reply.code(400).send({
           success: false,
@@ -524,7 +528,7 @@ export class NotificationController {
           errors: error.errors,
         });
       }
-      
+
       return reply.code(500).send({
         success: false,
         message: error.message || 'Failed to send hotel vendor notification',
