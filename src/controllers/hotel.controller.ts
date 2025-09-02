@@ -136,7 +136,7 @@ export class HotelController {
       }
 
 
-      // If dates are provided, filter by availability
+      // If dates are provided, check availability for each room but keep all rooms
       if (checkIn && checkOut && rooms.length > 0) {
 
         const checkInDate = new Date(checkIn.endsWith('Z') || checkIn.includes('+') ? checkIn : checkIn + 'Z');
@@ -144,14 +144,22 @@ export class HotelController {
 
 
 
-        const availableRooms = [];
+        // Add isAvailable flag to each room instead of filtering
+        const roomsWithAvailability = [];
         for (const room of rooms) {
           const isAvailable = await this.hotelService.checkRoomAvailability(room.id, checkInDate, checkOutDate);
-          if (isAvailable) {
-            availableRooms.push(room);
-          }
+          roomsWithAvailability.push({
+            ...room,
+            isAvailable
+          });
         }
-        rooms = availableRooms;
+        rooms = roomsWithAvailability;
+      } else {
+        // If no dates provided, mark all rooms as available
+        rooms = rooms.map(room => ({
+          ...room,
+          isAvailable: true
+        }));
       }
 
       // Sort available rooms by price (ascending order - cheapest first)
@@ -173,30 +181,33 @@ export class HotelController {
         })
       );
 
+      // Find first available room to use as current room
+      const availableRooms = roomsWithAddons.filter(room => room.isAvailable);
+      const firstAvailableRoom = availableRooms.length > 0 ? availableRooms[0] : null;
 
-      // Create room upgrade data structure - only if there are available rooms
+      // Create room upgrade data structure
       const roomUpgradeData = {
-        currentRoom: roomsWithAddons.length > 0 ? {
-          id: roomsWithAddons[0].id,
-          name: roomsWithAddons[0].name,
-          images: roomsWithAddons[0].images.length > 0 ? roomsWithAddons[0].images : null,
-          features: roomsWithAddons[0].description || roomsWithAddons[0].amenities.join(', '),
-          pricePerNight: roomsWithAddons[0].pricePerNight,
-          pricePerHour: roomsWithAddons[0].pricePerHour,
-          capacity: roomsWithAddons[0].capacity,
-          addons: roomsWithAddons[0].addons,
-          roomtType: roomsWithAddons[0].roomTypeId,
+        currentRoom: firstAvailableRoom ? {
+          id: firstAvailableRoom.id,
+          name: firstAvailableRoom.name,
+          images: firstAvailableRoom.images.length > 0 ? firstAvailableRoom.images : null,
+          features: firstAvailableRoom.description || firstAvailableRoom.amenities.join(', '),
+          pricePerNight: firstAvailableRoom.pricePerNight,
+          pricePerHour: firstAvailableRoom.pricePerHour,
+          capacity: firstAvailableRoom.capacity,
+          addons: firstAvailableRoom.addons,
+          roomtType: firstAvailableRoom.roomTypeId,
           isCurrent: true,
           bookingType: bookingType,
-          displayPrice: bookingType === "hourly" ? (roomsWithAddons[0].hourlyStays.length
-            ? Math.min(...roomsWithAddons[0].hourlyStays.map(item => item.price)) : 0) : roomsWithAddons[0].pricePerNight,
-          bedType: roomsWithAddons[0].bedType,
-          capacity: roomsWithAddons[0].capacity,
-          hourlyStays: roomsWithAddons[0].hourlyStays
+          displayPrice: bookingType === "hourly" ? (firstAvailableRoom.hourlyStays.length
+            ? Math.min(...firstAvailableRoom.hourlyStays.map(item => item.price)) : 0) : firstAvailableRoom.pricePerNight,
+          bedType: firstAvailableRoom.bedType,
+          isAvailable: firstAvailableRoom.isAvailable,
+          hourlyStays: firstAvailableRoom.hourlyStays
 
 
         } : null,
-        upgradeOptions: roomsWithAddons.slice(1).map(room => ({
+        upgradeOptions: roomsWithAddons.filter(room => !firstAvailableRoom || room.id !== firstAvailableRoom.id).map(room => ({
           id: room.id,
           name: room.name,
           images: room.images.length > 0 ? room.images : null,
@@ -210,10 +221,11 @@ export class HotelController {
             ? Math.min(...room.hourlyStays.map(item => item.price)) : 0 : room.pricePerNight,
           bedType: room.bedType,
           roomtType: room.roomTypeId,
-          capacity: room.capacity,
+          isAvailable: room.isAvailable,
           hourlyStays: room.hourlyStays
         })),
-        totalAvailableRooms: roomsWithAddons.length
+        totalAvailableRooms: availableRooms.length,
+        totalRooms: roomsWithAddons.length
       };
 
 
@@ -224,10 +236,31 @@ export class HotelController {
             ...hotel,
             rating: reviewsData.overallRating,
             reviewCount: reviewsData.totalReviews,
-            price: roomsWithAddons.length > 0 ? (bookingType === "hourly" ? (roomsWithAddons[0].pricePerHour || roomsWithAddons[0].pricePerNight) : roomsWithAddons[0].pricePerNight) : null,
-            availableRooms: roomsWithAddons.length,
+            price: firstAvailableRoom ? (bookingType === "hourly" ? (firstAvailableRoom.pricePerHour || firstAvailableRoom.pricePerNight) : firstAvailableRoom.pricePerNight) : null,
+            availableRooms: availableRooms.length,
+            totalRooms: roomsWithAddons.length,
             reviewsData,
             roomUpgradeData,
+            allRooms: roomsWithAddons.map(room => ({
+              id: room.id,
+              name: room.name,
+              roomNumber: room.roomNumber,
+              images: room.images.length > 0 ? room.images : null,
+              features: room.description || room.amenities.join(', '),
+              pricePerNight: room.pricePerNight,
+              pricePerHour: room.pricePerHour,
+              capacity: room.capacity,
+              addons: room.addons,
+              roomTypeId: room.roomTypeId,
+              bookingType: bookingType,
+              displayPrice: bookingType === "hourly" ? (room.hourlyStays?.length
+                ? Math.min(...room.hourlyStays.map(item => item.price)) : 0) : room.pricePerNight,
+              bedType: room.bedType,
+              isAvailable: room.isAvailable,
+              hourlyStays: room.hourlyStays,
+              amenities: room.amenities,
+              status: room.status
+            })),
             searchCriteria: {
               guests,
               checkIn,

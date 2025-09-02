@@ -1935,7 +1935,18 @@ export class BookingService {
     })
 
     const coupounUsagesFoBooking = await this.fastify.db.query.couponUsages.findFirst({
-      where: eq(couponUsages.bookingId, booking.id)
+      where: eq(couponUsages.bookingId, booking.id),
+      with: {
+        coupon: true
+      }
+    })
+    
+    // Get booking coupon details from bookingCoupons table
+    const bookingCoupon = await this.fastify.db.query.bookingCoupons.findFirst({
+      where: eq(bookingCoupons.bookingId, booking.id),
+      with: {
+        coupon: true
+      }
     })
 
 
@@ -1973,11 +1984,28 @@ export class BookingService {
         platformFee,
         gstPercentage: booking.hotel.gstPercentage,
         platformFeePercentage,
-        couponAppliedAmount: coupounUsagesFoBooking ? coupounUsagesFoBooking.discountAmount : 0,
-        walletAmount: booking.walletAmountUsed
+        couponAppliedAmount: bookingCoupon ? bookingCoupon.discountAmount : 0,
+        walletAmount: booking.walletAmountUsed,
+        couponDetails: bookingCoupon ? {
+          id: bookingCoupon.coupon.id,
+          code: bookingCoupon.coupon.code,
+          description: bookingCoupon.coupon.description,
+          discountType: bookingCoupon.coupon.discountType,
+          discountValue: bookingCoupon.coupon.discountValue,
+          discountAmount: bookingCoupon.discountAmount,
+          maxDiscountAmount: bookingCoupon.coupon.maxDiscountAmount,
+          appliedAt: bookingCoupon.appliedAt
+        } : null
 
       },
       totalAmount: booking.totalAmount,
+      appliedCoupon: bookingCoupon ? {
+        code: bookingCoupon.coupon.code,
+        description: bookingCoupon.coupon.description,
+        discountType: bookingCoupon.coupon.discountType,
+        discountValue: bookingCoupon.coupon.discountValue,
+        discountAmount: bookingCoupon.discountAmount
+      } : null,
       cancellationPolicy: booking.hotel.cancellationPolicy || 'Free cancellation up to 24 hours before check-in. After that, a 1-night charge will apply.',
       refundInfo: refundInfo ? {
         id: refundInfo.id,
