@@ -7,6 +7,7 @@ import admin from "../config/firebase/firebase";
 import { UserRole, UserStatus } from "../types/common";
 import { ConflictError, NotFoundError } from "../types/errors";
 import { hotels, hotelUsers } from "../models/Hotel";
+import { customerProfiles } from "../models/CustomerProfile";
 import { NotFound } from "@aws-sdk/client-s3/dist-types";
 
 interface TokenResponse {
@@ -382,11 +383,43 @@ export class AuthService {
 
   async getAllUsers(page: number, limit: number, role: string) {
     const db = this.fastify.db;
+    
+    // Handle case where role might be undefined or null
+    if (!role) {
+      const allUsers = await db.query.users.findMany({
+        offset: (page - 1) * limit,
+        limit: limit,
+      });
+      return allUsers;
+    }
+
     const allUsers = await db.query.users.findMany({
       where: eq(users.role, role),
       offset: (page - 1) * limit,
       limit: limit,
     });
+
+    // If role is HOTEL_ADMIN, include hotelId for each user
+    if (role === UserRole.HOTEL_ADMIN) {
+      const usersWithHotelId = await Promise.all(
+        allUsers.map(async (user) => {
+          let hotelId = null;
+          if (user.role === UserRole.HOTEL_ADMIN) {
+            const hotel = await db.query.hotels.findFirst({
+              where: eq(hotels.ownerId, user.id),
+            });
+            hotelId = hotel?.id || null;
+          }
+          
+          return {
+            ...user,
+            hotelId,
+          };
+        })
+      );
+      return usersWithHotelId;
+    }
+
     return allUsers;
   }
 
@@ -462,9 +495,30 @@ export class AuthService {
     return hotelAdmin[0];
   }
 
+  // Update user status (admin only)
+  async updateUserStatus(userId: string, newStatus: UserStatus) {
+    const db = this.fastify.db;
+
+    // Check if user exists
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, userId)
+    });
+
+    if (!user) {
+      throw new NotFoundError('User not found');
+    }
+
+    // Update user status
+    const updatedUser = await db
+      .update(users)
+      .set({
+        status: newStatus,
+        updatedAt: new Date()
+      })
+      .where(eq(users.id, userId))
+      .returning();
+
+    return updatedUser[0];
+  }
 
 }
-import { users } from "../models/User";
-import { customerProfiles } from "../models/CustomerProfile";
-import { NotFoundError, UnauthorizedError } from "../types/errors";
-import { eq } from "drizzle-orm";

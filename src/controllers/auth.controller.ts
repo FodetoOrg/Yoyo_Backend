@@ -7,8 +7,9 @@ import {
   LoginResponseSchema,
   RefreshTokenResponseSchema,
 } from "../schemas/auth.schema";
-import { HttpStatus } from "../types/common";
+import { HttpStatus, UserRole } from "../types/common";
 import { logger } from "../utils/logger";
+import { NotFoundError } from "../types/errors";
 
 export class AuthController {
   private authService: AuthService;
@@ -167,6 +168,57 @@ export class AuthController {
     } catch (error) {
       logger.error({ error }, "Error adding hotel admin");
       throw error;
+    }
+  }
+
+  // Update user status (admin only)
+  async updateUserStatus(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { userId } = request.params as { userId: string };
+      const { status } = request.body as { status: 'active' | 'inactive' };
+      const adminRole = (request as any).user.role;
+
+      // Check if user is admin
+      if (adminRole !== UserRole.SUPER_ADMIN) {
+        return reply.code(403).send({
+          success: false,
+          message: 'Unauthorized. Only super admins can update user status',
+        });
+      }
+
+      // Validate status
+      if (status !== 'active' && status !== 'inactive') {
+        return reply.code(400).send({
+          success: false,
+          message: 'Invalid status. Must be "active" or "inactive"',
+        });
+      }
+
+      const updatedUser = await this.authService.updateUserStatus(userId, status);
+
+      return reply.code(200).send({
+        success: true,
+        message: `User status updated to ${status} successfully`,
+        data: {
+          userId: updatedUser.id,
+          status: updatedUser.status,
+          updatedAt: updatedUser.updatedAt
+        },
+      });
+    } catch (error) {
+      request.log.error(error);
+
+      if (error instanceof NotFoundError) {
+        return reply.code(404).send({
+          success: false,
+          message: error.message || 'User not found',
+        });
+      }
+
+      return reply.code(500).send({
+        success: false,
+        message: error.message || 'Failed to update user status',
+      });
     }
   }
 }

@@ -64,6 +64,23 @@ export default async function bookingRoutes(fastify: FastifyInstance) {
     preHandler: [fastify.authenticate]
   }, (request, reply) => bookingController.getAllBookings(request, reply));
 
+  // Get recent bookings (admin and hotel admin only)
+  fastify.get('/recent', {
+    schema: {
+      querystring: {
+        type: 'object',
+        properties: {
+          page: { type: 'number', minimum: 1, default: 1 },
+          limit: { type: 'number', minimum: 1, maximum: 100, default: 10 }
+        }
+      },
+      tags: ['bookings'],
+      summary: 'Get recent bookings (admin and hotel admin only)',
+      security: [{ bearerAuth: [] }]
+    },
+    preHandler: [fastify.authenticate]
+  }, (request, reply) => bookingController.getRecentBookings(request, reply));
+
   // Get user's bookings
   fastify.get('/user/me', {
     schema: {

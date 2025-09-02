@@ -643,6 +643,55 @@ export class BookingController {
     }
   }
 
+  // Get recent bookings for admins and hotel admins
+  async getRecentBookings(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const { page, limit } = request.query as { page?: number; limit?: number };
+      const userRole = request.user.role;
+      const userId = request.user.id;
+
+      // Check if user is admin or hotel admin
+      if (userRole !== UserRole.SUPER_ADMIN && userRole !== UserRole.HOTEL_ADMIN) {
+        return reply.code(403).send({
+          success: false,
+          message: 'Unauthorized. Only admins and hotel admins can access this endpoint',
+        });
+      }
+
+      let hotelId: string | undefined;
+
+      // For hotel admins, get their hotel ID
+      if (userRole === UserRole.HOTEL_ADMIN) {
+        const hotel = await this.hotelService.getHotels({ ownerId: userId });
+        if (hotel && hotel.length > 0) {
+          hotelId = hotel[0].id;
+        } else {
+          return reply.code(404).send({
+            success: false,
+            message: 'Hotel not found for this hotel admin',
+          });
+        }
+      }
+
+      const result = await this.bookingService.getRecentBookings(
+        userRole,
+        hotelId,
+        { page: page || 1, limit: limit || 10 }
+      );
+
+      return reply.code(200).send({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send({
+        success: false,
+        message: error.message || 'Failed to fetch recent bookings',
+      });
+    }
+  }
+
 }
 
 

@@ -81,4 +81,53 @@ export default async function authRoutes(fastify: FastifyInstance) {
     },
     (request, reply) => authController.addHotelAdmin(request, reply)
   );
+
+  // Update user status (admin only)
+  fastify.patch(
+    "/users/:userId/status",
+    {
+      schema: {
+        tags: ["auth"],
+        summary: "Update user status (admin only)",
+        params: {
+          type: "object",
+          properties: {
+            userId: { type: "string" }
+          },
+          required: ["userId"]
+        },
+        body: {
+          type: "object",
+          properties: {
+            status: { 
+              type: "string", 
+              enum: ["active", "inactive"],
+              description: "New status for the user"
+            }
+          },
+          required: ["status"]
+        },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              success: { type: "boolean" },
+              message: { type: "string" },
+              data: {
+                type: "object",
+                properties: {
+                  userId: { type: "string" },
+                  status: { type: "string" },
+                  updatedAt: { type: "string" }
+                }
+              }
+            }
+          }
+        },
+        security: [{ bearerAuth: [] }]
+      },
+      preHandler: [fastify.authenticate],
+    },
+    (request, reply) => authController.updateUserStatus(request, reply)
+  );
 }

@@ -80,19 +80,92 @@ export class HotelService {
     this.fastify = fastify;
   }
 
-  async getHotels(type) {
+  async getHotels(filters: { type?: string; cityId?: string; status?: string; ownerId?: string }) {
     const db = this.fastify.db;
     let whereConditions: any[] = [];
-    if (type && (type === 'active' || type === 'inactive')) {
-      whereConditions.push(eq(hotels.status, type));
+    
+    if (filters.type && (filters.type === 'active' || filters.type === 'inactive')) {
+      whereConditions.push(eq(hotels.status, filters.type));
+    }
+    
+    if (filters.status) {
+      whereConditions.push(eq(hotels.status, filters.status));
+    }
+    
+    if (filters.cityId) {
+      // Since city field stores city name, we need to get the city name from cities table
+      const city = await db.query.cities.findFirst({
+        where: eq(cities.id, filters.cityId),
+      });
+      
+      if (city) {
+        whereConditions.push(eq(hotels.city, city.name));
+      }
     }
 
-    const hotelsReturn = await db.query.hotels.findMany(
-      {
-        where: and(...whereConditions),
-      }
-    );
-    return hotelsReturn;
+    if (filters.ownerId) {
+      whereConditions.push(eq(hotels.ownerId, filters.ownerId));
+    }
+
+    // Get hotels with city information
+    const hotelsReturn = await db
+      .select({
+        id: hotels.id,
+        name: hotels.name,
+        description: hotels.description,
+        address: hotels.address,
+        city: hotels.city,
+        zipCode: hotels.zipCode,
+        starRating: hotels.starRating,
+        amenities: hotels.amenities,
+        status: hotels.status,
+        createdAt: hotels.createdAt,
+        updatedAt: hotels.updatedAt,
+        cityId: cities.id,
+        cityName: cities.name,
+        state: cities.state,
+      })
+      .from(hotels)
+      .leftJoin(cities, eq(hotels.city, cities.name))
+      .where(whereConditions.length > 0 ? and(...whereConditions) : undefined);
+
+    // Get images for hotels
+    const hotelIds = hotelsReturn.map(hotel => hotel.id);
+    const hotelImagesResult = await db
+      .select()
+      .from(hotelImages)
+      .where(and(
+        inArray(hotelImages.hotelId, hotelIds),
+        eq(hotelImages.isPrimary, true)
+      ));
+
+    // Create a map of hotelId to image
+    const imageMap = new Map();
+    hotelImagesResult.forEach(img => {
+      imageMap.set(img.hotelId, img.url);
+    });
+
+    // Format hotel results to include city mapping and image
+    const formattedHotels = hotelsReturn.map((hotel) => ({
+      id: hotel.id,
+      name: hotel.name,
+      description: hotel.description,
+      address: hotel.address,
+      city: {
+        name: hotel.cityName || hotel.city,
+        id: hotel.cityId,
+        state: hotel.state
+      },
+      zipCode: hotel.zipCode,
+      starRating: hotel.starRating,
+      amenities: hotel.amenities ? JSON.parse(hotel.amenities) : [],
+      status: hotel.status,
+      image: imageMap.get(hotel.id) || null,
+      createdAt: hotel.createdAt,
+      updatedAt: hotel.updatedAt,
+    }));
+
+    return formattedHotels;
   }
 
   // Search hotels by city and other criteria
@@ -329,9 +402,10 @@ export class HotelService {
         });
       }
       // 1. Get existing image records from DB
-      const existingHotelImages = await db.query.hotelImages.findMany({
-        where: eq(hotelImages.hotelId, processedData.id)
-      });
+      const existingHotelImages = await db
+        .select()
+        .from(hotelImages)
+        .where(eq(hotelImages.hotelId, processedData.id));
 
       // 2. Extract existing image IDs
       const keptImageIds = processedData.images

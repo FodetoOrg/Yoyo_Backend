@@ -33,6 +33,50 @@ export default async function hotelRoutes(fastify: FastifyInstance) {
       schema: {
         tags: ["hotels"],
         summary: "Get all hotels",
+        querystring: {
+          type: "object",
+          properties: {
+            type: { type: "string", enum: ["active", "inactive"] },
+            cityId: { type: "string", description: "Filter hotels by city ID" },
+            status: { type: "string", description: "Filter hotels by status (active, inactive, suspended)" },
+            ownerId: { type: "string", description: "Filter hotels by owner ID" }
+          }
+        },
+        response: {
+          200: {
+            type: "object",
+            properties: {
+              success: { type: "boolean" },
+              data: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    id: { type: "string" },
+                    name: { type: "string" },
+                    description: { type: "string" },
+                    address: { type: "string" },
+                    city: {
+                      type: "object",
+                      properties: {
+                        name: { type: "string" },
+                        id: { type: "string" },
+                        state: { type: "string" }
+                      }
+                    },
+                    zipCode: { type: "string" },
+                    starRating: { type: "string" },
+                    amenities: { type: "array", items: { type: "string" } },
+                    status: { type: "string" },
+                    image: { type: "string", nullable: true },
+                    createdAt: { type: "string" },
+                    updatedAt: { type: "string" }
+                  }
+                }
+              }
+            }
+          }
+        }
       },
       preHandler: [fastify.authenticate],
       // preHandler: [rbacGuard(permissions.viewAllHotels)]

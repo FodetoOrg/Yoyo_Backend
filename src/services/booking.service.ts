@@ -567,7 +567,7 @@ export class BookingService {
         }
       });
 
-      // Send web push notification
+      // Send web push notification to customer
       await this.notificationService.sendWebPushNotification({
         userId: bookingData.userId,
         title: 'Booking Confirmed! 🎉',
@@ -583,7 +583,43 @@ export class BookingService {
         }
       });
 
-      // Send email notification
+      // Send web push notification to admin
+      await this.notificationService.sendAdminWebPushNotification({
+        title: 'New Booking Received! 📋',
+        message: `New booking at ${hotel.name} - ${bookingData.guestName} (₹${bookingData.totalAmount})`,
+        type: 'info',
+        requireInteraction: true,
+        url: `/admin/bookings/${bookingId}`,
+        data: {
+          bookingId,
+          hotelName: hotel.name,
+          guestName: bookingData.guestName,
+          totalAmount: bookingData.totalAmount,
+          checkInDate: bookingData.checkIn.toISOString(),
+          checkOutDate: bookingData.checkOut.toISOString(),
+        }
+      });
+
+      // Send web push notification to hotel admin
+      await this.notificationService.sendHotelVendorWebPushNotification(hotel.id, {
+        title: 'New Booking at Your Hotel! 🏨',
+        message: `${bookingData.guestName} has booked ${room.name} - Check-in: ${bookingData.checkIn.toLocaleDateString()}`,
+        type: 'success',
+        requireInteraction: true,
+        url: `/hotel/bookings/${bookingId}`,
+        data: {
+          bookingId,
+          roomName: room.name,
+          guestName: bookingData.guestName,
+          guestEmail: bookingData.guestEmail,
+          guestPhone: bookingData.guestPhone,
+          totalAmount: bookingData.totalAmount,
+          checkInDate: bookingData.checkIn.toISOString(),
+          checkOutDate: bookingData.checkOut.toISOString(),
+        }
+      });
+
+      // Send email notification to customer
       await this.notificationService.sendImmediateNotification({
         userId: bookingData.userId,
         type: 'email',
@@ -931,6 +967,82 @@ export class BookingService {
       limit
     };
   }
+
+  // Get recent bookings for admins and hotel admins
+  async getRecentBookings(userRole: string, hotelId?: string, options: { page?: number; limit?: number } = {}) {
+    const db = this.fastify.db;
+    const { page = 1, limit = 10 } = options;
+    const offset = (page - 1) * limit;
+
+    // Build where conditions based on user role
+    let whereConditions = [];
+    
+    if (userRole === UserRole.HOTEL_ADMIN && hotelId) {
+      // Hotel admin can only see bookings for their hotel
+      whereConditions.push(eq(bookings.hotelId, hotelId));
+    }
+    // For admin role, no hotel filter is applied - they can see all bookings
+
+    // Get total count
+    const totalResult = await db.query.bookings.findMany({
+      where: whereConditions.length > 0 ? and(...whereConditions) : undefined
+    });
+    const total = totalResult.length;
+
+    const recentBookings = await db.query.bookings.findMany({
+      where: whereConditions.length > 0 ? and(...whereConditions) : undefined,
+      with: {
+        user: true,
+        hotel: true,
+        room: true
+      },
+      orderBy: (bookings, { desc }) => [desc(bookings.createdAt)],
+      limit,
+      offset
+    });
+
+    // Format bookings with the specific fields requested
+    const formattedBookings = recentBookings.map((booking) => {
+      const baseBooking = {
+        bookingId: booking.id,
+        guestDetails: {
+          name: booking.guestName,
+          email: booking.guestEmail,
+          phone: booking.guestPhone
+        },
+        customerId: booking.userId,
+        checkIn: booking.checkInDate,
+        checkOut: booking.checkOutDate,
+        bookingType: booking.bookingType,
+        guestCount: booking.guestCount,
+        totalAmount: booking.totalAmount,
+        status: booking.status,
+        paymentStatus: booking.paymentStatus,
+        bookingDate: booking.bookingDate,
+        createdAt: booking.createdAt
+      };
+
+      // Add hotel information for admin users
+      if (userRole === 'admin') {
+        return {
+          ...baseBooking,
+          hotelId: booking.hotel.id,
+          hotelName: booking.hotel.name
+        };
+      }
+
+      // For hotel admin, don't include hotel info since it's their own hotel
+      return baseBooking;
+    });
+
+    return {
+      bookings: formattedBookings,
+      total,
+      page,
+      limit
+    };
+  }
+
   async cancelBooking(bookingId: string, user: any, cancelReason: string) {
     const db = this.fastify.db;
 
@@ -1010,6 +1122,59 @@ export class BookingService {
             }
           });
 
+          // Send web push notification to customer
+          await this.notificationService.sendWebPushNotification({
+            userId: booking.userId,
+            title: 'Booking Cancelled & Refund Initiated 💰',
+            message: `Your booking at ${booking.hotel.name} has been cancelled. Refund request initiated.`,
+            type: 'error',
+            requireInteraction: true,
+            url: `/bookings/${bookingId}`,
+            data: {
+              bookingId,
+              hotelName: booking.hotel.name,
+              cancelReason,
+              refundInitiated: true,
+              cancelledBy: user.role === 'hotel' ? 'hotel' : 'user'
+            }
+          });
+
+          // Send web push notification to admin
+          await this.notificationService.sendAdminWebPushNotification({
+            title: 'Booking Cancelled - Refund Required 💰',
+            message: `Booking cancelled at ${booking.hotel.name} - ${booking.user.name} (₹${booking.totalAmount})`,
+            type: 'warning',
+            requireInteraction: true,
+            url: `/admin/bookings/${bookingId}`,
+            data: {
+              bookingId,
+              hotelName: booking.hotel.name,
+              guestName: booking.user.name,
+              totalAmount: booking.totalAmount,
+              cancelReason,
+              cancelledBy: user.role === 'hotel' ? 'hotel' : 'user',
+              refundInitiated: true
+            }
+          });
+
+          // Send web push notification to hotel admin (if cancelled by customer)
+          if (user.role !== 'hotel') {
+            await this.notificationService.sendHotelVendorWebPushNotification(booking.hotelId, {
+              title: 'Booking Cancelled by Customer ❌',
+              message: `${booking.user.name} cancelled booking - Refund initiated`,
+              type: 'warning',
+              requireInteraction: true,
+              url: `/hotel/bookings/${bookingId}`,
+              data: {
+                bookingId,
+                guestName: booking.user.name,
+                totalAmount: booking.totalAmount,
+                cancelReason,
+                refundInitiated: true
+              }
+            });
+          }
+
           // Send immediate email notification
           await this.notificationService.sendImmediateNotification({
             userId: booking.userId,
@@ -1077,6 +1242,57 @@ export class BookingService {
               cancelledBy: user.role === 'hotel' ? 'hotel' : 'user'
             }
           });
+
+          // Send web push notification to customer
+          await this.notificationService.sendWebPushNotification({
+            userId: booking.userId,
+            title: 'Booking Cancelled ❌',
+            message: `Your booking at ${booking.hotel.name} has been cancelled.`,
+            type: 'error',
+            requireInteraction: true,
+            url: `/bookings/${bookingId}`,
+            data: {
+              bookingId,
+              hotelName: booking.hotel.name,
+              cancelReason,
+              refundInitiated: false,
+              cancelledBy: user.role === 'hotel' ? 'hotel' : 'user'
+            }
+          });
+
+          // Send web push notification to admin
+          await this.notificationService.sendAdminWebPushNotification({
+            title: 'Booking Cancelled - No Refund Required ❌',
+            message: `Booking cancelled at ${booking.hotel.name} - ${booking.user.name} (No payment made)`,
+            type: 'info',
+            requireInteraction: true,
+            url: `/admin/bookings/${bookingId}`,
+            data: {
+              bookingId,
+              hotelName: booking.hotel.name,
+              guestName: booking.user.name,
+              cancelReason,
+              cancelledBy: user.role === 'hotel' ? 'hotel' : 'user',
+              refundInitiated: false
+            }
+          });
+
+          // Send web push notification to hotel admin (if cancelled by customer)
+          if (user.role !== 'hotel') {
+            await this.notificationService.sendHotelVendorWebPushNotification(booking.hotelId, {
+              title: 'Booking Cancelled by Customer ❌',
+              message: `${booking.user.name} cancelled booking - No refund required`,
+              type: 'info',
+              requireInteraction: true,
+              url: `/hotel/bookings/${bookingId}`,
+              data: {
+                bookingId,
+                guestName: booking.user.name,
+                cancelReason,
+                refundInitiated: false
+              }
+            });
+          }
 
           // Send immediate email notification
           await this.notificationService.sendImmediateNotification({
@@ -1278,6 +1494,57 @@ export class BookingService {
                 hotelName: updatedBooking.hotel.name,
               },
             });
+
+            // Send web push notification to customer
+            await this.notificationService.sendWebPushNotification({
+              userId: updatedBooking.userId,
+              title: 'Booking Status Updated',
+              message: notificationMessage,
+              type: status === 'cancelled' ? 'error' : 'info',
+              requireInteraction: true,
+              url: `/bookings/${bookingId}`,
+              data: {
+                bookingId,
+                status,
+                hotelName: updatedBooking.hotel.name,
+                reason: reason || null
+              }
+            });
+
+            // Send web push notification to admin for important status changes
+            if (['cancelled', 'checked-in', 'completed'].includes(status)) {
+              await this.notificationService.sendAdminWebPushNotification({
+                title: `Booking ${status.charAt(0).toUpperCase() + status.slice(1)} 📋`,
+                message: `Booking at ${updatedBooking.hotel.name} - ${updatedBooking.user?.name || 'Guest'} (${status})`,
+                type: status === 'cancelled' ? 'warning' : 'info',
+                requireInteraction: true,
+                url: `/admin/bookings/${bookingId}`,
+                data: {
+                  bookingId,
+                  hotelName: updatedBooking.hotel.name,
+                  guestName: updatedBooking.user?.name || 'Guest',
+                  status,
+                  reason: reason || null
+                }
+              });
+            }
+
+            // Send web push notification to hotel admin for important status changes
+            if (['cancelled', 'checked-in', 'completed'].includes(status)) {
+              await this.notificationService.sendHotelVendorWebPushNotification(updatedBooking.hotelId, {
+                title: `Booking ${status.charAt(0).toUpperCase() + status.slice(1)} 🏨`,
+                message: `${updatedBooking.user?.name || 'Guest'} - ${status} at your hotel`,
+                type: status === 'cancelled' ? 'warning' : 'success',
+                requireInteraction: true,
+                url: `/hotel/bookings/${bookingId}`,
+                data: {
+                  bookingId,
+                  guestName: updatedBooking.user?.name || 'Guest',
+                  status,
+                  reason: reason || null
+                }
+              });
+            }
 
             // Send immediate email notification
             await this.notificationService.sendImmediateNotification({
