@@ -373,6 +373,52 @@ export class NotificationController {
     }
   }
 
+  // Check notification subscription status
+  async checkSubscriptionStatus(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const userId = (request as any).user.id;
+      const { endpoint, p256dh, auth } = request.query as any;
+
+      const result = await this.webpushNotificationService.checkSubscriptionStatus(
+        userId,
+        endpoint,
+        p256dh,
+        auth
+      );
+
+      return reply.code(200).send({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send({
+        success: false,
+        message: 'Failed to check subscription status',
+      });
+    }
+  }
+
+  // Validate notification permissions (for login/reload)
+  async validateNotificationPermissions(request: FastifyRequest, reply: FastifyReply) {
+    try {
+      const userId = (request as any).user.id;
+
+      const result = await this.webpushNotificationService.validateNotificationPermissions(userId);
+
+      return reply.code(200).send({
+        success: true,
+        data: result,
+      });
+    } catch (error) {
+      request.log.error(error);
+      return reply.code(500).send({
+        success: false,
+        message: 'Failed to validate notification permissions',
+      });
+    }
+  }
+
   // Subscribe to web push notifications
   async subscribeWebPush(request: FastifyRequest, reply: FastifyReply) {
     try {
@@ -383,8 +429,9 @@ export class NotificationController {
 
       return reply.code(201).send({
         success: true,
-        message: 'Successfully subscribed to web push notifications',
+        message: result.message || 'Successfully subscribed to web push notifications',
         data: result,
+        action: result.action
       });
     } catch (error) {
       request.log.error(error);

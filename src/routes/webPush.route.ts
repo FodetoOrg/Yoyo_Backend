@@ -16,6 +16,34 @@ export default async function webPushRoutes(fastify: FastifyInstance) {
     }
   }, (request, reply) => notificationController.getVapidPublicKey(request, reply));
 
+  // Check subscription status
+  fastify.get('/subscription-status', {
+    schema: {
+      tags: ['web-push'],
+      summary: 'Check notification subscription status',
+      security: [{ bearerAuth: [] }],
+      querystring: {
+        type: 'object',
+        properties: {
+          endpoint: { type: 'string' },
+          p256dh: { type: 'string' },
+          auth: { type: 'string' }
+        }
+      }
+    },
+    preHandler: [fastify.authenticate]
+  }, (request, reply) => notificationController.checkSubscriptionStatus(request, reply));
+
+  // Validate notification permissions
+  fastify.get('/validate-permissions', {
+    schema: {
+      tags: ['web-push'],
+      summary: 'Validate notification permissions for user',
+      security: [{ bearerAuth: [] }]
+    },
+    preHandler: [fastify.authenticate]
+  }, (request, reply) => notificationController.validateNotificationPermissions(request, reply));
+
   // Subscribe to web push notifications
   fastify.post('/subscribe', {
     schema: {

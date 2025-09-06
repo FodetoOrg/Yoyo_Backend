@@ -370,48 +370,17 @@ export class BookingService {
 
         const nights = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60 * 24));
 
-        // Send immediate push notification for successful booking
-        await this.notificationService.sendInstantBookingSuccessNotification(bookingData.userId, {
-          title: 'Booking Created Successfully! 🎉',
-          message: `Your booking at ${hotel.name} has been created for ${new Date(bookingData.checkIn).toLocaleDateString()}`,
-          type: 'booking_created',
-          data: {
-            bookingId: booking,
-            hotelName: hotel.name,
-            checkInDate: new Date(bookingData.checkIn).toLocaleDateString(),
-            checkOutDate: new Date(bookingData.checkOut).toLocaleDateString(),
-            totalAmount: bookingData.totalAmount,
-            status: 'confirmed',
-            guests: bookingData.guests
-          }
-        });
+        // Note: Customer web push notifications removed - only admins and hotel vendors get web push
 
-        // Send immediate email notification
-        await this.notificationService.sendImmediateNotification({
-          userId: bookingData.userId,
-          type: 'email',
-          title: 'Booking Confirmation - ' + hotel.name,
-          message: `
-            <h2>🎉 Booking Confirmed!</h2>
-            <p>Dear ${bookingData.guestName},</p>
-            <p>Your booking has been successfully created and confirmed!</p>
-            <div style="background: #f5f5f5; padding: 20px; margin: 20px 0; border-radius: 8px;">
-              <h3>Booking Details:</h3>
-              <p><strong>Hotel:</strong> ${hotel.name}</p>
-              <p><strong>Booking ID:</strong> ${booking}</p>
-              <p><strong>Check-in:</strong> ${new Date(bookingData.checkIn).toLocaleDateString()}</p>
-              <p><strong>Check-out:</strong> ${new Date(bookingData.checkOut).toLocaleDateString()}</p>
-              <p><strong>Guests:</strong> ${bookingData.guests}</p>
-              <p><strong>Total Amount:</strong> ₹${bookingData.frontendPrice}</p>
-              <p><strong>Payment Mode:</strong> ${bookingData.paymentMode}</p>
-            </div>
-            <p>Thank you for choosing our service!</p>
-            <p>Have a wonderful stay! 🏨</p>
-          `,
-          email: bookingData.guestEmail,
-          source: 'booking_created',
-          sourceId: booking
-        });
+        // Send notifications to admins and hotel vendors
+        // This will also send email notification to the customer
+        await this.sendBookingNotifications(
+          booking,
+          bookingData,
+          hotel,
+          room,
+          couponValidation
+        );
 
       } catch (error) {
         console.error('Failed to send immediate booking notifications:', error);
@@ -441,7 +410,10 @@ export class BookingService {
   private async validateBookingData(bookingData: any) {
     const db = this.fastify.db;
 
-    console.log('came here ')
+    console.log('=== VALIDATE BOOKING DATA DEBUG ===')
+    console.log('Input hotelId:', bookingData.hotelId)
+    console.log('Input hotelId type:', typeof bookingData.hotelId)
+    
     // Parallel validation queries
     const [hotel, room] = await Promise.all([
       db.query.hotels.findFirst({
@@ -452,8 +424,19 @@ export class BookingService {
       })
     ]);
 
+    console.log('Fetched hotel:', JSON.stringify(hotel, null, 2))
+    console.log('Hotel ID from DB:', hotel?.id)
+    console.log('Hotel ID type from DB:', typeof hotel?.id)
+
     if (!hotel) throw new Error('Hotel not found');
     if (!room) throw new Error('Room not found');
+    
+    // Validate hotel ID is not 'None' or other invalid values
+    const invalidIds = ['None', 'none', 'null', 'undefined', '', null, undefined];
+    if (invalidIds.includes(hotel.id) || invalidIds.includes(String(hotel.id))) {
+      console.error(`Hotel ${hotel.name} has invalid ID: "${hotel.id}"`);
+      throw new Error(`Hotel has invalid ID configuration: ${hotel.id}`);
+    }
 
     // Validate payment mode
     let finalPaymentMode = bookingData.paymentMode || 'offline';
@@ -552,38 +535,17 @@ export class BookingService {
   ) {
     const nights = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60 * 24));
 
-    console.log('in notifications ')
+    console.log('=== BOOKING NOTIFICATIONS DEBUG ===')
+    console.log('Hotel object:', JSON.stringify(hotel, null, 2))
+    console.log('Hotel ID:', hotel?.id)
+    console.log('Hotel ID type:', typeof hotel?.id)
+    console.log('Hotel name:', hotel?.name)
+    
     try {
-      // Send push notification
-      await this.notificationService.sendInstantBookingSuccessNotification(bookingData.userId, {
-        title: 'Booking Confirmed! 🎉',
-        message: `Your booking at ${hotel.name} has been confirmed. Booking ID: ${bookingId}`,
-        type: 'booking_confirmed',
-        data: {
-          bookingId,
-          hotelName: hotel.name,
-          checkInDate: bookingData.checkIn.toISOString(),
-          checkOutDate: bookingData.checkOut.toISOString(),
-        }
-      });
+      // Note: Customer web push notifications removed - only admins and hotel vendors get web push
 
-      // Send web push notification to customer
-      await this.notificationService.sendWebPushNotification({
-        userId: bookingData.userId,
-        title: 'Booking Confirmed! 🎉',
-        message: `Your booking at ${hotel.name} has been confirmed. Check-in: ${bookingData.checkIn.toLocaleDateString()}`,
-        type: 'success',
-        requireInteraction: true,
-        url: `/bookings/${bookingId}`,
-        data: {
-          bookingId,
-          hotelName: hotel.name,
-          checkInDate: bookingData.checkIn.toISOString(),
-          checkOutDate: bookingData.checkOut.toISOString(),
-        }
-      });
-
-      // Send web push notification to admin
+      // Send web push notification to all admins (superAdmin + hotel admins)
+      console.log('Sending admin notification to superAdmin and hotel admins...')
       await this.notificationService.sendAdminWebPushNotification({
         title: 'New Booking Received! 📋',
         message: `New booking at ${hotel.name} - ${bookingData.guestName} (₹${bookingData.totalAmount})`,
@@ -594,30 +556,52 @@ export class BookingService {
           bookingId,
           hotelName: hotel.name,
           guestName: bookingData.guestName,
-          totalAmount: bookingData.totalAmount,
-          checkInDate: bookingData.checkIn.toISOString(),
-          checkOutDate: bookingData.checkOut.toISOString(),
-        }
-      });
-
-      // Send web push notification to hotel admin
-      await this.notificationService.sendHotelVendorWebPushNotification(hotel.id, {
-        title: 'New Booking at Your Hotel! 🏨',
-        message: `${bookingData.guestName} has booked ${room.name} - Check-in: ${bookingData.checkIn.toLocaleDateString()}`,
-        type: 'success',
-        requireInteraction: true,
-        url: `/hotel/bookings/${bookingId}`,
-        data: {
-          bookingId,
-          roomName: room.name,
-          guestName: bookingData.guestName,
-          guestEmail: bookingData.guestEmail,
           guestPhone: bookingData.guestPhone,
           totalAmount: bookingData.totalAmount,
           checkInDate: bookingData.checkIn.toISOString(),
           checkOutDate: bookingData.checkOut.toISOString(),
+          roomName: room.name
         }
       });
+
+      // Send web push notification to hotel admin (only if hotel has valid ID)
+      // Check for various invalid ID formats
+      const invalidIds = ['None', 'none', 'null', 'undefined', '', null, undefined];
+      const hotelIdStr = hotel?.id ? String(hotel.id) : '';
+      
+      console.log('Checking hotel ID for vendor notification...')
+      console.log('Hotel ID string:', hotelIdStr)
+      console.log('Is valid ID?', hotelIdStr && !invalidIds.includes(hotelIdStr) && !invalidIds.includes(hotel?.id))
+      
+      if (hotel && hotel.id && !invalidIds.includes(hotelIdStr) && !invalidIds.includes(hotel.id)) {
+        console.log('Sending hotel vendor notification for hotel ID:', hotel.id)
+        try {
+          await this.notificationService.sendHotelVendorWebPushNotification(hotel.id, {
+            title: 'New Booking at Your Hotel! 🏨',
+            message: `${bookingData.guestName} has booked ${room.name} - Check-in: ${bookingData.checkIn.toLocaleDateString()}`,
+            type: 'success',
+            requireInteraction: true,
+            url: `/hotel/bookings/${bookingId}`,
+            data: {
+              bookingId,
+              roomName: room.name,
+              guestName: bookingData.guestName,
+              guestEmail: bookingData.guestEmail,
+              guestPhone: bookingData.guestPhone,
+              totalAmount: bookingData.totalAmount,
+              checkInDate: bookingData.checkIn.toISOString(),
+              checkOutDate: bookingData.checkOut.toISOString(),
+            }
+          });
+          console.log('Hotel vendor notification sent successfully')
+        } catch (hotelError) {
+          console.error('Failed to send hotel vendor notification:', hotelError);
+          console.error('Hotel ID that caused error:', hotel.id);
+          // Don't throw - let other notifications continue
+        }
+      } else {
+        console.log(`SKIPPING hotel vendor notification - Invalid or missing hotel ID: "${hotel?.id}" (type: ${typeof hotel?.id})`);
+      }
 
       // Send email notification to customer
       await this.notificationService.sendImmediateNotification({
@@ -1158,7 +1142,7 @@ export class BookingService {
           });
 
           // Send web push notification to hotel admin (if cancelled by customer)
-          if (user.role !== 'hotel') {
+          if (user.role !== 'hotel' && booking.hotelId && booking.hotelId !== 'None' && booking.hotelId !== 'null') {
             await this.notificationService.sendHotelVendorWebPushNotification(booking.hotelId, {
               title: 'Booking Cancelled by Customer ❌',
               message: `${booking.user.name} cancelled booking - Refund initiated`,
@@ -1278,7 +1262,7 @@ export class BookingService {
           });
 
           // Send web push notification to hotel admin (if cancelled by customer)
-          if (user.role !== 'hotel') {
+          if (user.role !== 'hotel' && booking.hotelId && booking.hotelId !== 'None' && booking.hotelId !== 'null') {
             await this.notificationService.sendHotelVendorWebPushNotification(booking.hotelId, {
               title: 'Booking Cancelled by Customer ❌',
               message: `${booking.user.name} cancelled booking - No refund required`,
@@ -1483,15 +1467,28 @@ export class BookingService {
                 `;
             }
 
-            // Send immediate push notification
+            // Get updater's details to check if it's hotel admin
+            const updaterUser = await db.query.users.findFirst({
+              where: eq(users.id, updatedBy)
+            });
+            
+            // Send immediate mobile push notification to user
+            // Enhanced message if updated by hotel admin
+            const isHotelAdmin = updaterUser?.role === 'hotel' || updaterUser?.role === 'superAdmin';
+            const enhancedMessage = isHotelAdmin 
+              ? `🏨 Hotel Update: ${notificationMessage}`
+              : notificationMessage;
+            
             await this.notificationService.sendInstantBookingSuccessNotification(updatedBooking.userId, {
-              title: 'Booking Status Updated',
-              message: notificationMessage,
+              title: isHotelAdmin ? 'Hotel Update 🏨' : 'Booking Status Updated',
+              message: enhancedMessage,
               type: 'booking_status_update',
               data: {
                 bookingId,
                 status,
                 hotelName: updatedBooking.hotel.name,
+                updatedByHotelAdmin: isHotelAdmin,
+                updatedBy: updaterUser?.name || 'System'
               },
             });
 
@@ -1530,7 +1527,7 @@ export class BookingService {
             }
 
             // Send web push notification to hotel admin for important status changes
-            if (['cancelled', 'checked-in', 'completed'].includes(status)) {
+            if (['cancelled', 'checked-in', 'completed'].includes(status) && updatedBooking.hotelId && updatedBooking.hotelId !== 'None' && updatedBooking.hotelId !== 'null') {
               await this.notificationService.sendHotelVendorWebPushNotification(updatedBooking.hotelId, {
                 title: `Booking ${status.charAt(0).toUpperCase() + status.slice(1)} 🏨`,
                 message: `${updatedBooking.user?.name || 'Guest'} - ${status} at your hotel`,

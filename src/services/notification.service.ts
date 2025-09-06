@@ -8,7 +8,7 @@ import {
   pushTokens,
   users
 } from "../models/schema";
-import { eq, and, desc, lt, inArray } from "drizzle-orm";
+import { eq, and, desc, lt, gte, inArray } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 const nodemailer = require('nodemailer');
 import admin from "../config/firebase/firebase";
@@ -1143,23 +1143,40 @@ export class NotificationService {
   }
 
   // Get user notifications
-  async getUserNotifications(userId: string, page: number = 1, limit: number = 10) {
+  async getUserNotifications(userId: string, page: number = 1, limit: number = 10, todayOnly: boolean = true) {
     const db = this.fastify.db;
 
+    // Build where clause
+    let whereClause = eq(notifications.userId, userId);
+    
+    // If todayOnly is true, filter for today's notifications only
+    if (todayOnly) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      whereClause = and(
+        eq(notifications.userId, userId),
+        gte(notifications.createdAt, today),
+        lt(notifications.createdAt, tomorrow)
+      );
+    }
+
     const userNotifications = await db.query.notifications.findMany({
-      where: eq(notifications.userId, userId),
+      where: whereClause,
       orderBy: [desc(notifications.createdAt)],
       limit,
       offset: (page - 1) * limit,
     });
 
     const total = await db.query.notifications.findMany({
-      where: eq(notifications.userId, userId),
+      where: whereClause,
     });
 
     const unreadCount = await db.query.notifications.findMany({
       where: and(
-        eq(notifications.userId, userId),
+        whereClause,
         eq(notifications.read, false)
       ),
     });
@@ -1171,6 +1188,7 @@ export class NotificationService {
       limit,
       totalPages: Math.ceil(total.length / limit),
       unreadCount: unreadCount.length,
+      isToday: todayOnly
     };
   }
 

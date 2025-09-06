@@ -1,8 +1,8 @@
 
 // @ts-nocheck
 import { FastifyInstance } from "fastify";
-import { notifications, users, webPushSubscriptions } from "../models/schema";
-import { eq, and, desc } from "drizzle-orm";
+import { notifications, users, webPushSubscriptions, hotels } from "../models/schema";
+import { eq, and, desc, or } from "drizzle-orm";
 import { v4 as uuidv4 } from "uuid";
 import * as webpush from 'web-push';
 
@@ -62,30 +62,181 @@ export class WebPushNotificationService {
     return process.env.VAPID_PUBLIC_KEY || webpush.generateVAPIDKeys().publicKey;
   }
 
-  // Subscribe user to web push notifications
+  // Validate notification permissions (to be called on login/reload)
+  async validateNotificationPermissions(userId: string) {
+    try {
+      const db = this.fastify.db;
+      
+      // Check if user has any active subscriptions
+      const subscriptions = await db.select()
+        .from(webPushSubscriptions)
+        .where(and(
+          eq(webPushSubscriptions.userId, userId),
+          eq(webPushSubscriptions.isActive, true)
+        ));
+
+      // Get user details
+      const user = await db.select()
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
+
+      if (!user.length) {
+        return {
+          success: false,
+          error: 'User not found',
+          requiresPermission: true
+        };
+      }
+
+      // Check if user role requires notifications
+      const requiresNotifications = ['superAdmin', 'hotel'].includes(user[0].role);
+
+      return {
+        success: true,
+        hasSubscription: subscriptions.length > 0,
+        requiresPermission: requiresNotifications && subscriptions.length === 0,
+        subscriptionCount: subscriptions.length,
+        userRole: user[0].role,
+        message: requiresNotifications && subscriptions.length === 0 
+          ? 'Notification permission required for your role' 
+          : 'Notifications configured'
+      };
+
+    } catch (error) {
+      console.error('Failed to validate notification permissions:', error);
+      return {
+        success: false,
+        error: error.message,
+        requiresPermission: false
+      };
+    }
+  }
+
+  // Check user's notification subscription status (one per user)
+  async checkSubscriptionStatus(userId: string, endpoint?: string, p256dh?: string, auth?: string) {
+    try {
+      const db = this.fastify.db;
+      
+      // Get user's single active subscription
+      const subscription = await db.select()
+        .from(webPushSubscriptions)
+        .where(and(
+          eq(webPushSubscriptions.userId, userId),
+          eq(webPushSubscriptions.isActive, true)
+        ))
+        .limit(1); // User should only have one
+
+      if (!subscription.length) {
+        return {
+          isSubscribed: false,
+          hasValidSubscription: false,
+          needsUpdate: false,
+          currentEndpoint: null
+        };
+      }
+
+      const currentSub = subscription[0];
+
+      // If endpoint and keys provided, check if they match current subscription
+      if (endpoint && p256dh && auth) {
+        const isMatching = currentSub.endpoint === endpoint && 
+                          currentSub.p256dhKey === p256dh && 
+                          currentSub.authKey === auth;
+
+        return {
+          isSubscribed: true,
+          hasValidSubscription: isMatching,
+          needsUpdate: !isMatching,
+          currentEndpoint: currentSub.endpoint,
+          providedEndpoint: endpoint,
+          message: !isMatching ? 'Subscription details have changed, update required' : 'Subscription is valid'
+        };
+      }
+
+      // Just return current subscription status
+      return {
+        isSubscribed: true,
+        hasValidSubscription: true,
+        needsUpdate: false,
+        currentEndpoint: currentSub.endpoint
+      };
+
+    } catch (error) {
+      console.error('Failed to check subscription status:', error);
+      return {
+        isSubscribed: false,
+        hasValidSubscription: false,
+        needsUpdate: false,
+        currentEndpoint: null,
+        error: error.message
+      };
+    }
+  }
+
+  // Subscribe user to web push notifications (ONE subscription per user)
   async subscribeUser(userId: string, subscription: WebPushSubscription) {
     try {
       const db = this.fastify.db;
       
-      // Check if subscription already exists
+      // Check if user has ANY existing subscription (only one allowed per user)
       const existing = await db.select()
         .from(webPushSubscriptions)
-        .where(eq(webPushSubscriptions.endpoint, subscription.endpoint))
+        .where(eq(webPushSubscriptions.userId, userId))
         .limit(1);
 
       if (existing.length > 0) {
-        // Update existing subscription
-        await db.update(webPushSubscriptions)
-          .set({
-            userId,
-            p256dhKey: subscription.keys.p256dh,
-            authKey: subscription.keys.auth,
-            isActive: true,
-            updatedAt: new Date()
-          })
-          .where(eq(webPushSubscriptions.endpoint, subscription.endpoint));
+        // User already has a subscription - UPDATE it with new endpoint/keys
+        const needsUpdate = existing[0].endpoint !== subscription.endpoint ||
+                          existing[0].p256dhKey !== subscription.keys.p256dh || 
+                          existing[0].authKey !== subscription.keys.auth;
+        
+        if (needsUpdate) {
+          // Update the existing subscription with new endpoint and keys
+          await db.update(webPushSubscriptions)
+            .set({
+              endpoint: subscription.endpoint,  // Update endpoint too
+              p256dhKey: subscription.keys.p256dh,
+              authKey: subscription.keys.auth,
+              isActive: true,
+              updatedAt: new Date()
+            })
+            .where(eq(webPushSubscriptions.userId, userId));  // Update by userId
+          
+          console.log(`Web push subscription updated for user ${userId} (endpoint/keys changed)`);
+          return {
+            success: true,
+            message: 'Web push subscription updated with new endpoint/keys',
+            action: 'updated',
+            oldEndpoint: existing[0].endpoint,
+            newEndpoint: subscription.endpoint
+          };
+        } else {
+          // Everything is the same, just ensure it's active
+          if (!existing[0].isActive) {
+            await db.update(webPushSubscriptions)
+              .set({
+                isActive: true,
+                updatedAt: new Date()
+              })
+              .where(eq(webPushSubscriptions.userId, userId));
+            
+            console.log(`Web push subscription reactivated for user ${userId}`);
+            return {
+              success: true,
+              message: 'Subscription reactivated',
+              action: 'reactivated'
+            };
+          }
+          
+          return {
+            success: true,
+            message: 'Subscription already exists and is active',
+            action: 'existing'
+          };
+        }
       } else {
-        // Add new subscription
+        // User has no subscription - CREATE new one
         await db.insert(webPushSubscriptions).values({
           id: uuidv4(),
           userId,
@@ -94,14 +245,15 @@ export class WebPushNotificationService {
           authKey: subscription.keys.auth,
           isActive: true
         });
+        
+        console.log(`First web push subscription created for user ${userId}`);
+        return {
+          success: true,
+          message: 'Successfully subscribed to web push notifications',
+          action: 'created'
+        };
       }
 
-      console.log(`Web push subscription saved for user ${userId}`);
-      
-      return {
-        success: true,
-        message: 'Successfully subscribed to web push notifications'
-      };
 
     } catch (error) {
       console.error('Failed to subscribe user:', error);
@@ -109,17 +261,26 @@ export class WebPushNotificationService {
     }
   }
 
-  // Unsubscribe user from web push notifications
-  async unsubscribeUser(userId: string, endpoint: string) {
+  // Unsubscribe user from web push notifications (they only have one)
+  async unsubscribeUser(userId: string, endpoint?: string) {
     try {
       const db = this.fastify.db;
       
-      await db.update(webPushSubscriptions)
-        .set({ isActive: false, updatedAt: new Date() })
-        .where(and(
-          eq(webPushSubscriptions.userId, userId),
-          eq(webPushSubscriptions.endpoint, endpoint)
-        ));
+      // Since user can only have ONE subscription, we can just deactivate by userId
+      // But if endpoint is provided, we can verify it matches
+      if (endpoint) {
+        await db.update(webPushSubscriptions)
+          .set({ isActive: false, updatedAt: new Date() })
+          .where(and(
+            eq(webPushSubscriptions.userId, userId),
+            eq(webPushSubscriptions.endpoint, endpoint)
+          ));
+      } else {
+        // Just deactivate the user's single subscription
+        await db.update(webPushSubscriptions)
+          .set({ isActive: false, updatedAt: new Date() })
+          .where(eq(webPushSubscriptions.userId, userId));
+      }
 
       console.log(`Web push subscription deactivated for user ${userId}`);
       
@@ -234,18 +395,25 @@ export class WebPushNotificationService {
     }
   }
 
-  // Send web push to all admins
+  // Send web push to all admins (both superAdmin and hotel admins)
   async sendAdminWebPushNotification(data: Omit<WebPushNotificationData, 'userId'>) {
     try {
       const db = this.fastify.db;
       
+      // Get both super admins and hotel admins
       const adminUsers = await db.select({
         id: users.id,
         name: users.name,
-        email: users.email
+        email: users.email,
+        role: users.role
       })
       .from(users)
-      .where(eq(users.role, 'admin'));
+      .where(or(
+        eq(users.role, 'superAdmin'),
+        eq(users.role, 'hotel')  // Include hotel admins as well
+      ));
+
+      console.log(`Found ${adminUsers.length} admin users (superAdmin + hotel admins)`);
 
       const notifications = [];
 
@@ -280,6 +448,47 @@ export class WebPushNotificationService {
     try {
       const db = this.fastify.db;
       
+      // First check if hotelId is valid
+      if (!hotelId || hotelId === 'None' || hotelId === 'null' || hotelId === 'undefined') {
+        console.log(`Invalid hotelId provided: ${hotelId}. Skipping hotel vendor notifications.`);
+        return {
+          success: false,
+          totalStaff: 0,
+          notificationsSent: 0,
+          error: 'Invalid hotelId'
+        };
+      }
+      
+      // Get hotel owner and staff directly using ownerId from hotels table
+      const hotelData = await db.select({
+        ownerId: hotels.ownerId
+      })
+      .from(hotels)
+      .where(eq(hotels.id, hotelId))
+      .limit(1);
+      
+      if (!hotelData.length || !hotelData[0].ownerId) {
+        console.log(`No hotel found with id ${hotelId} or no owner assigned`);
+        return {
+          success: false,
+          totalStaff: 0,
+          notificationsSent: 0
+        };
+      }
+      
+      // Check if ownerId is 'None' or other invalid values
+      const invalidOwnerIds = ['None', 'none', 'null', 'undefined', '', null, undefined];
+      if (invalidOwnerIds.includes(hotelData[0].ownerId)) {
+        console.log(`Hotel ${hotelId} has invalid owner_id: "${hotelData[0].ownerId}". Skipping vendor notification.`);
+        return {
+          success: false,
+          totalStaff: 0,
+          notificationsSent: 0,
+          error: `Invalid owner_id: ${hotelData[0].ownerId}`
+        };
+      }
+      
+      // Get the hotel owner (who should receive notifications)
       const hotelStaff = await db.select({
         id: users.id,
         name: users.name,
@@ -287,7 +496,7 @@ export class WebPushNotificationService {
       })
       .from(users)
       .where(and(
-        eq(users.role, 'hotel_admin'),
+        eq(users.id, hotelData[0].ownerId),
         eq(users.isActive, true)
       ));
 
