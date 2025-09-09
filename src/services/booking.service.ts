@@ -54,13 +54,6 @@ export class BookingService {
     const istOffset = 5.5 * 60 * 60 * 1000; // 5:30 hours in milliseconds
     const cutoffIST = new Date(cutoff.getTime() + istOffset);
 
-    // Removed log('Current time (local):', now.toString());
-    // Removed log('Current time (UTC):', now.toISOString());
-    // Removed log('Cutoff time (UTC):', cutoff.toISOString());
-    // Removed log('Booking check-in (UTC):', new Date('2025-08-11T13:00:00.000Z').toISOString());
-
-    // Removed log('Cutoff in IST equivalent:', cutoffIST.toISOString());
-    // Removed log('cutoff ', cutoff)
     const candidatesAll = await db.query.bookings.findMany({
       where: and(
         eq(bookings.status, 'confirmed'),
@@ -69,7 +62,6 @@ export class BookingService {
       with: { hotel: true }, // for notification message
       columns: { id: true, userId: true, checkInDate: true }
     });
-    // Removed log('candidatesAll ', candidatesAll)
 
     // Find candidates (still confirmed, missed check-in+buffer)
     const candidates = await db.query.bookings.findMany({
@@ -81,7 +73,6 @@ export class BookingService {
       columns: { id: true, userId: true, checkInDate: true }
     });
 
-    // Removed log('candidates ', candidates)
 
     // return {
     //   cancelled: 0
@@ -162,9 +153,6 @@ export class BookingService {
     // Convert dates to ensure proper comparison (remove milliseconds for consistency)
 
 
-    // Removed log('Checking availability for room:', roomId);
-    // Removed log(checkInDate)
-    // Removed log(checkOutDate)
 
 
     // Check if there are any overlapping bookings
@@ -179,7 +167,7 @@ export class BookingService {
     });
 
     if (overlappingBookings.length > 0) {
-      // // Removed log('Found overlapping bookings:', overlappingBookings.map(b => ({
+      // ('Found overlapping bookings:', overlappingBookings.map(b => ({
       //   id: b.id,
       //   checkIn: b.checkInDate,
       //   checkOut: b.checkOutDate,
@@ -189,7 +177,7 @@ export class BookingService {
       return { available: false, reason: 'Room is already booked for the selected dates' };
     }
 
-    // // Removed log('Room is available');
+    // ('Room is available');
     return { available: true, reason: null };
   }
   // Optimized createBooking method
@@ -219,7 +207,6 @@ export class BookingService {
     const validationResult = await this.validateBookingData(bookingData);
     const { hotel, room, couponValidation, finalAmount, finalPaymentMode, gstAmount, platformFeeAmount, basePrice } = validationResult;
 
-    // Removed log('validationresult is ', validationResult)
     // 2. TRANSACTION: Only database operations (keep this minimal and fast)
     const booking = await db.transaction(async (tx) => {
       // Calculate duration based on booking type
@@ -274,7 +261,6 @@ export class BookingService {
         guestPhone: bookingData.guestPhone
       });
 
-      // Removed log('coupns mapping start')
       // Insert coupon usage if applicable
       if (couponValidation) {
         await tx.insert(bookingCoupons).values({
@@ -358,7 +344,6 @@ export class BookingService {
       return bookingId;
     });
 
-    // Removed log('calling notifications')
     // 3. POST-TRANSACTION: Send notifications (async, don't block response)
     setImmediate(async () => {
       try {
@@ -410,9 +395,6 @@ export class BookingService {
   private async validateBookingData(bookingData: any) {
     const db = this.fastify.db;
 
-    // Removed log('=== VALIDATE BOOKING DATA DEBUG ===')
-    // Removed log('Input hotelId:', bookingData.hotelId)
-    // Removed log('Input hotelId type:', typeof bookingData.hotelId)
     
     // Parallel validation queries
     const [hotel, room] = await Promise.all([
@@ -424,9 +406,6 @@ export class BookingService {
       })
     ]);
 
-    // Removed log('Fetched hotel:', JSON.stringify(hotel, null, 2))
-    // Removed log('Hotel ID from DB:', hotel?.id)
-    // Removed log('Hotel ID type from DB:', typeof hotel?.id)
 
     if (!hotel) throw new Error('Hotel not found');
     if (!room) throw new Error('Room not found');
@@ -452,15 +431,12 @@ export class BookingService {
     let expectedPrice = 0;
     let duration = 0;
     let basePrice = 0;
-    // Removed log('came here  2')
     if (bookingData.bookingType === 'hourly') {
       duration = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60));
 
-      // Removed log('hourlStay')
       const hourlStay = await db.query.roomHourlyStays.findFirst({
         where: and(eq(roomHourlyStays.roomId, bookingData.roomId), eq(roomHourlyStays.hours, duration))
       })
-      // Removed log('hourlStay is ', hourlStay)
       if (!hourlStay) {
         throw new Error('The selected rooms have been booked in the meantime. Please choose different dates or rooms.')
       }
@@ -471,7 +447,6 @@ export class BookingService {
       duration = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60 * 24));
       basePrice = room.pricePerNight * duration;
     }
-    // Removed log('came here  3')
 
     // Get platform fee configuration
     const platformFeeConfig = await db.query.configurations.findFirst({
@@ -488,7 +463,6 @@ export class BookingService {
     let couponValidation = null;
     let finalAmount = expectedPrice;
 
-    // Removed log('finalAmount is came ', finalAmount)
 
     if (bookingData.couponCode) {
       try {
@@ -501,7 +475,6 @@ export class BookingService {
           bookingData.bookingType
         );
 
-        // Removed log('couponValidation ', couponValidation)
 
         if (couponValidation) {
           finalAmount = finalAmount - couponValidation.discountAmount;
@@ -512,7 +485,6 @@ export class BookingService {
           }
         }
       } catch (error) {
-        // Removed log('error ', error)
         throw new NotFoundError('Coupon Not Found');
       }
     } else {
@@ -535,17 +507,11 @@ export class BookingService {
   ) {
     const nights = Math.ceil((bookingData.checkOut.getTime() - bookingData.checkIn.getTime()) / (1000 * 60 * 60 * 24));
 
-    // Removed log('=== BOOKING NOTIFICATIONS DEBUG ===')
-    // Removed log('Hotel object:', JSON.stringify(hotel, null, 2))
-    // Removed log('Hotel ID:', hotel?.id)
-    // Removed log('Hotel ID type:', typeof hotel?.id)
-    // Removed log('Hotel name:', hotel?.name)
     
     try {
       // Note: Customer web push notifications removed - only admins and hotel vendors get web push
 
       // Send web push notification to all admins (superAdmin + hotel admins)
-      // Removed log('Sending admin notification to superAdmin and hotel admins...')
       await this.notificationService.sendAdminWebPushNotification({
         title: 'New Booking Received! 📋',
         message: `New booking at ${hotel.name} - ${bookingData.guestName} (₹${bookingData.totalAmount})`,
@@ -569,12 +535,8 @@ export class BookingService {
       const invalidIds = ['None', 'none', 'null', 'undefined', '', null, undefined];
       const hotelIdStr = hotel?.id ? String(hotel.id) : '';
       
-      // Removed log('Checking hotel ID for vendor notification...')
-      // Removed log('Hotel ID string:', hotelIdStr)
-      // Removed log('Is valid ID?', hotelIdStr && !invalidIds.includes(hotelIdStr) && !invalidIds.includes(hotel?.id))
       
       if (hotel && hotel.id && !invalidIds.includes(hotelIdStr) && !invalidIds.includes(hotel.id)) {
-        // Removed log('Sending hotel vendor notification for hotel ID:', hotel.id)
         try {
           await this.notificationService.sendHotelVendorWebPushNotification(hotel.id, {
             title: 'New Booking at Your Hotel! 🏨',
@@ -593,14 +555,12 @@ export class BookingService {
               checkOutDate: bookingData.checkOut.toISOString(),
             }
           });
-          // Removed log('Hotel vendor notification sent successfully')
         } catch (hotelError) {
           console.error('Failed to send hotel vendor notification:', hotelError);
           console.error('Hotel ID that caused error:', hotel.id);
           // Don't throw - let other notifications continue
         }
       } else {
-        // Removed log(`SKIPPING hotel vendor notification - Invalid or missing hotel ID: "${hotel?.id}" (type: ${typeof hotel?.id})`);
       }
 
       // Send email notification to customer
@@ -629,7 +589,6 @@ export class BookingService {
 
 
     } catch (error) {
-      // Removed log(`Failed to send notifications for booking ${bookingId}:`, error);
       // Could implement retry logic here or add to a dead letter queue
       await this.notificationService.queueNotification({
         userId: bookingData.userId,
@@ -1835,8 +1794,8 @@ export class BookingService {
       return null;
     }
 
-    // // Removed log('booking is ', booking)
-    // // Removed log('user is ', user)
+    // ('booking is ', booking)
+    // ('user is ', user)
 
     // Check if user is authorized to view this booking
     if (booking.userId !== user.id && booking.hotel.ownerId !== user.id && user.role !== UserRole.SUPER_ADMIN) {
@@ -1866,7 +1825,7 @@ export class BookingService {
 
     let nights = 0;
     // let subTotal = 0;
-    // // Removed log('booking.checkInDate ', booking.checkInDate)
+    // ('booking.checkInDate ', booking.checkInDate)
     const checkInDate = new Date(booking.checkInDate);
     const checkOutDate = new Date(booking.checkOutDate);
     let subtotal = 0;
@@ -1910,9 +1869,9 @@ export class BookingService {
     //   }
     // }
 
-    // // Removed log('booking ', booking)
+    // ('booking ', booking)
 
-    // // Removed log('booking.hotel.amenities ', booking.hotel.amenities)
+    // ('booking.hotel.amenities ', booking.hotel.amenities)
 
     // Get amenities (assuming these are stored in room type or hotel)
     const amenities = JSON.parse(booking.hotel.amenities) || []
@@ -1920,8 +1879,8 @@ export class BookingService {
     // Get booking addons
     const bookingAddons = await this.addonService.getBookingAddons(booking.id);
 
-    // // Removed log('checkin date ', checkInDate)
-    // // Removed log('checkout ', checkOutDate)
+    // ('checkin date ', checkInDate)
+    // ('checkout ', checkOutDate)
 
     const globalOnlinePayment = await this.fastify.db.query.configurations.findFirst({
       where: eq(configurations.key, 'online_payment_global_enabled')

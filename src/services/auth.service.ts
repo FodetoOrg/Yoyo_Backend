@@ -27,28 +27,21 @@ export class AuthService {
   // Login or register user with Firebase ID token
   async loginWithFirebase(idToken: string, role: string = "user"): Promise<any> {
 
-    // Removed log("idToken in start of loginWithFirebase  ", idToken);
 
     const payload = JSON.parse(Buffer.from(idToken.split('.')[1], 'base64').toString());
-    // Removed log("Full token received:", idToken.length, idToken.slice(0, 50));
 
-    // Removed log("🔍 Decoded Token Payload: ", payload);
 
     const decodedToken = await admin.auth().verifyIdToken(idToken);
 
 
 
 
-    // Removed log("decodedToken ", decodedToken);
-    // Removed log("idToken ", idToken);
     const db = this.fastify.db;
 
     const userFromFirebase = await admin.auth().getUser(decodedToken.uid);
-    // Removed log("userFromFirebase ", userFromFirebase);
     if (!userFromFirebase) {
       throw new Error("User not found in Firebase");
     }
-    // Removed log("userFromFirebase ", userFromFirebase);
     // Check if user exists
     let user = await db.query.users.findFirst({
       where: and(
@@ -56,9 +49,7 @@ export class AuthService {
         eq(users.role, role)
       ),
     });
-    // Removed log('user from db ', user)
     if (!user && (role === UserRole.SUPER_ADMIN || role === UserRole.HOTEL_ADMIN || role === UserRole.STAFF)) {
-      // Removed log('throwing this')
       throw new NotFoundError("User not found ");
 
     }
@@ -103,7 +94,6 @@ export class AuthService {
 
 
     }
-    // Removed log('came here ')
 
     if (!user) {
       throw new Error("User not found ");
@@ -116,7 +106,6 @@ export class AuthService {
       const hotelUser = await db.query.hotels.findFirst({
         where: eq(hotels.ownerId, user.id),
       });
-      // Removed log('hotelUser ', hotelUser)
       hotelId = hotelUser?.id || null;
     }
     let email = '';
@@ -131,12 +120,9 @@ export class AuthService {
       name=profile.fullName
     }
 
-    // Removed log("user ", user);
-    // Removed log("generating token");
     // Generate JWT tokens
     const tokens = await this.generateTokens(user);
 
-    // Removed log("tokens ", tokens);
 
     return {
       accessToken: tokens.accessToken,
@@ -199,7 +185,6 @@ export class AuthService {
   ): Promise<{ accessToken: string; refreshToken: string; user: any }> {
     try {
       const decoded = await this.fastify.jwt.verify(refreshToken);
-      // Removed log("decoded in refreshToken ", decoded);
 
       // Check if user exists
       const user = await this.fastify.db.query.users.findFirst({
@@ -223,7 +208,6 @@ export class AuthService {
         phone: user.phone,
         role: user.role,
       });
-      // Removed log("tokens in refreshToken ", tokens);
       return {
         ...tokens,
         user: {
@@ -239,7 +223,6 @@ export class AuthService {
         }
       };
     } catch (error) {
-      // Removed log(error);
       throw new Error("Invalid refresh token ");
     }
   }
@@ -283,7 +266,6 @@ export class AuthService {
     // If user is a customer, update both users table and customer_profiles table
     if (userRole === 'user') {
       return await db.transaction(async (tx) => {
-        // Removed log('updateData ',updateData)
         // Update user table if name is provided
         if (updateData.name) {
           await tx
@@ -299,10 +281,8 @@ export class AuthService {
         const existingProfile = await tx.query.customerProfiles.findFirst({
           where: eq(customerProfiles.userId, userId)
         });
-        // Removed log('existingProfile')
 
         if (existingProfile) {
-          // Removed log('exists ')
           // Update existing customer profile
           const profileUpdateData: any = {
             updatedAt: new Date(),
@@ -322,7 +302,6 @@ export class AuthService {
             .update(customerProfiles)
             .set(profileUpdateData)
             .where(eq(customerProfiles.userId, userId));
-          // Removed log('came here ')
         } else {
           // Create new customer profile
           const { v4: uuidv4 } = await import('uuid');
@@ -428,7 +407,6 @@ export class AuthService {
     const user = await db.query.users.findFirst({
       where: eq(users.id, id)
     })
-    // Removed log('user from db ', user)
     if (!user) {
       throw new NotFoundError('User Not Found');
     }
@@ -478,7 +456,6 @@ export class AuthService {
     });
 
     if (user) {
-      // Removed log("user already exists with this phone number");
       throw new ConflictError("User already exists with this phone number");
     }
 

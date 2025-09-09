@@ -72,7 +72,6 @@ export class AddonService {
   async getHotelAddons(hotelId: string, status: string | null | undefined) {
     const db = this.fastify.db;
     let whereConditions: any[] = [];
-    // Removed log('came here addoons  ', status)
     if (status && (status === 'active' || status === 'inactive')) {
       whereConditions.push(eq(addons.status, status));
     }
@@ -349,7 +348,6 @@ export class AddonService {
       where: eq(rooms.id, roomId),
     });
 
-    // Removed log('room ', room)
 
     if (!room || room.hotelId !== hotelId) {
       throw new Error('Room not found or does not belong to the specified hotel');
@@ -364,7 +362,6 @@ export class AddonService {
       orderBy: (addons, { asc }) => [asc(addons.name)],
     });
 
-    // Removed log(' hotelAddons ', hotelAddons)
 
     // Get already mapped addons for this room
     const mappedAddons = await db.query.roomAddons.findMany({
@@ -398,7 +395,6 @@ export class AddonService {
   }>) {
     const db = this.fastify.db;
 
-    // Removed log('addons here ')
     // Get addon details for pricing
     const addonIds = addonSelections.map(s => s.addonId);
     const addonDetails = await db.query.addons.findMany({
@@ -420,7 +416,6 @@ export class AddonService {
       };
     });
 
-    // Removed log('bookingaddondata ', bookingAddonData)
 
     if (bookingAddonData.length > 0) {
       return bookingAddonData

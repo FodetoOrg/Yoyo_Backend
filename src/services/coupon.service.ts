@@ -496,8 +496,6 @@ export class CouponService {
   private async filterCouponsByHotelMapping(couponList: any[], hotel: any) {
     const filteredCoupons = [];
 
-    // Removed log('couponList ', couponList)
-    // Removed log('hotel ', hotel)
     for (const coupon of couponList) {
       // If no mappings exist, coupon is valid for all
       if (!coupon.mappings || coupon.mappings.length === 0) {
@@ -545,26 +543,21 @@ export class CouponService {
       },
     });
 
-    // Removed log('coupon is ', coupon);
 
     if (!coupon) {
       throw new NotFoundError(`Coupon with code "${code}" not found`);
     }
 
-    // Removed log('came 4');
     // Check if coupon is active
     if (coupon.status !== 'active') {
       throw new Error('Coupon is not active');
     }
 
-    // Removed log('came 5');
     // Check if user has already used this coupon
     // Ensure both values are strings and not null/undefined
     const safeCouponId = coupon.id ? String(coupon.id) : null;
     const safeUserId = userId ? String(userId) : null;
 
-    // Removed log('coupn id is ', coupon.id)
-    // Removed log('userid is ', userId)
     if (!safeCouponId || !safeUserId) {
       throw new Error('Invalid coupon ID or user ID');
     }
@@ -577,9 +570,7 @@ export class CouponService {
       ),
     });
 
-    // Removed log('existingUsage ', existingUsage);
 
-    // Removed log('existingUsage ', existingUsage);
 
     if (existingUsage) {
       throw new BadRequestError('You have already used this coupon');
@@ -592,30 +583,22 @@ export class CouponService {
     const validFrom = coupon.validFrom instanceof Date ? coupon.validFrom : new Date(coupon.validFrom);
     const validTo = coupon.validTo instanceof Date ? coupon.validTo : new Date(coupon.validTo);
 
-    // Removed log('Date comparison:', {
-      now: now.toISOString(),
-      validFrom: validFrom.toISOString(),
-      validTo: validTo.toISOString()
-    });
+    // Date comparison - logging removed
 
     if (now < validFrom || now > validTo) {
-      // Removed log('coupon time is up');
       throw new Error('Coupon is not valid for current date');
     }
 
     // Check usage limit
     if (coupon.usageLimit && coupon.usedCount >= coupon.usageLimit) {
-      // Removed log('coupon usage up');
       throw new Error('Coupon usage limit exceeded');
     }
 
     // Check minimum order amount
     if (orderAmount < coupon.minOrderAmount) {
-      // Removed log('Minimum order amount not reached');
       throw new Error(`Minimum order amount of ₹${coupon.minOrderAmount} required`);
     }
 
-    // Removed log('came here');
     // Check booking type applicability
     if (coupon.applicableBookingTypes !== 'both') {
       if (coupon.applicableBookingTypes !== bookingType) {
@@ -631,7 +614,6 @@ export class CouponService {
 
     if (hotelId) {
 
-      // Removed log('hotelId ', hotelId)
       try {
         const hotel = await db.query.hotels.findFirst({
           where: eq(hotels.id, hotelId),
@@ -642,7 +624,6 @@ export class CouponService {
 
           actualCityId = hotel.cityId;
         }
-        // Removed log('hotel is ', hotel)
       } catch (error) {
         console.error('Error fetching hotel details:', error);
         // Continue with provided hotelId and roomTypeId
@@ -651,9 +632,7 @@ export class CouponService {
     }
 
 
-    // Removed log('actualRoomTypeId ', actualRoomTypeId)
 
-    // Removed log('mappings ', coupon.mappings)
 
     // Check each mapping
     for (const mapping of coupon.mappings) {
@@ -666,7 +645,6 @@ export class CouponService {
       // Direct room type match
       if (mapping.roomTypeId && mapping.roomTypeId === actualRoomTypeId) {
         isValidForHotel = true;
-        // Removed log('came here success')
         break;
       }
 
@@ -698,12 +676,9 @@ export class CouponService {
 
 
     if (!isValidForHotel) {
-      // Removed log('it is not valid hotel');
       throw new Error('Coupon is not valid for this hotel or room type');
     }
 
-    // Removed log('came butone ',coupon)
-    // Removed log('orderAmount ',orderAmount)
     // Calculate discount
     let discountAmount = 0;
     if (coupon.discountType === 'percentage') {
@@ -715,7 +690,7 @@ export class CouponService {
       discountAmount = coupon.discountValue;
     }
 
-    // Removed log('here issue')
+ //('here issue')
     // Ensure discount doesn't exceed order amount
     discountAmount = Math.min(discountAmount, orderAmount);
 

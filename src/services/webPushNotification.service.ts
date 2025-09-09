@@ -315,7 +315,6 @@ export class WebPushNotificationService {
       const userSubscriptions = await this.getUserSubscriptions(data.userId);
       
       if (!userSubscriptions || userSubscriptions.length === 0) {
-        // Removed log(`No web push subscriptions found for user ${data.userId}`);
         return {
           success: false,
           message: 'No active subscriptions found'
@@ -343,16 +342,13 @@ export class WebPushNotificationService {
 
       const sendPromises = userSubscriptions.map(async (subscription, index) => {
         try {
-          // Removed log('payload is ',payload)
           await webpush.sendNotification(subscription, payload);
-          // Removed log(`Web push sent successfully to subscription ${index + 1} for user ${data.userId}`);
           return { success: true, subscription: subscription.endpoint };
         } catch (error) {
           console.error(`Failed to send web push to subscription ${index + 1}:`, error);
           
           // Remove invalid subscriptions
           if (error.statusCode === 410 || error.statusCode === 404) {
-            // Removed log(`Removing invalid subscription for user ${data.userId}`);
             await this.unsubscribeUser(data.userId, subscription.endpoint);
           }
           
@@ -374,7 +370,6 @@ export class WebPushNotificationService {
         data: data.data ? JSON.stringify(data.data) : null,
       });
 
-      // Removed log(`Web push notifications sent: ${successful}/${userSubscriptions.length} for user ${data.userId}`);
 
       return {
         success: successful > 0,
@@ -407,7 +402,6 @@ export class WebPushNotificationService {
         eq(users.role, 'hotel')  // Include hotel admins as well
       ));
 
-      // Removed log(`Found ${adminUsers.length} admin users (superAdmin + hotel admins)`);
 
       const notifications = [];
 
@@ -423,7 +417,6 @@ export class WebPushNotificationService {
       const results = await Promise.allSettled(notifications);
       const successful = results.filter(r => r.status === 'fulfilled').length;
 
-      // Removed log(`Admin web push notifications sent: ${successful}/${adminUsers.length}`);
 
       return {
         success: true,
@@ -444,7 +437,6 @@ export class WebPushNotificationService {
       
       // First check if hotelId is valid
       if (!hotelId || hotelId === 'None' || hotelId === 'null' || hotelId === 'undefined') {
-        // Removed log(`Invalid hotelId provided: ${hotelId}. Skipping hotel vendor notifications.`);
         return {
           success: false,
           totalStaff: 0,
@@ -462,7 +454,6 @@ export class WebPushNotificationService {
       .limit(1);
       
       if (!hotelData.length || !hotelData[0].ownerId) {
-        // Removed log(`No hotel found with id ${hotelId} or no owner assigned`);
         return {
           success: false,
           totalStaff: 0,
@@ -473,7 +464,6 @@ export class WebPushNotificationService {
       // Check if ownerId is 'None' or other invalid values
       const invalidOwnerIds = ['None', 'none', 'null', 'undefined', '', null, undefined];
       if (invalidOwnerIds.includes(hotelData[0].ownerId)) {
-        // Removed log(`Hotel ${hotelId} has invalid owner_id: "${hotelData[0].ownerId}". Skipping vendor notification.`);
         return {
           success: false,
           totalStaff: 0,
@@ -509,7 +499,6 @@ export class WebPushNotificationService {
       const results = await Promise.allSettled(notifications);
       const successful = results.filter(r => r.status === 'fulfilled').length;
 
-      // Removed log(`Hotel vendor web push notifications sent: ${successful}/${hotelStaff.length}`);
 
       return {
         success: true,

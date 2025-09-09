@@ -165,7 +165,6 @@ export class RefundService {
     refundType: 'cancellation' | 'hotel_cancellation' | 'no_show' | 'admin_refund';
   }) {
     const db = this.fastify.db;
-    // Removed log('came in refund');
 
     return await db.transaction(async (tx) => {
       // Get booking with hotel and payment details
@@ -332,7 +331,6 @@ export class RefundService {
   // Process refund (Admin only)
   async processRefund(refundId: string, processedBy: any) {
     const db = this.fastify.db;
-    // Removed log('processedBy ',processedBy)
     if (processedBy.role !== UserRole.SUPER_ADMIN) {
       throw new Error('You dont have access to refund this')
     }
@@ -355,13 +353,11 @@ export class RefundService {
         throw new Error('Refund is not in pending status');
       }
 
-      // Removed log('refund retunred ', refund)
 
       let wallet = await tx.query.wallets.findFirst({
         where: eq(wallets.userId, refund.userId)
       });
 
-      // Removed log('wallet is ', wallet)
 
       if (!wallet) {
         const walletId = uuidv4();
@@ -374,13 +370,10 @@ export class RefundService {
           status: 'active'
         }).returning();
       }
-      // Removed log('wallet after  is ', wallet)
 
       const newBalance = wallet.balance + refund.refundAmount;
       const newTotalEarned = wallet.totalEarned + refund.refundAmount;
 
-      // Removed log('newbalance ', newBalance)
-      // Removed log('newTotaleearned ', newTotalEarned)
 
       // Update wallet balance
       await tx.update(wallets)
@@ -392,7 +385,6 @@ export class RefundService {
         .where(eq(wallets.id, wallet.id));
 
 
-      // Removed log('here ')
 
       // Create transaction record
       const transactionId = uuidv4();
@@ -410,7 +402,6 @@ export class RefundService {
         metadata: refund.metadata ? JSON.stringify(refund.metadata) : null
       });
 
-      // Removed log('here ', 2)
 
 
       // Update refund status
@@ -424,7 +415,6 @@ export class RefundService {
         })
         .where(eq(refunds.id, refundId));
 
-      // Removed log('here 3')
       await this.sendRefundStatusNotifications(
         refundId,
         'Success',
