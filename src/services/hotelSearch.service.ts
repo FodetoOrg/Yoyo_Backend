@@ -67,7 +67,7 @@ export class HotelSearchService {
       limit = 10
     } = filters;
 
-    console.log('filters came is ', filters)
+    // Removed log('filters came is ', filters)
 
     const totalGuests = adults + children; // infants don't count for capacity
 
@@ -109,7 +109,7 @@ export class HotelSearchService {
 
     let hotelsData = await baseQuery;
 
-    // console.log('hotel data ', hotelsData)
+    // // Removed log('hotel data ', hotelsData)
 
     // STEP 1: Distance calculation - Calculate distance for ALL hotels if coordinates provided
     if (coordinates) {
@@ -122,7 +122,7 @@ export class HotelSearchService {
         )
       }));
 
-      console.log('after calluctaing distance ', hotelsData)
+      // Removed log('after calluctaing distance ', hotelsData)
 
       // Sort by distance first to get nearest hotels
       hotelsData = hotelsData.sort((a, b) => (a.distance || 0) - (b.distance || 0));
@@ -149,7 +149,7 @@ export class HotelSearchService {
 
     for (const hotelData of hotelsData) {
       const pricing = await this.getHotelPricing(hotelData.hotel.id, checkIn, checkOut, totalGuests, bookingType);
-      console.log('completed pricing')
+      // Removed log('completed pricing')
       
       // Get base pricing even if no rooms are available
       const basePricing = pricing || await this.getBasePricing(hotelData.hotel.id, bookingType);
@@ -165,7 +165,7 @@ export class HotelSearchService {
         bookingType
       ) : null;
       
-      console.log('completed hourly stays')
+      // Removed log('completed hourly stays')
       hotelsWithPricing.push({
         id: hotelData.hotel.id,
         name: hotelData.hotel.name,
@@ -198,13 +198,13 @@ export class HotelSearchService {
     if (!coordinates || sortBy !== 'distance') {
       hotelsWithPricing = this.sortHotels(hotelsWithPricing, sortBy);
     }
-    console.log('camwe but one  ')
+    // Removed log('camwe but one  ')
     // Pagination
     const total = hotelsWithPricing.length;
     const totalPages = Math.ceil(total / limit);
     const startIndex = (page - 1) * limit;
     const paginatedHotels = hotelsWithPricing.slice(startIndex, startIndex + limit);
-    console.log('finally last ')
+    // Removed log('finally last ')
     return {
       hotels: paginatedHotels,
       total,
@@ -228,7 +228,7 @@ export class HotelSearchService {
   async getNearbyHotels(filters: HomeTabFilters) {
     const { coordinates, limit = 10, sortBy } = filters;
 
-    console.log('filters in nearby ', filters)
+    // Removed log('filters in nearby ', filters)
 
     if (!coordinates) {
       return [];
@@ -278,7 +278,7 @@ export class HotelSearchService {
 
       if (!Array.isArray(v)) return [];
 
-      console.log('v is ', v)
+      // Removed log('v is ', v)
       // Filter to keep only non-empty strings
       return v.filter(item => typeof item === 'string' && item.trim() !== '');
     } catch {
@@ -294,7 +294,7 @@ export class HotelSearchService {
     const ids: string[] = this.toIdList(cfg?.value);
     if (ids.length === 0) return [];
 
-    console.log('ids came is  ', ids)
+    // Removed log('ids came is  ', ids)
     const featuredHotels = await this.fastify.db.query.hotels.findMany({
       where: and(
         eq(hotels.status, "active"),
@@ -366,7 +366,7 @@ export class HotelSearchService {
           'daily'
         ) : null;
 
-        console.log('hotel is ', hotel)
+        // Removed log('hotel is ', hotel)
 
         return {
           id: hotel.id,
@@ -535,7 +535,7 @@ export class HotelSearchService {
       .from(rooms)
       .where(and(...roomConditions));
 
-    console.log('allRooms came ', allRooms)
+    // Removed log('allRooms came ', allRooms)
 
     // Check each room for booking conflicts
     const availableHotelIds = new Set<string>();
@@ -545,12 +545,12 @@ export class HotelSearchService {
     for (const room of allRooms) {
       let staysPresent = false;
       if (bookingType === 'hourly') {
-        console.log('yes came in ')
+        // Removed log('yes came in ')
         const hourlyStays = await db.query.roomHourlyStays.findMany({
           where: and(eq(roomHourlyStays.roomId, room.roomId), gt(roomHourlyStays.price, 0))
         })
 
-        console.log('hourlyStays came ', hourlyStays.length || 0)
+        // Removed log('hourlyStays came ', hourlyStays.length || 0)
 
         if (hourlyStays && hourlyStays.length === 3) {
           staysPresent = true
@@ -565,7 +565,7 @@ export class HotelSearchService {
         checkIn,
         checkOut
       );
-      console.log('hasConflict ', hasConflict)
+      // Removed log('hasConflict ', hasConflict)
 
       if (hasConflict === false) {
 
@@ -598,11 +598,11 @@ export class HotelSearchService {
     requestCheckIn.setMilliseconds(0);
     requestCheckOut.setMilliseconds(0);
 
-    console.log('checkin in search ', checkIn)
-    console.log('checkout in search ', checkOut)
+    // Removed log('checkin in search ', checkIn)
+    // Removed log('checkout in search ', checkOut)
 
-    console.log('Checking booking conflict for room:', roomId);
-    console.log('Request dates:', { checkIn: requestCheckIn, checkOut: requestCheckOut });
+    // Removed log('Checking booking conflict for room:', roomId);
+    // Removed log('Request dates:', { checkIn: requestCheckIn, checkOut: requestCheckOut });
 
     // Check for overlapping bookings that are not cancelled
     // Two bookings overlap if: checkIn < existing.checkOut AND checkOut > existing.checkIn
@@ -617,7 +617,7 @@ export class HotelSearchService {
     });
 
     if (conflictingBookings.length > 0) {
-      console.log('Found conflicting booking:', conflictingBookings.map(b => ({
+      // Removed log('Found conflicting booking:', conflictingBookings.map(b => ({
         id: b.id,
         checkIn: b.checkInDate,
         checkOut: b.checkOutDate,
@@ -625,7 +625,7 @@ export class HotelSearchService {
         bookingType: b.bookingType
       })));
     } else {
-      console.log('No conflicting bookings found');
+      // Removed log('No conflicting bookings found');
     }
 
     return conflictingBookings.length > 0;

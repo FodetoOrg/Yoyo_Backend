@@ -259,7 +259,7 @@ export class HotelService {
     const db = this.fastify.db;
     const hotelId = uuidv4();
 
-    console.log("hotelData", hotelData);
+    // Removed log("hotelData", hotelData);
     // Start a transaction
     return await db.transaction(async (tx) => {
       // check if hotel owner exists
@@ -267,7 +267,7 @@ export class HotelService {
         where: eq(hotelUsers.userId, hotelData.ownerId),
       });
 
-      console.log("hotelOwner in createHotel", hotelOwner);
+      // Removed log("hotelOwner in createHotel", hotelOwner);
 
       if (hotelOwner) {
         throw new ForbiddenError("Hotel owner not found");
@@ -347,7 +347,7 @@ export class HotelService {
     if (hotelData.amenities) {
       processedData.amenities = JSON.stringify(hotelData.amenities);
     }
-    console.log('processedData ', processedData.id)
+    // Removed log('processedData ', processedData.id)
     return await db.transaction(async (tx) => {
       const existingData: Hotel = await tx.query.hotels.findFirst({
         where: eq(hotels.id, processedData.id),
@@ -860,15 +860,15 @@ export class HotelService {
   async checkRoomAvailability(roomId: string, checkInDate: Date, checkOutDate: Date): Promise<boolean> {
     const db = this.fastify.db;
 
-    console.log('----- checkInDate ', checkInDate)
-    console.log('------- checkou ', checkOutDate)
+    // Removed log('----- checkInDate ', checkInDate)
+    // Removed log('------- checkou ', checkOutDate)
 
     // Get room from database
     const room = await db.query.rooms.findFirst({
       where: eq(rooms.id, roomId)
     });
 
-    console.log('room is ', room)
+    // Removed log('room is ', room)
 
     if (!room) {
       return false;
@@ -881,7 +881,7 @@ export class HotelService {
         and(eq(bookings.roomId, roomId),
           not(eq(bookings.status, 'cancelled')))
     })
-    console.log('bookings ', bookingsr)
+    // Removed log('bookings ', bookingsr)
     const overlappingBookings = await db.query.bookings.findMany({
       where: and(
         eq(bookings.roomId, roomId),
@@ -906,8 +906,8 @@ export class HotelService {
       },
     });
 
-    console.log('roomAddonsRetunerd ', roomAddonsRetunerd)
-    console.log('for roomid ', roomId)
+    // Removed log('roomAddonsRetunerd ', roomAddonsRetunerd)
+    // Removed log('for roomid ', roomId)
 
     return roomAddonsRetunerd.map(roomAddon => ({
       id: roomAddon.addon.id,
@@ -936,11 +936,11 @@ export class HotelService {
         and(eq(users.role, UserRole.HOTEL_ADMIN), isNull(hotelUsers.userId))
       );
 
-    console.log("here allHotelUsers", allHotelUsers);
-    console.log("hotelId", hotelId);
+    // Removed log("here allHotelUsers", allHotelUsers);
+    // Removed log("hotelId", hotelId);
 
     if (hotelId !== "") {
-      console.log("hotelId included ", hotelId);
+      // Removed log("hotelId included ", hotelId);
       const includedUser = await db.query.hotelUsers.findFirst({
         where: eq(hotelUsers.hotelId, hotelId),
         with: {
@@ -948,7 +948,7 @@ export class HotelService {
         },
       });
 
-      console.log("includedUser", includedUser);
+      // Removed log("includedUser", includedUser);
 
       if (includedUser) {
         allHotelUsers.push({

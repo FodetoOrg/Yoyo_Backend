@@ -34,7 +34,7 @@ export class CitiesService {
     const city = await db.query.cities.findFirst({
       where: eq(cities.id, id),
     });
-    console.log('city from db is ',city)
+    // Removed log('city from db is ',city)
     if (!city) {
       throw new NotFoundError(`City with id ${id} not found`);
     }

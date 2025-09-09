@@ -73,7 +73,7 @@ export class NotificationService {
         updatedAt: new Date(),
       };
 
-      console.log('tokenData ', tokenData)
+      // Removed log('tokenData ', tokenData)
 
       return await db.transaction(async (tx) => {
 
@@ -88,7 +88,7 @@ export class NotificationService {
           id: uuidv4(),
           ...tokenData,
         }).returning();
-        console.log('newToken ', newToken)
+        // Removed log('newToken ', newToken)
         return newToken[0];
       })
     } catch (error) {
@@ -142,7 +142,7 @@ export class NotificationService {
     const tokens = await db.query.pushTokens.findFirst({
       where: eq(pushTokens.userId, userId)
     })
-    console.log('tokens ', tokens)
+    // Removed log('tokens ', tokens)
     if (!tokens) {
       throw new NotFoundError('Expo Token NotFound')
     }
@@ -170,15 +170,15 @@ export class NotificationService {
   }) {
     try {
 
-      console.log('in email sender')
+      // Removed log('in email sender')
       // Check user preferences first
       const preferences = await this.getUserPreferences(data.userId);
 
       if (!this.isNotificationAllowed(data.type, preferences)) {
-        console.log(`Immediate notification blocked by user preferences: ${data.type} for user ${data.userId}`);
+        // Removed log(`Immediate notification blocked by user preferences: ${data.type} for user ${data.userId}`);
         return { success: false, reason: 'Blocked by user preferences' };
       }
-      console.log('came here in notifiy 1')
+      // Removed log('came here in notifiy 1')
 
       // Send directly without queuing
       let result;
@@ -201,7 +201,7 @@ export class NotificationService {
           const user = await db.query.users.findFirst({
             where: eq(users.id, data.userId)
           });
-          console.log('notifications in email ')
+          // Removed log('notifications in email ')
           result = await this.sendEmailNotification({
             to: data.email || user?.email || '',
             subject: data.title,
@@ -261,11 +261,11 @@ export class NotificationService {
     pushToken: string;
   }) {
     if (!Expo.isExpoPushToken(data.pushToken)) {
-      console.log('invalid token ')
+      // Removed log('invalid token ')
       throw new Error('Invalid Expo push token');
     }
 
-    console.log('came here in notifiy 2')
+    // Removed log('came here in notifiy 2')
     const message: ExpoPushMessage = {
       to: data.pushToken,
       title: data.title,
@@ -311,19 +311,19 @@ export class NotificationService {
       // Get user's active push tokens
       const userTokens = await this.getUserPushTokens(userId);
 
-      console.log('got usertokens ', userTokens)
+      // Removed log('got usertokens ', userTokens)
 
       if (userTokens.length === 0) {
-        console.log(`No push tokens found for user ${userId}`);
+        // Removed log(`No push tokens found for user ${userId}`);
         return { success: false, reason: 'No push tokens found' };
       }
 
-      console.log('userTokens ', userTokens);
+      // Removed log('userTokens ', userTokens);
 
       // Check user preferences quickly
       const preferences = await this.getUserPreferences(userId);
       if (!preferences.pushEnabled || !preferences.bookingNotifications) {
-        console.log(`Push notifications disabled for user ${userId}`);
+        // Removed log(`Push notifications disabled for user ${userId}`);
         return { success: false, reason: 'Push notifications disabled' };
       }
 
@@ -332,10 +332,10 @@ export class NotificationService {
 
       // Check if it's a valid Expo push token
       const isValidToken = Expo.isExpoPushToken(pushToken);
-      console.log('checking validToken:', isValidToken);
+      // Removed log('checking validToken:', isValidToken);
 
       if (!isValidToken) { // Fixed: inverted logic
-        console.log(`Invalid Expo token for user ${userId}`);
+        // Removed log(`Invalid Expo token for user ${userId}`);
         return { success: false, reason: 'Invalid Expo token' };
       }
 
@@ -346,7 +346,7 @@ export class NotificationService {
         action: 'booking_success'
       };
 
-      console.log('notificationData ', notificationData);
+      // Removed log('notificationData ', notificationData);
 
       // Create push message (single message, not array)
       const message: ExpoPushMessage = { // Fixed: single object, not array
@@ -361,7 +361,7 @@ export class NotificationService {
         channelId: 'booking_notifications',
       };
 
-      console.log('Sending push notification:', message);
+      // Removed log('Sending push notification:', message);
 
       // Send immediately using Expo SDK
       const chunks = this.expo.chunkPushNotifications([message]); // Fixed: wrap in array
@@ -371,7 +371,7 @@ export class NotificationService {
         try {
           const ticketChunk = await this.expo.sendPushNotificationsAsync(chunk);
           tickets.push(...ticketChunk);
-          console.log('Push notification sent, tickets:', ticketChunk);
+          // Removed log('Push notification sent, tickets:', ticketChunk);
         } catch (error) {
           console.error('Error sending instant push notification chunk:', error);
           throw error; // Re-throw to be caught by outer try-catch
@@ -388,7 +388,7 @@ export class NotificationService {
             token: pushToken, // Fixed: use pushToken variable
             ticketId: ticket.id
           });
-          console.log('Push notification delivered successfully:', ticket.id);
+          // Removed log('Push notification delivered successfully:', ticket.id);
         } else if (ticket.status === 'error') {
           console.error('Push notification error:', ticket);
 
@@ -400,7 +400,7 @@ export class NotificationService {
 
       // Clean up invalid tokens asynchronously
       if (invalidTokens.length > 0) {
-        console.log('Cleaning up invalid tokens:', invalidTokens);
+        // Removed log('Cleaning up invalid tokens:', invalidTokens);
         setImmediate(() => this.cleanupInvalidTokens(invalidTokens));
       }
 
@@ -423,7 +423,7 @@ export class NotificationService {
         timestamp: new Date(),
       };
 
-      console.log(`Instant booking notification result:`, response);
+      // Removed log(`Instant booking notification result:`, response);
 
       return response;
 
@@ -909,7 +909,7 @@ export class NotificationService {
       }
 
       // Fallback: Log for development
-      console.log('SMS notification (dev mode):', {
+      // Removed log('SMS notification (dev mode):', {
         to: data.to,
         message: data.message,
         timestamp: new Date(),

@@ -334,7 +334,7 @@ export class PaymentService {
     const db = this.fastify.db;
     const { bookingId, userId, amount, currency = 'INR', walletAmount } = params;
 
-    console.log('params are ', params)
+    // Removed log('params are ', params)
 
     try {
       // Check if booking exists and is valid (outside transaction)
@@ -343,7 +343,7 @@ export class PaymentService {
         with: { user: true, hotel: true, room: true }
       });
 
-      console.log('booking ', booking);
+      // Removed log('booking ', booking);
 
       if (!booking) {
         throw new Error('Booking not found');
@@ -365,7 +365,7 @@ export class PaymentService {
       //   )
       // });
 
-      // console.log('existingOrder ', existingOrder);
+      // // Removed log('existingOrder ', existingOrder);
 
       // if (existingOrder && new Date() < existingOrder.expiresAt) {
       //   return {
@@ -395,7 +395,7 @@ export class PaymentService {
           where: eq(wallets.userId, userId)
         });
 
-        console.log('wallet ', walletData);
+        // Removed log('wallet ', walletData);
 
         if (!walletData || walletData.balance < walletAmount) {
           throw new Error("You don't have enough wallet money to continue the payment. Try to avoid using wallet");
@@ -408,7 +408,7 @@ export class PaymentService {
 
       // Create Razorpay order (outside transaction since it's external API)
       const receipt = `receipt_${bookingId}_${Date.now()}`;
-      console.log('Creating Razorpay order with amount:', Math.round(amountFinal * 100));
+      // Removed log('Creating Razorpay order with amount:', Math.round(amountFinal * 100));
 
       const razorpayOrder = await this.razorpay.orders.create({
         amount: Math.round(amountFinal * 100), // Convert to paise
@@ -422,7 +422,7 @@ export class PaymentService {
         }
       });
 
-      console.log('Razorpay order created successfully:', razorpayOrder.id);
+      // Removed log('Razorpay order created successfully:', razorpayOrder.id);
 
       // Now perform all database operations in a single transaction
       const result = await db.transaction(async (tx) => {
@@ -1096,11 +1096,11 @@ export class PaymentService {
     const db = this.fastify.db;
     const { userId, bookingId, status, paymentMode, page = 1, limit = 10, hotelId } = filters;
 
-    console.log('userid ', userId)
-    console.log(bookingId)
-    console.log(paymentMode)
-    console.log('status ', status)
-    console.log(hotelId)
+    // Removed log('userid ', userId)
+    // Removed log(bookingId)
+    // Removed log(paymentMode)
+    // Removed log('status ', status)
+    // Removed log(hotelId)
 
     let whereConditions: any[] = [];
 
@@ -1120,7 +1120,7 @@ export class PaymentService {
       whereConditions.push(eq(payments.paymentMode, paymentMode));
     }
 
-    console.log('hotelId is ', hotelId)
+    // Removed log('hotelId is ', hotelId)
 
     // For hotel filtering, we need to join with bookings table
     let query = db
@@ -1196,7 +1196,7 @@ export class PaymentService {
     const totalResult = await countQuery;
     const totalPayments = totalResult[0]?.count || 0;
 
-    console.log('paymentHistory ', paymentHistory.slice(0, 3))
+    // Removed log('paymentHistory ', paymentHistory.slice(0, 3))
 
     return {
       payments: paymentHistory.map(payment => ({
@@ -1299,7 +1299,7 @@ export class PaymentService {
           await this.handleOrderPaid(event);
           break;
         default:
-          console.log(`Unhandled webhook event: ${webhook.event}`);
+          // Removed log(`Unhandled webhook event: ${webhook.event}`);
       }
 
       // Mark as processed
@@ -1345,16 +1345,16 @@ export class PaymentService {
 
   private async handlePaymentCaptured(event: any) {
     // Additional processing for captured payments
-    console.log('Payment captured:', event.payload.payment.entity.id);
+    // Removed log('Payment captured:', event.payload.payment.entity.id);
   }
 
   private async handlePaymentFailed(event: any) {
     // Handle failed payments
-    console.log('Payment failed:', event.payload.payment.entity.id);
+    // Removed log('Payment failed:', event.payload.payment.entity.id);
   }
 
   private async handleOrderPaid(event: any) {
     // Handle order paid events
-    console.log('Order paid:', event.payload.order.entity.id);
+    // Removed log('Order paid:', event.payload.order.entity.id);
   }
 }
