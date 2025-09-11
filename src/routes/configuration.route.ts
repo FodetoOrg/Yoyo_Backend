@@ -5,7 +5,9 @@ import {
   getAllConfigurations,
   getConfiguration,
   updateConfiguration,
-  initializeConfigurations
+  initializeConfigurations,
+  getContactInfo,
+  updateContactInfo
 } from '../controllers/configuration.controller';
 import { configurations } from '../models/Configuration';
 import { uploadToStorage } from '../config/firebase/firebase';
@@ -30,6 +32,14 @@ async function configurationRoutes(fastify: FastifyInstance) {
   fastify.post('/configurations/initialize', {
     preHandler: [fastify.authenticate]
   }, initializeConfigurations);
+
+  // Get contact information (public endpoint - no authentication required)
+  fastify.get('/contact-info', getContactInfo);
+
+  // Update contact information (admin only)
+  fastify.put('/contact-info', {
+    preHandler: [fastify.authenticate]
+  }, updateContactInfo);
 
   fastify.get('/configurations/hotelIds', {
     preHandler: [fastify.authenticate]

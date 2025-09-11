@@ -457,10 +457,10 @@ export class PaymentService {
               paymentMode: 'online',
               paymentMethod: walletAmount >= amount ? 'wallet' : 'razorpay', // Set method based on payment type
               walletAmountUsed: walletAmount || 0,
+              razorpayOrderId: razorpayOrder.id, // Link to Razorpay order
               updatedAt: new Date(),
               amount: amountFinal,
-              actualPaymentAmount: booking.amount
-
+              actualPaymentAmount: amount
             })
             .where(eq(payments.id, existingPayment.id));
         } else {
@@ -469,12 +469,14 @@ export class PaymentService {
             id: paymentId,
             bookingId,
             userId: userId,
+            paymentOrderId: paymentOrderId,
             amount: amountFinal,
-            actualPaymentAmount: booking.amount,
+            actualPaymentAmount: amount,
             currency: 'INR',
             paymentType: 'full',
             paymentMethod: walletAmount >= amount ? 'wallet' : 'razorpay',
-            paymentMode: 'offline',
+            paymentMode: 'online',
+            razorpayOrderId: razorpayOrder.id,
             status: 'pending',
             transactionDate: new Date(),
           });

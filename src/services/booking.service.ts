@@ -248,7 +248,7 @@ export class BookingService {
         totalHours: totalHours,
         guestCount: bookingData.guests,
         totalAmount: finalAmount,
-        paymentMode: 'offline', // Always start as offline
+        paymentMode: finalPaymentMode, // Use the actual payment mode selected
         requiresOnlinePayment,
         paymentDueDate,
         advanceAmount,
@@ -305,7 +305,7 @@ export class BookingService {
         currency: 'INR',
         paymentType: finalPaymentMode === 'offline' && advanceAmount > 0 ? 'advance' : 'full',
         paymentMethod: finalPaymentMode === 'offline' ? (hotel.defaultPaymentMethod || 'cash') : 'razorpay',
-        paymentMode: 'offline',
+        paymentMode: finalPaymentMode,
         roomCharge: basePrice,
         gstAmount,
         platformFee: platformFeeAmount,

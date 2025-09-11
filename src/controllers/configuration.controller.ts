@@ -102,4 +102,55 @@ export const initializeConfigurations = async (request: FastifyRequest, reply: F
   }
 };
 
+// Get contact information
+export const getContactInfo = async (request: FastifyRequest, reply: FastifyReply) => {
+  try {
+    configurationService.setFastify(request.server);
+    
+    const contactInfo = await configurationService.getContactInfo();
+
+    reply.send({
+      success: true,
+      data: contactInfo
+    });
+  } catch (error) {
+    reply.code(500).send({
+      success: false,
+      message: error.message || 'Failed to fetch contact information'
+    });
+  }
+};
+
+// Update contact information
+export const updateContactInfo = async (request: FastifyRequest<{
+  Body: {
+    general_inquiries?: {
+      phone?: string;
+      email?: string;
+    };
+    support?: {
+      phone?: string;
+      email?: string;
+    };
+  }
+}>, reply: FastifyReply) => {
+  try {
+    configurationService.setFastify(request.server);
+    
+    const contactData = request.body;
+    const updatedContactInfo = await configurationService.updateContactInfo(contactData);
+
+    reply.send({
+      success: true,
+      data: updatedContactInfo,
+      message: 'Contact information updated successfully'
+    });
+  } catch (error) {
+    reply.code(500).send({
+      success: false,
+      message: error.message || 'Failed to update contact information'
+    });
+  }
+};
+
 

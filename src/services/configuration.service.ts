@@ -202,6 +202,34 @@ export class ConfigurationService {
         type: 'number',
         description: 'Default platform fee',
         category: 'app'
+      },
+      {
+        key: 'general_inquiries_phone',
+        value: '',
+        type: 'string',
+        description: 'Phone number for general inquiries',
+        category: 'contact'
+      },
+      {
+        key: 'general_inquiries_email',
+        value: '',
+        type: 'string',
+        description: 'Email address for general inquiries',
+        category: 'contact'
+      },
+      {
+        key: 'support_phone',
+        value: '',
+        type: 'string',
+        description: 'Phone number for customer support',
+        category: 'contact'
+      },
+      {
+        key: 'support_email',
+        value: '',
+        type: 'string',
+        description: 'Email address for customer support',
+        category: 'contact'
       }
     ];
 
@@ -235,5 +263,97 @@ export class ConfigurationService {
   async getPlatformFeePercentage(): Promise<number> {
     const config = await this.getConfiguration('platform_fee');
     return config ? parseFloat(config.value) : 5;
+  }
+
+  // Get all contact information
+  async getContactInfo() {
+    const db = this.fastify.db;
+
+    const contactConfigs = await db.select()
+      .from(configurations)
+      .where(and(eq(configurations.category, 'contact'), eq(configurations.isActive, true)));
+
+    const contactInfo = {
+      general_inquiries: {
+        phone: '',
+        email: ''
+      },
+      support: {
+        phone: '',
+        email: ''
+      }
+    };
+
+    contactConfigs.forEach(config => {
+      switch (config.key) {
+        case 'general_inquiries_phone':
+          contactInfo.general_inquiries.phone = config.value;
+          break;
+        case 'general_inquiries_email':
+          contactInfo.general_inquiries.email = config.value;
+          break;
+        case 'support_phone':
+          contactInfo.support.phone = config.value;
+          break;
+        case 'support_email':
+          contactInfo.support.email = config.value;
+          break;
+      }
+    });
+
+    return contactInfo;
+  }
+
+  // Update contact information
+  async updateContactInfo(contactData: {
+    general_inquiries?: { phone?: string; email?: string };
+    support?: { phone?: string; email?: string };
+  }) {
+    const updates = [];
+
+    if (contactData.general_inquiries?.phone !== undefined) {
+      updates.push(this.setConfiguration(
+        'general_inquiries_phone',
+        contactData.general_inquiries.phone,
+        'string',
+        'Phone number for general inquiries',
+        'contact'
+      ));
+    }
+
+    if (contactData.general_inquiries?.email !== undefined) {
+      updates.push(this.setConfiguration(
+        'general_inquiries_email',
+        contactData.general_inquiries.email,
+        'string',
+        'Email address for general inquiries',
+        'contact'
+      ));
+    }
+
+    if (contactData.support?.phone !== undefined) {
+      updates.push(this.setConfiguration(
+        'support_phone',
+        contactData.support.phone,
+        'string',
+        'Phone number for customer support',
+        'contact'
+      ));
+    }
+
+    if (contactData.support?.email !== undefined) {
+      updates.push(this.setConfiguration(
+        'support_email',
+        contactData.support.email,
+        'string',
+        'Email address for customer support',
+        'contact'
+      ));
+    }
+
+    await Promise.all(updates);
+    
+    // Return the updated contact information
+    return await this.getContactInfo();
   }
 }
