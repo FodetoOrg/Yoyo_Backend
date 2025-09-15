@@ -162,6 +162,11 @@ export class HotelSearchService {
         bookingType
       ) : null;
       
+      // Skip hotels with no hourly stays when searching for hourly bookings
+      if (bookingType === 'hourly' && (!hourlyStays || hourlyStays.length !== 3) &&  hourlyStays.filter(h => h.price > 0).length !== 3) {
+        continue; // Skip this hotel as it doesn't support hourly bookings
+      }
+      
       hotelsWithPricing.push({
         id: hotelData.hotel.id,
         name: hotelData.hotel.name,
