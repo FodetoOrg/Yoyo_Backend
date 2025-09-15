@@ -120,9 +120,7 @@ export class RoomService {
           orderBy: [desc(roomImages.isPrimary)],
         },
       },
-      orderBy: [desc(rooms.createdAt)],
-      limit,
-      offset: (page - 1) * limit,
+      orderBy: [desc(rooms.createdAt)]
     });
 
 

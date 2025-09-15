@@ -218,9 +218,7 @@ export class WalletService {
 
     const transactions = await db.query.walletTransactions.findMany({
       where: and(...whereConditions),
-      orderBy: [desc(walletTransactions.createdAt)],
-      limit,
-      offset: (page - 1) * limit
+      orderBy: [desc(walletTransactions.createdAt)]
     });
 
     // Get total count

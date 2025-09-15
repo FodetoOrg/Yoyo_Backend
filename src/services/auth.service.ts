@@ -366,16 +366,14 @@ export class AuthService {
     // Handle case where role might be undefined or null
     if (!role) {
       const allUsers = await db.query.users.findMany({
-        offset: (page - 1) * limit,
-        limit: limit,
+   
       });
       return allUsers;
     }
 
     const allUsers = await db.query.users.findMany({
       where: eq(users.role, role),
-      offset: (page - 1) * limit,
-      limit: limit,
+     
     });
 
     // If role is HOTEL_ADMIN, include hotelId for each user

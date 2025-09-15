@@ -1131,8 +1131,6 @@ export class PaymentService {
     // Apply pagination and ordering
     const rawPayments = await query
       .orderBy(desc(payments.createdAt))
-      .limit(limit)
-      .offset((page - 1) * limit);
 
     // Now get the full payment data with relations for the filtered results
     const paymentIds = rawPayments.map(row => row.payments.id);

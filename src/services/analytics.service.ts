@@ -204,7 +204,7 @@ export class AnalyticsService {
       )
       .groupBy(hotels.city)
       .orderBy(desc(sum(sql`CASE WHEN ${bookings.status} = 'confirmed' THEN ${bookings.totalAmount} ELSE 0 END`)))
-      .limit(5);
+;
 
     // Top performing hotels with commission metrics
     const topHotels = await db
@@ -224,7 +224,7 @@ export class AnalyticsService {
       )
       .groupBy(hotels.id, hotels.name, hotels.city)
       .orderBy(desc(sum(sql`CASE WHEN ${bookings.status} = 'confirmed' THEN ${bookings.totalAmount} ELSE 0 END`)))
-      .limit(10);
+;
 
     // Recent bookings
     const recentBookings = await db
@@ -244,7 +244,7 @@ export class AnalyticsService {
       .leftJoin(hotels, eq(bookings.hotelId, hotels.id))
       .leftJoin(users, eq(bookings.userId, users.id))
       .orderBy(desc(bookings.createdAt))
-      .limit(10);
+;
 
     return {
       overview: {
@@ -498,7 +498,7 @@ export class AnalyticsService {
       ))
       .groupBy(rooms.id, rooms.name, rooms.roomNumber)
       .orderBy(desc(sum(bookings.totalAmount)))
-      .limit(5);
+;
 
     // Recent bookings for this hotel
     const recentBookings = await db
@@ -519,7 +519,7 @@ export class AnalyticsService {
       .leftJoin(users, eq(bookings.userId, users.id))
       .where(eq(bookings.hotelId, hotelId))
       .orderBy(desc(bookings.createdAt))
-      .limit(10);
+;
 
     // Commission calculations
     const commissionRate = hotel.commissionRate / 100; // Convert percentage to decimal
@@ -775,7 +775,7 @@ export class AnalyticsService {
       ))
       .groupBy(hotels.id, hotels.name)
       .orderBy(desc(sum(sql`CASE WHEN ${bookings.status} = 'confirmed' THEN ${bookings.totalAmount} ELSE 0 END`)))
-      .limit(5);
+;
 
     // Recent bookings in this city
     const recentBookings = await db
@@ -795,7 +795,7 @@ export class AnalyticsService {
       .leftJoin(users, eq(bookings.userId, users.id))
       .where(inArray(bookings.hotelId, hotelIds))
       .orderBy(desc(bookings.createdAt))
-      .limit(10);
+;
 
     // Commission calculations
     const commissionRate = 0.10;

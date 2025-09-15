@@ -719,8 +719,6 @@ export class BookingService {
         }
       },
       orderBy: (bookings, { desc }) => [desc(bookings.createdAt)],
-      limit,
-      offset
     });
 
     // Format bookings with Promise.all to handle async operations
@@ -856,9 +854,7 @@ export class BookingService {
         hotel: true,
         room: true
       },
-      orderBy: (bookings, { desc }) => [desc(bookings.createdAt)],
-      limit,
-      offset
+      orderBy: (bookings, { desc }) => [desc(bookings.createdAt)]
     });
 
     // Commission rate (10%)

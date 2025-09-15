@@ -706,9 +706,7 @@ export class DetailsService {
       .leftJoin(users, eq(bookings.userId, users.id))
       .leftJoin(hotels, eq(bookings.hotelId, hotels.id))
       .leftJoin(payments, eq(refunds.paymentId, payments.id))
-      .orderBy(desc(refunds.createdAt))
-      .limit(limit)
-      .offset(offset);
+      .orderBy(desc(refunds.createdAt));
 
     const totalCount = await db.select({ count: count() })
       .from(refunds);
